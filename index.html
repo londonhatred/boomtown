@@ -392,21 +392,20 @@
     background:var(--card);font-weight:700;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-2)}
   .day-opt.on{background:var(--ink);color:var(--paper)}
 
-  /* meetup heatmap + windows */
-  .hm-wrap{margin:4px 0 6px}
-  .hm{display:flex;gap:1px;height:34px;border:2px solid var(--ink);border-radius:var(--radius-sm);overflow:hidden}
-  .hm-cell{flex:1;background:var(--teal);min-width:0}
-  .hm-ticks{display:flex;justify-content:space-between;font-size:9px;color:var(--muted);font-weight:700;margin-top:3px;letter-spacing:.02em}
-  .hm-legend{display:flex;justify-content:space-between;align-items:center;margin:2px 0 10px}
-  .link-btn{background:none;border:none;color:var(--accent);font-weight:700;font-size:11.5px;text-decoration:underline;padding:0}
+  /* meetup windows list */
+  .meet-sub{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin:2px 0 12px;font-size:11px;color:var(--muted);font-weight:600;line-height:1.4}
+  .meet-weigh{flex:none;text-align:right;text-transform:uppercase;letter-spacing:.04em;font-weight:700}
+  .link-btn{background:none;border:none;color:var(--accent);font-weight:700;font-size:11px;text-decoration:underline;padding:0;text-transform:none;letter-spacing:0}
   .meet-list{display:flex;flex-direction:column;gap:8px}
-  .meet-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--paper);border:1.5px solid var(--ink);border-radius:var(--radius-sm);width:100%;text-align:left;cursor:pointer}
-  .meet-row .mr-time{flex:none;min-width:108px}
-  .meet-row .mr-time b{display:block;font-size:13.5px}
-  .meet-row .mr-time span{font-size:10.5px;color:var(--muted);font-weight:700}
-  .meet-row .mr-bar{flex:1;height:8px;background:var(--panel);border:1.5px solid var(--ink);border-radius:999px;overflow:hidden}
-  .meet-row .mr-fill{height:100%;background:var(--teal)}
-  .meet-row .mr-go{font-family:"Anton";color:var(--muted);font-size:18px}
+  .meet-row{display:flex;align-items:center;gap:12px;padding:11px 13px;background:var(--paper);border:2px solid var(--ink);border-radius:var(--radius-sm);width:100%;text-align:left;cursor:pointer}
+  .meet-row:active{transform:translate(1px,1px)}
+  .mr-left{flex:1;min-width:0}
+  .mr-time{font-family:"Anton";font-size:17px;letter-spacing:.01em;line-height:1}
+  .mr-who{font-size:11.5px;color:var(--muted);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+  .mr-right{flex:none;text-align:right}
+  .mr-count{font-family:"Anton";font-size:22px;line-height:1;color:var(--teal)}
+  .mr-count span{font-family:"Archivo";font-size:12px;color:var(--muted);font-weight:700}
+  .mr-len{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-top:3px}
 
   /* rally calls */
   .live-mini{font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-ink);background:var(--accent);border:1.5px solid var(--ink);border-radius:2px;padding:1px 6px;vertical-align:2px}
@@ -423,6 +422,9 @@
   .crew-opt.on{background:var(--panel)}
   .crew-opt .crew-chk{margin-left:auto;font-weight:900;color:var(--teal);font-size:16px}
   .crew-opt .mo-av{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:11px;font-weight:800;flex:none;border:1.5px solid var(--ink)}
+  .seed-live{background:var(--ink);color:var(--paper);border-radius:var(--radius-sm);padding:11px 13px;margin-bottom:10px;font-size:13px;line-height:1.45}
+  .seed-live b{color:var(--gold)}
+  .seed-live #seed-clock{font-family:"Anton";font-size:16px;margin-left:4px}
 
   .offline-bar{position:fixed;left:0;right:0;top:0;z-index:90;display:none;align-items:center;justify-content:center;gap:8px;
     background:var(--ink);color:var(--paper);font-size:12px;font-weight:700;letter-spacing:.02em;padding:7px 14px;text-align:center;line-height:1.3}
@@ -527,6 +529,7 @@ const colMessages  = collection(db, "messages");
 const colCalls     = collection(db, "calls");
 const colPacking   = collection(db, "packing");
 const colShifts    = collection(db, "shifts");
+const colLegs      = collection(db, "legs");   // crowdsourced walk-time samples between stage pairs
 
 /* ---- App state ---- */
 const state = {
@@ -538,6 +541,7 @@ const state = {
   messages: [],               // [{id,userId,name,text,createdAt}]
   myPacking: { checked:[], mine:[] },
   shifts: [],                 // private, owner-only: [{id,ownerId,label,day,start,end,note}]
+  legs: [],                   // walk-time samples: [{id,pair,sec,dist,seed}]
   menuOpen: false,
   locations: [],              // [{id(userId),name,lat,lng,acc,updatedAt}]
   pins: [],                   // [{id,ownerId,ownerName,label,type,lat,lng,shared,updatedAt}]
@@ -753,6 +757,9 @@ function subscribeAll(){
   onSnapshot(colCalls, snap=>{
     state.calls = snap.docs.map(d=>({id:d.id,...d.data()}));
     if(state.user){ maybeNotifyCalls(); if(!document.querySelector(".modal-bg")) renderApp(); }
+  });
+  onSnapshot(colLegs, snap=>{
+    state.legs = snap.docs.map(d=>({id:d.id,...d.data()}));
   });
 }
 function activeCalls(){
@@ -1283,6 +1290,16 @@ function viewAdmin(){
         <div class="row" style="gap:8px"><input id="autostop-hrs" type="number" min="1" max="24" value="${esc(String(s.autoStopHours||4))}"><button class="btn primary" id="save-autostop" style="flex:none">Save</button></div></label>`:""}
     </div>`:""}
 
+    ${locationEnabled()?`<div class="card admin-block">
+      <div style="font-family:Anton;font-size:15px;text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px">Walk-time routes</div>
+      <div class="find-note" style="margin-bottom:12px">Walk times start as estimates and sharpen as people move around while sharing location. You can also walk key routes yourself to seed accurate baselines.</div>
+      ${walkAdminStatus()}
+      <button class="btn lime block" id="seed-walk" ${stagesWithCoords().length>=2?'':'disabled'} style="margin-bottom:8px">${find.seedActive?`⏱ Arrived — stop &amp; save`:`Walk a route to time it`}</button>
+      ${stagesWithCoords().length<2?`<div class="find-note">Pin at least 2 stages first.</div>`:''}
+      <button class="btn danger block" id="reset-walk">Reset walk-time data</button>
+      <div class="find-note" style="margin-top:6px">Run this once just before the festival to wipe any test data so it relearns on-site.${s.walkReset?` Last reset: ${new Date(s.walkReset).toLocaleString()}.`:''}</div>
+    </div>`:""}
+
     <div class="card admin-block">
       <div style="font-family:Anton;font-size:15px;text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px">App features</div>
       ${[["chat","Group chat","Shared message board for the crew"],
@@ -1495,6 +1512,15 @@ function wireView(){
   if(saveDate) saveDate.onclick = async()=>{ await saveStructure({...state.structure, festivalStartDate:v.querySelector("#fest-date").value||""}); toast("Saved"); };
   const saveAuto = v.querySelector("#save-autostop");
   if(saveAuto) saveAuto.onclick = async()=>{ const h=Math.min(24,Math.max(1,+v.querySelector("#autostop-hrs").value||4)); await saveStructure({...state.structure, autoStopHours:h}); toast("Saved"); };
+  const seedBtn=v.querySelector("#seed-walk");
+  if(seedBtn) seedBtn.onclick=()=>{ if(find.seedActive) stopSeedWalk(); else startSeedWalk(); };
+  const resetWalk=v.querySelector("#reset-walk");
+  if(resetWalk) resetWalk.onclick=async()=>{
+    if(!confirm("Wipe all learned walk-time data so it relearns at the festival? Stages, picks and everything else are kept.")) return;
+    resetWalk.disabled=true; resetWalk.textContent="Clearing…";
+    try{ await clearWalkData(); toast("Walk-time data cleared"); renderView(); }
+    catch(e){ resetWalk.disabled=false; resetWalk.textContent="Reset walk-time data"; toast("Couldn't clear — try again"); }
+  };
   v.querySelectorAll("[data-feat]").forEach(b=>b.onclick=async()=>{
     const k=b.dataset.feat; const features={...(state.structure.features||{})}; features[k]=!feat(k);
     await saveStructure({...state.structure, features});
@@ -1906,7 +1932,8 @@ function renderBulkModal(){
 let find = { started:false, enabledOnce:false, geoWatch:null, orientBound:false, orientHandler:null,
              pos:null, acc:null, heading:null, hasOrientation:false, headingMode:"auto", target:null, error:null,
              show:{stages:true,people:true,pins:true}, share:false, shareTimer:null, myUpdated:0, lastWrite:0,
-             lost:false, autoStopAt:0, autoStopTimer:null, packingSubbed:false, notify:false, notifyTimers:[], notifiedChanges:{}, notifiedMentions:{}, notifiedCalls:{}, sessionStart:Date.now() };
+             lost:false, autoStopAt:0, autoStopTimer:null, packingSubbed:false, notify:false, notifyTimers:[], notifiedChanges:{}, notifiedMentions:{}, notifiedCalls:{}, sessionStart:Date.now(),
+             seedActive:false, seedFrom:null, seedStartT:0, seedPt:null, seedDist:0, seedWatch:null, seedClock:null };
 
 const R_EARTH = 6371000;
 const toRad = d => d*Math.PI/180, toDeg = r => r*180/Math.PI;
@@ -1934,6 +1961,131 @@ function stagesWithCoords(){
       out.push({id:s.id,name:s.name,sub:d.name,color:districtColor(d.id),lat:s.lat,lng:s.lng});
   }));
   return out;
+}
+
+/* ============================================================
+   WALK-TIME LEARNING
+   Seed routes (admin-walked) + crowdsourced legs from movement,
+   median-based, with straight-line fallback. Stored as derived
+   leg samples only — no long-term raw GPS trails.
+   ============================================================ */
+const STAGE_RADIUS = 35;        // metres: "you're at this stage"
+const WALK_MPS_FALLBACK = 1.15; // ~4.1 km/h walking, padded for crowds
+const DETOUR_FACTOR = 1.35;     // straight-line → real path padding
+const MIN_LEG_SEC = 40, MAX_LEG_SEC = 60*60;       // sanity bounds
+const MAX_LEG_SPEED = 3.0;      // m/s; faster = probably a vehicle/GPS jump, discard
+let trip = null;                 // {fromStage, startT, lastPt, lastT, dist}
+
+function nearestStage(lat,lng){
+  let best=null, bd=Infinity;
+  stagesWithCoords().forEach(s=>{ const d=haversine(lat,lng,s.lat,s.lng); if(d<bd){ bd=d; best=s; } });
+  return best && bd<=STAGE_RADIUS ? {stage:best, dist:bd} : null;
+}
+function trackTrip(pos, acc){
+  if(!feat("overlaps")&&!locationEnabled()) return;   // tie to location features
+  if(acc && acc>60) return;                            // ignore very fuzzy fixes
+  const now=Date.now(); const here=nearestStage(pos.lat,pos.lng);
+  if(!trip){
+    if(here) trip={fromStage:here.stage.id, startT:now, lastPt:pos, lastT:now, dist:0};
+    return;
+  }
+  // accumulate path distance with a plausible-speed filter
+  const seg=haversine(trip.lastPt.lat,trip.lastPt.lng,pos.lat,pos.lng);
+  const dt=(now-trip.lastT)/1000;
+  if(dt>0 && seg/dt <= MAX_LEG_SPEED){ trip.dist+=seg; }
+  trip.lastPt=pos; trip.lastT=now;
+  // arrived at a different stage? record the leg.
+  if(here && here.stage.id!==trip.fromStage){
+    const sec=Math.round((now-trip.startT)/1000);
+    if(sec>=MIN_LEG_SEC && sec<=MAX_LEG_SEC && trip.dist>10){
+      recordLeg(trip.fromStage, here.stage.id, sec, Math.round(trip.dist));
+    }
+    trip={fromStage:here.stage.id, startT:now, lastPt:pos, lastT:now, dist:0}; // chain onward
+  }
+}
+const legKey=(a,b)=> a<b ? a+"__"+b : b+"__"+a;   // undirected pair
+async function recordLeg(a,b,sec,dist){
+  try{ await addDoc(colLegs, { pair:legKey(a,b), sec, dist, by:state.user.id, at:serverTimestamp() }); }catch(e){}
+}
+// admin "walk this route now" — records a high-trust seed leg from the timed walk
+async function recordSeedLeg(a,b,sec,dist){
+  try{ await addDoc(colLegs, { pair:legKey(a,b), sec, dist, by:state.user.id, seed:true, at:serverTimestamp() }); }catch(e){}
+}
+
+function median(arr){ if(!arr.length) return null; const s=[...arr].sort((x,y)=>x-y); const m=Math.floor(s.length/2); return s.length%2?s[m]:(s[m-1]+s[m])/2; }
+// walk seconds between two stage ids: measured median if we have it, else straight-line estimate
+function walkSeconds(aId,bId){
+  if(aId===bId) return 0;
+  const key=legKey(aId,bId);
+  const samples=state.legs.filter(l=>l.pair===key);
+  if(samples.length){
+    // weight seeds a bit by counting them twice
+    const times=[]; samples.forEach(l=>{ times.push(l.sec); if(l.seed) times.push(l.sec); });
+    const med=median(times); if(med) return med;
+  }
+  // fallback: straight-line × detour ÷ walking speed
+  const A=stagesWithCoords().find(s=>s.id===aId), B=stagesWithCoords().find(s=>s.id===bId);
+  if(!A||!B) return null;
+  const d=haversine(A.lat,A.lng,B.lat,B.lng)*DETOUR_FACTOR;
+  return Math.round(d/WALK_MPS_FALLBACK);
+}
+function walkSecondsFromPos(pos,bId){
+  // distance from a free GPS point to a target stage (used for leave-now / clash when located but not at a stage)
+  const B=stagesWithCoords().find(s=>s.id===bId); if(!B||!pos) return null;
+  const here=nearestStage(pos.lat,pos.lng);
+  if(here) return walkSeconds(here.stage.id,bId);
+  const d=haversine(pos.lat,pos.lng,B.lat,B.lng)*DETOUR_FACTOR;
+  return Math.round(d/WALK_MPS_FALLBACK);
+}
+function fmtWalk(sec){ if(sec==null) return ""; const m=Math.max(1,Math.round(sec/60)); return "~"+m+" min walk"; }
+async function clearWalkData(){
+  const snap=await getDocs(colLegs);
+  const ids=snap.docs.map(d=>d.id);
+  for(let i=0;i<ids.length;i+=20){ await Promise.all(ids.slice(i,i+20).map(id=>deleteDoc(doc(db,"legs",id)))); }
+  await saveStructure({...state.structure, walkReset:Date.now()});
+}
+function walkAdminStatus(){
+  const n=state.legs.length;
+  const pairs=new Set(state.legs.map(l=>l.pair)).size;
+  if(find.seedActive){
+    const from=stagesWithCoords().find(s=>s.id===find.seedFrom);
+    return `<div class="seed-live">⏱ Timing from <b>${esc(from?from.name:"start")}</b> — walk to another stage, then tap “stop &amp; save”. <span id="seed-clock">0:00</span></div>`;
+  }
+  return `<div class="find-note" style="margin-bottom:10px">${n? `${n} walk sample${n>1?'s':''} across ${pairs} route${pairs>1?'s':''} learned so far.` : "No walk data yet — estimates in use."}</div>`;
+}
+function startSeedWalk(){
+  if(!navigator.geolocation){ toast("Location not supported"); return; }
+  navigator.geolocation.getCurrentPosition(p=>{
+    const here=nearestStage(p.coords.latitude,p.coords.longitude);
+    if(!here){ toast("Stand at a stage to start timing"); return; }
+    find.seedActive=true; find.seedFrom=here.stage.id; find.seedStartT=Date.now();
+    find.seedPt={lat:p.coords.latitude,lng:p.coords.longitude}; find.seedDist=0;
+    find.seedWatch=navigator.geolocation.watchPosition(q=>{
+      const pos={lat:q.coords.latitude,lng:q.coords.longitude};
+      if(find.seedPt){ const seg=haversine(find.seedPt.lat,find.seedPt.lng,pos.lat,pos.lng); if(seg<200) find.seedDist+=seg; }
+      find.seedPt=pos;
+    }, ()=>{}, {enableHighAccuracy:true,maximumAge:0,timeout:20000});
+    find.seedClock=setInterval(()=>{ const el=document.getElementById("seed-clock"); if(el){ const s=Math.round((Date.now()-find.seedStartT)/1000); el.textContent=Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); } },1000);
+    toast("Timing — walk to another stage"); renderView();
+  }, ()=>toast("Couldn't get location"), {enableHighAccuracy:true,maximumAge:0,timeout:15000});
+}
+function stopSeedWalk(){
+  const finish=(lat,lng)=>{
+    const here=nearestStage(lat,lng);
+    cleanupSeed();
+    if(!here || here.stage.id===find.seedFrom){ toast("Stop at a different stage to save the route"); renderView(); return; }
+    const sec=Math.round((Date.now()-find.seedStartT)/1000);
+    recordSeedLeg(find.seedFrom, here.stage.id, sec, Math.round(find.seedDist));
+    const from=stagesWithCoords().find(s=>s.id===find.seedFrom), to=here.stage;
+    toast(`Saved ${from?from.name:"?"} → ${to.name}: ~${Math.max(1,Math.round(sec/60))} min`); renderView();
+  };
+  if(navigator.geolocation) navigator.geolocation.getCurrentPosition(p=>finish(p.coords.latitude,p.coords.longitude), ()=>{ if(find.seedPt) finish(find.seedPt.lat,find.seedPt.lng); else { cleanupSeed(); renderView(); } }, {enableHighAccuracy:true,maximumAge:0,timeout:15000});
+  else if(find.seedPt) finish(find.seedPt.lat,find.seedPt.lng);
+}
+function cleanupSeed(){
+  if(find.seedWatch!=null && navigator.geolocation) navigator.geolocation.clearWatch(find.seedWatch);
+  if(find.seedClock) clearInterval(find.seedClock);
+  find.seedActive=false; find.seedWatch=null; find.seedClock=null;
 }
 function personColor(id){ let h=0; for(let i=0;i<id.length;i++) h=(h*31+id.charCodeAt(i))>>>0; return AREA_COLORS[h%AREA_COLORS.length]; }
 function peopleWithCoords(){
@@ -2085,6 +2237,7 @@ function renderPinModal(){
 function writeMyLocation(){
   if(!find.share || !find.pos || !state.user) return;
   find.myUpdated=Date.now();
+  trackTrip(find.pos, find.acc);   // crowdsourced walk-time learning
   setDoc(doc(db,"locations",state.user.id),
     { name:state.user.name, lat:+find.pos.lat.toFixed(6), lng:+find.pos.lng.toFixed(6), acc:find.acc||null, lost:!!find.lost, updatedAt:serverTimestamp() }
   ).catch(()=>{});
@@ -2113,6 +2266,7 @@ function stopShare(){
   if(find.shareTimer){ clearInterval(find.shareTimer); find.shareTimer=null; }
   if(find.autoStopTimer){ clearTimeout(find.autoStopTimer); find.autoStopTimer=null; }
   find.autoStopAt=0;
+  trip = null;   // drop any in-progress trip trail
   if(state.user) deleteDoc(doc(db,"locations",state.user.id)).catch(()=>{});
 }
 window.addEventListener("pagehide",()=>{ if(find.share && state.user){ try{ deleteDoc(doc(db,"locations",state.user.id)); }catch(e){} } });
@@ -2611,14 +2765,16 @@ function bestWindows(day, people, minLen){
   const wins=[]; let i=0;
   while(i<prof.length){
     if(prof[i]>=need){
-      let j=i, minFree=prof[i];
-      while(j<prof.length && prof[j]>=need){ minFree=Math.min(minFree,prof[j]); j++; }
+      let j=i, minFree=prof[i], maxFree=prof[i], peakIdx=i;
+      while(j<prof.length && prof[j]>=need){ if(prof[j]>maxFree){ maxFree=prof[j]; peakIdx=j; } minFree=Math.min(minFree,prof[j]); j++; }
       const start=MEET_START+i*MEET_STEP, end=MEET_START+j*MEET_STEP, len=end-start;
-      if(len>=minLen) wins.push({day,start,end,len,minFree,maxFree:Math.max(...prof.slice(i,j))});
+      const peak=MEET_START+peakIdx*MEET_STEP;
+      if(len>=minLen) wins.push({day,start,end,len,minFree,maxFree,peak});
       i=j;
     } else i++;
   }
-  return wins.sort((a,b)=> b.maxFree-a.maxFree || b.len-a.len);
+  // sort: most people first, then longest window
+  return wins.sort((a,b)=> b.maxFree-a.maxFree || b.len-a.len || a.start-b.start);
 }
 function whoFreeAt(day, minute, people){
   const free=[],busy=[];
@@ -2656,34 +2812,30 @@ function meetupCard(){
       <div class="find-note">Once a few people have picked some acts, I’ll show the best times to meet up here.</div></div>`;
   }
 
-  // heatmap strip
-  const prof=availabilityProfile(day,people);
   const maxN=people.length||1;
-  const cells=prof.map((free,i)=>{
-    const t=MEET_START+i*MEET_STEP;
-    const ratio=free/maxN;
-    return `<span class="hm-cell" style="opacity:${0.12+ratio*0.88}" title="${minToHM(t)} · ${free}/${maxN} free"></span>`;
-  }).join("");
-  // hour ticks
-  const ticks=[];
-  for(let t=MEET_START;t<=MEET_END;t+=180){ ticks.push(`<span>${minToHM(t).replace(':00','')}</span>`); }
-
-  const wins=bestWindows(day,people,30).slice(0,4);
+  const wins=bestWindows(day,people,30).slice(0,6);
+  const fmtLen=m=>{ const h=Math.floor(m/60),mm=m%60; return (h?h+"h":"")+(mm?(h?" ":"")+mm+"m":(h?"":"0m")); };
   const winRows = wins.length ? wins.map(w=>{
-    const mid=Math.round((w.start+w.end)/2/MEET_STEP)*MEET_STEP;
-    return `<div class="meet-row" data-meetwin="${day}|${mid}">
-      <div class="mr-time"><b>${minToHM(w.start)}–${minToHM(w.end)}</b><span>${w.maxFree}/${maxN} free</span></div>
-      <div class="mr-bar"><div class="mr-fill" style="width:${Math.round(w.maxFree/maxN*100)}%"></div></div>
-      <span class="mr-go">›</span>
-    </div>`;
-  }).join("") : `<div class="find-note">No clear window today — try the whole group, or use a rally call below to find people in the moment.</div>`;
+    const {free}=whoFreeAt(day,w.peak,people);
+    const names=free.map(id=>{const u=state.users.find(x=>x.id===id);return u?u.name:"?";});
+    const shown=names.slice(0,5).map(esc).join(", ")+(names.length>5?` +${names.length-5}`:"");
+    return `<button class="meet-row" data-meetwin="${day}|${w.peak}">
+      <div class="mr-left">
+        <div class="mr-time">${minToHM(w.start)} – ${minToHM(w.end)}</div>
+        <div class="mr-who">${shown}</div>
+      </div>
+      <div class="mr-right">
+        <div class="mr-count">${w.maxFree}<span>/${maxN}</span></div>
+        <div class="mr-len">${fmtLen(w.len)} free</div>
+      </div>
+    </button>`;
+  }).join("") : `<div class="find-note">No window where most of you are free today — schedules are packed! Use a rally call below to grab people in the moment.</div>`;
 
   return `<div class="free-card">
-    <div class="free-head">🤝 When can we meet?</div>
+    <div class="free-head">🤝 Best times to meet</div>
     ${modeTabs}${dayTabs}
-    <div class="hm-wrap"><div class="hm">${cells}</div><div class="hm-ticks">${ticks.join("")}</div></div>
-    <div class="hm-legend"><span class="find-note">weighing ${maxN} ${state.meetMode==='crew'?'crew':'who’ve planned'}</span>
-      ${state.meetMode==='crew'?`<button class="link-btn" id="crew-edit">edit crew</button>`:''}</div>
+    <div class="meet-sub"><span>Sorted by most people free, then longest. Tap one to see who & take action.</span>
+      <span class="meet-weigh">${maxN} ${state.meetMode==='crew'?'crew':'planned'}${state.meetMode==='crew'?` · <button class="link-btn" id="crew-edit">edit</button>`:''}</span></div>
     <div class="meet-list">${winRows}</div>
   </div>`;
 }
