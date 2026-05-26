@@ -330,9 +330,20 @@
   .msg.mine .bubble{background:var(--ink);color:var(--paper)}
   .msg.mine .bubble a{color:#ffd9c9}
   .msg-time{font-size:10px;color:var(--muted);margin:0 4px}
-  .chat-input{position:sticky;bottom:calc(96px + var(--safe-b));display:flex;gap:8px;padding:8px 0;background:var(--paper)}
+  .chat-input{display:flex;gap:8px;padding:8px 0;background:var(--paper)}
   .chat-input input{flex:1;padding:12px 14px;border-radius:var(--radius-sm);background:var(--paper);border:2px solid var(--ink);color:var(--ink);outline:none}
   .chat-input input:focus{border-color:var(--accent)}
+  .mention{font-weight:800;color:var(--accent)}
+  .msg.mine .mention{color:#ffd9c9}
+  .mention.me{background:var(--accent);color:var(--accent-ink);border-radius:3px;padding:0 4px}
+  .msg.pinged .bubble{border-color:var(--accent);box-shadow:var(--hard-sm)}
+  .chat-compose{position:sticky;bottom:calc(96px + var(--safe-b));background:var(--paper)}
+  .mention-pop{position:absolute;left:0;right:56px;bottom:100%;margin-bottom:6px;background:var(--card);
+    border:2px solid var(--ink);border-radius:var(--radius-sm);box-shadow:var(--hard);overflow:hidden;max-height:210px;overflow-y:auto}
+  .mention-opt{display:flex;align-items:center;gap:10px;width:100%;padding:10px 13px;text-align:left;font-weight:700;font-size:14px;border-bottom:1px solid var(--line)}
+  .mention-opt:last-child{border-bottom:none}
+  .mention-opt:hover{background:var(--panel)}
+  .mention-opt .mo-av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:11px;font-weight:800;flex:none;border:1.5px solid var(--ink)}
 
   /* info */
   .info-item{background:var(--card);border:2px solid var(--ink);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px}
@@ -372,6 +383,14 @@
     border:2px solid var(--ink);border-radius:var(--radius-sm);font-weight:900;font-size:15px;color:var(--paper)}
   .ev-check.on{background:var(--accent);color:var(--accent-ink)}
   .ev.rowsel{outline:2px solid var(--accent);outline-offset:1px}
+  .ev.shift{background:var(--panel)}
+  .ev.shift h3{font-family:"Archivo";font-weight:800;font-size:16px;text-transform:none}
+  .secret-tag{font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--paper);
+    background:var(--ink);border-radius:2px;padding:2px 8px}
+  .day-pick{display:flex;gap:6px;flex-wrap:wrap}
+  .day-opt{flex:1;min-width:54px;padding:10px 6px;border-radius:var(--radius-sm);border:2px solid var(--ink);
+    background:var(--card);font-weight:700;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-2)}
+  .day-opt.on{background:var(--ink);color:var(--paper)}
 
   .offline-bar{position:fixed;left:0;right:0;top:0;z-index:90;display:none;align-items:center;justify-content:center;gap:8px;
     background:var(--ink);color:var(--paper);font-size:12px;font-weight:700;letter-spacing:.02em;padding:7px 14px;text-align:center;line-height:1.3}
@@ -474,6 +493,7 @@ const colLocations = collection(db, "locations");
 const colPins      = collection(db, "pins");
 const colMessages  = collection(db, "messages");
 const colPacking   = collection(db, "packing");
+const colShifts    = collection(db, "shifts");
 
 /* ---- App state ---- */
 const state = {
@@ -484,6 +504,7 @@ const state = {
   picks: [],                  // [{id,userId,eventId}]
   messages: [],               // [{id,userId,name,text,createdAt}]
   myPacking: { checked:[], mine:[] },
+  shifts: [],                 // private, owner-only: [{id,ownerId,label,day,start,end,note}]
   menuOpen: false,
   locations: [],              // [{id(userId),name,lat,lng,acc,updatedAt}]
   pins: [],                   // [{id,ownerId,ownerName,label,type,lat,lng,shared,updatedAt}]
@@ -499,8 +520,8 @@ const uid = () => Math.random().toString(36).slice(2,10);
 const esc = s => (s??"").toString().replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const toMin = t => { if(!t) return 0; const [h,m]=t.split(":").map(Number); return h*60+(m||0); };
 const dayIdx = d => DAYS.indexOf(d);
-function timeRangeMin(ev){ // returns [start, end] in minutes, handling past-midnight
-  let s = toMin(ev.start), e = toMin(ev.end);
+function timeRangeMin(ev){ // returns [start, end] in festival-day minutes (late-night counts as same night)
+  let s = festMin(ev.start), e = festMin(ev.end);
   if (e <= s) e += 24*60;
   return [s,e];
 }
@@ -522,18 +543,25 @@ function initials(name){
 function feat(name){ const f=state.structure.features; return f ? f[name]!==false : true; }
 function festivalStart(){ const s=state.structure.festivalStartDate; return s ? new Date(s+"T00:00:00") : null; }
 function dateForDay(day){ const base=festivalStart(); if(!base) return null; const d=new Date(base); d.setDate(d.getDate()+Math.max(0,DAYS.indexOf(day))); return d; }
-function eventStart(ev){ const d=dateForDay(ev.day); if(!d||!ev.start) return null; const [h,m]=ev.start.split(":").map(Number); const dt=new Date(d); dt.setHours(h,m||0,0,0); return dt; }
+// Festival "day" runs noon→noon-ish: clock times before this hour belong to the PREVIOUS day's night.
+const DAY_ROLLOVER_HOUR = 6;   // 00:00–05:59 counts as the late night of the day named on the event
+function isLateNight(hhmm){ if(!hhmm) return false; const h=+hhmm.split(":")[0]; return h < DAY_ROLLOVER_HOUR; }
+// minutes-since-noon ordering within a festival day, so 02:00 sorts AFTER 23:00
+function festMin(hhmm){ if(!hhmm) return 0; let m=toMin(hhmm); if(isLateNight(hhmm)) m+=24*60; return m; }
+function eventStart(ev){ const d=dateForDay(ev.day); if(!d||!ev.start) return null; const [h,m]=ev.start.split(":").map(Number); const dt=new Date(d); dt.setHours(h,m||0,0,0); if(isLateNight(ev.start)) dt.setDate(dt.getDate()+1); return dt; }
 function eventEnd(ev){ const s=eventStart(ev); if(!s) return null; if(!ev.end) return new Date(s.getTime()+60*60000); const [h,m]=ev.end.split(":").map(Number); const dt=new Date(s); dt.setHours(h,m||0,0,0); if(dt<=s) dt.setDate(dt.getDate()+1); return dt; }
 function nextPickInfo(){
   if(!festivalStart()) return null;
   const ids=myPickIds();
-  const items=state.events.filter(e=>ids.has(e.id)).map(e=>({ev:e,s:eventStart(e),e2:eventEnd(e)})).filter(x=>x.s);
+  let items=state.events.filter(e=>ids.has(e.id)).map(e=>({ev:e,s:eventStart(e),e2:eventEnd(e),shift:false}));
+  if(feat("shifts")) items=items.concat((state.shifts||[]).map(sh=>({ev:sh,s:eventStart(sh),e2:eventEnd(sh),shift:true})));
+  items=items.filter(x=>x.s);
   if(!items.length) return null;
   const now=Date.now();
   const onNow=items.filter(x=>x.s.getTime()<=now && x.e2.getTime()>now).sort((a,b)=>a.e2-b.e2)[0];
-  if(onNow) return {ev:onNow.ev, status:"now", until:onNow.e2};
+  if(onNow) return {ev:onNow.ev, status:"now", until:onNow.e2, shift:onNow.shift};
   const upcoming=items.filter(x=>x.s.getTime()>now).sort((a,b)=>a.s-b.s)[0];
-  if(upcoming) return {ev:upcoming.ev, status:"soon", at:upcoming.s, mins:Math.round((upcoming.s.getTime()-now)/60000)};
+  if(upcoming) return {ev:upcoming.ev, status:"soon", at:upcoming.s, mins:Math.round((upcoming.s.getTime()-now)/60000), shift:upcoming.shift};
   return null;
 }
 function untilText(mins){
@@ -682,7 +710,20 @@ function subscribeAll(){
   onSnapshot(colMessages, snap=>{
     state.messages = snap.docs.map(d=>({id:d.id,...d.data()}))
       .sort((a,b)=>((a.createdAt&&a.createdAt.toMillis?a.createdAt.toMillis():0)-(b.createdAt&&b.createdAt.toMillis?b.createdAt.toMillis():0)));
-    if(state.user && state.view==="chat" && !document.querySelector(".modal-bg")) renderView();
+    if(state.user){ maybeNotifyMentions(); if((state.view==="chat"||state.view==="browse") && !document.querySelector(".modal-bg")) renderApp(); }
+  });
+}
+function maybeNotifyMentions(){
+  if(!state.user) return;
+  const me=state.user.id;
+  state.messages.forEach(m=>{
+    if(m.userId===me) return;
+    const t=(m.createdAt&&m.createdAt.toMillis)?m.createdAt.toMillis():0;
+    if(t<=find.sessionStart) return;                          // ignore history from before this session
+    const mentioned = (m.mentions&&m.mentions.includes(me)) || messageMentionsMe(m.text||"");
+    if(!mentioned) return;
+    if(find.notifiedMentions[m.id]) return; find.notifiedMentions[m.id]=true;
+    if(feat("notify") && find.notify) pushNotify(`${m.name||"Someone"} tagged you`, (m.text||"").slice(0,120), "mention-"+m.id);
   });
 }
 function subscribeMyPacking(){
@@ -691,7 +732,18 @@ function subscribeMyPacking(){
     state.myPacking = snap.exists() ? { checked:snap.data().checked||[], mine:snap.data().mine||[] } : { checked:[], mine:[] };
     if(state.view==="packing" && !document.querySelector(".modal-bg")) renderView();
   });
+  // private shifts — only this user's own
+  onSnapshot(query(colShifts, where("ownerId","==",state.user.id)), snap=>{
+    state.shifts = snap.docs.map(d=>({id:d.id,...d.data()}));
+    if((state.view==="mine"||state.view==="shared") && !document.querySelector(".modal-bg")) renderView();
+  });
 }
+async function saveShift(sh){
+  const data={ ownerId:state.user.id, label:(sh.label||"").trim()||"Work shift", day:sh.day, start:sh.start, end:sh.end||"", note:(sh.note||"").trim() };
+  if(sh.id) await updateDoc(doc(db,"shifts",sh.id), data);
+  else await addDoc(colShifts, data);
+}
+async function deleteShift(id){ await deleteDoc(doc(db,"shifts",id)); }
 
 function allReady(){ return Object.values(state.ready).every(Boolean); }
 function afterData(){
@@ -856,7 +908,7 @@ function renderView(){
 /* ---------- shared rendering bits ---------- */
 function myPickIds(){ return new Set(state.picks.filter(p=>p.userId===state.user.id).map(p=>p.eventId)); }
 function sortEvents(list){
-  return [...list].sort((a,b)=> dayIdx(a.day)-dayIdx(b.day) || toMin(a.start)-toMin(b.start) || (a.title||"").localeCompare(b.title||""));
+  return [...list].sort((a,b)=> dayIdx(a.day)-dayIdx(b.day) || festMin(a.start)-festMin(b.start) || (a.title||"").localeCompare(b.title||""));
 }
 function eventCard(ev, {picked, clash, changed}={}){
   const goers = state.picks.filter(p=>p.eventId===ev.id);
@@ -942,23 +994,40 @@ function viewBrowse(){
 function viewMine(){
   const ids = myPickIds();
   let list = sortEvents(state.events.filter(e=>ids.has(e.id)));
-  // clash detection
+  const shifts = (state.shifts||[]).slice();
+  // clash detection (picks vs picks, and picks vs my shifts)
   const clashSet = new Set();
   for(let i=0;i<list.length;i++) for(let j=i+1;j<list.length;j++){
     if(overlaps(list[i],list[j])){ clashSet.add(list[i].id); clashSet.add(list[j].id); }
   }
-  const daysActive = new Set(list.map(e=>e.day)).size;
+  shifts.forEach(sh=>{ list.forEach(e=>{ if(overlaps({day:sh.day,start:sh.start,end:sh.end||addHour(sh.start)}, e)){ clashSet.add(e.id); clashSet.add("sh:"+sh.id); } }); });
+  const daysActive = new Set([...list.map(e=>e.day), ...shifts.map(s=>s.day)]).size;
 
-  if(list.length===0){
+  const addShiftBtn = feat("shifts") ? `<button class="btn ghost sm no-print" id="add-shift" style="flex:none">＋ Shift</button>` : "";
+
+  if(list.length===0 && shifts.length===0){
     return `
-      <div class="sec-head"><div><h2>My plan</h2><div class="lead">Your personal weekend schedule.</div></div></div>
-      ${emptyState("🎟️","Nothing picked yet","Go to Browse and tap the ✓ on acts you want to catch.")}`;
+      <div class="sec-head"><div><h2>My plan</h2><div class="lead">Your personal weekend schedule.</div></div>${addShiftBtn}</div>
+      ${emptyState("🎟️","Nothing picked yet","Go to Browse and tap the ✓ on acts you want to catch."+(feat("shifts")?" Working the festival? Add a private shift with ＋ Shift.":""))}`;
   }
-  const g = groupByDay(list);
+
+  // group BOTH events and shifts by day
+  const byDay={}; DAYS.forEach(d=>byDay[d]=[]);
+  list.forEach(e=>byDay[e.day]&&byDay[e.day].push({kind:"ev",ev:e,t:toMin(e.start)}));
+  shifts.forEach(sh=>byDay[sh.day]&&byDay[sh.day].push({kind:"shift",sh,t:toMin(sh.start)}));
+  Object.values(byDay).forEach(arr=>arr.sort((a,b)=>a.t-b.t));
+
   let nextCard="";
   if(feat("nextAct") && festivalStart()){
     const np=nextPickInfo();
-    if(np){
+    if(np && np.shift){
+      const when = np.status==="now" ? `On now · until ${esc(fmt12(np.ev.end||""))}` : `${untilText(np.mins)} · ${esc(fmt12(np.ev.start))}`;
+      nextCard=`<div class="next-card ${np.status==='now'?'live':''}">
+        <div class="nc-tag">${np.status==="now"?"On shift now":"Shift up next"}</div>
+        <div class="nc-name">🔒 ${esc(np.ev.label||"Work shift")}</div>
+        <div class="nc-meta"><span class="secret-tag">Private</span> ${when}${np.ev.note?` · ${esc(np.ev.note)}`:''}</div>
+      </div>`;
+    } else if(np){
       const hasLoc = locationEnabled() && stagesWithCoords().some(s=>s.name===np.ev.stageName);
       const when = np.status==="now" ? `On now · until ${esc(fmt12(toHM(np.until)))}` : `${untilText(np.mins)} · ${esc(fmt12(np.ev.start))}`;
       nextCard=`<div class="next-card ${np.status==='now'?'live':''}">
@@ -970,19 +1039,38 @@ function viewMine(){
     }
   }
   return `
-    <div class="sec-head"><div><h2>My plan</h2><div class="lead">${list.length} pick${list.length>1?'s':''}${clashSet.size?` · ⚠ ${clashSet.size/2|0} clash${clashSet.size>2?'es':''}`:''}</div></div>
-      <button class="btn ghost sm no-print" id="print-plan" style="flex:none">Print</button></div>
+    <div class="sec-head"><div><h2>My plan</h2><div class="lead">${list.length} pick${list.length!==1?'s':''}${shifts.length?` · ${shifts.length} shift${shifts.length>1?'s':''}`:''}${clashSet.size?` · ⚠ clash`:''}</div></div>
+      <div style="display:flex;gap:8px;flex:none">${addShiftBtn}<button class="btn ghost sm no-print" id="print-plan">Print</button></div></div>
     ${nextCard}
     <div class="stat-row">
       <div class="stat"><div class="n">${list.length}</div><div class="l">Picks</div></div>
       <div class="stat"><div class="n">${daysActive}</div><div class="l">Days out</div></div>
-      <div class="stat"><div class="n">${clashSet.size/2|0}</div><div class="l">Clashes</div></div>
+      <div class="stat"><div class="n">${[...clashSet].filter(x=>typeof x==='string'&&!x.startsWith('sh:')).length||0}</div><div class="l">Clashes</div></div>
     </div>
-    ${DAYS.filter(d=>g[d]&&g[d].length).map(d=>`
+    ${DAYS.filter(d=>byDay[d]&&byDay[d].length).map(d=>`
       <div class="day-label">${d}</div>
-      ${g[d].map(e=>eventCard(e,{picked:true,clash:clashSet.has(e.id),changed:eventChanged(e)})).join("")}
+      ${byDay[d].map(item=> item.kind==="ev"
+        ? eventCard(item.ev,{picked:true,clash:clashSet.has(item.ev.id),changed:eventChanged(item.ev)})
+        : shiftCard(item.sh,{clash:clashSet.has("sh:"+item.sh.id)})
+      ).join("")}
     `).join("")}
   `;
+}
+function addHour(t){ let m=toMin(t)+60; return String(Math.floor(m/60)%24).padStart(2,"0")+":"+String(m%60).padStart(2,"0"); }
+function shiftCard(sh,{clash}={}){
+  return `<div class="ev shift ${clash?'clash':''}" data-shift="${sh.id}" style="box-shadow:inset 5px 0 0 var(--ink)">
+    <div class="time"><div class="t">${esc(fmt12(sh.start))}</div><div class="t2">${sh.end?('→ '+esc(fmt12(sh.end))):''}</div></div>
+    <div class="body">
+      <h3>🔒 ${esc(sh.label||"Work shift")}</h3>
+      <div class="meta"><span class="secret-tag">Private · only you</span></div>
+      ${sh.note?`<div class="notes">${esc(sh.note)}</div>`:""}
+      ${clash?`<div class="clash-note">⚠ Overlaps a pick</div>`:""}
+    </div>
+    <div class="act" style="flex-direction:column;gap:6px">
+      <button class="btn ghost sm" data-edit-shift="${sh.id}">Edit</button>
+      <button class="btn danger sm" data-del-shift="${sh.id}">Del</button>
+    </div>
+  </div>`;
 }
 function toHM(date){ return String(date.getHours()).padStart(2,"0")+":"+String(date.getMinutes()).padStart(2,"0"); }
 
@@ -1141,7 +1229,8 @@ function viewAdmin(){
          ["packing","Packing list","Shared checklist everyone ticks off"],
          ["overlaps","Free-time finder","Suggests gaps to meet up / eat in the Group tab"],
          ["alerts","Set-time change alerts","Flags picks on people’s plans when a time changes"],
-         ["notify","Reminders / notifications","Lets people opt in to “starting soon” nudges"]].map(([k,t,d])=>`
+         ["notify","Reminders / notifications","Lets people opt in to “starting soon” nudges"],
+         ["shifts","Private work shifts","Lets anyone add private shifts that block their free time"]].map(([k,t,d])=>`
         <div class="share-row" style="border:none;padding:8px 0;margin:0;background:none;border-top:1px solid var(--line)">
           <div style="min-width:0"><b style="font-size:13.5px">${t}</b><div class="find-note">${d}</div></div>
           <button class="switch ${feat(k)?'on':''}" data-feat="${k}" role="switch" aria-checked="${feat(k)}"><span></span></button>
@@ -1257,15 +1346,48 @@ function wireView(){
 
   // ---- my plan: print + mark changes seen ----
   const printBtn=v.querySelector("#print-plan"); if(printBtn) printBtn.onclick=()=>window.print();
+  const addShift=v.querySelector("#add-shift"); if(addShift) addShift.onclick=()=>{ state.modal={type:"shift",data:null}; renderModal(); };
+  v.querySelectorAll("[data-edit-shift]").forEach(b=>b.onclick=()=>{ const sh=state.shifts.find(x=>x.id===b.dataset.editShift); state.modal={type:"shift",data:sh}; renderModal(); });
+  v.querySelectorAll("[data-del-shift]").forEach(b=>b.onclick=async()=>{ const sh=state.shifts.find(x=>x.id===b.dataset.delShift); if(confirm(`Delete "${sh.label||'shift'}"?`)){ await deleteShift(sh.id); toast("Shift removed"); } });
   if(state.view==="mine") setTimeout(markChangesSeen, 4000);
 
   // ---- chat ----
   if(state.view==="chat"){
     const sc=v.querySelector("#chat-scroll"); if(sc) sc.scrollTop=sc.scrollHeight;
-    const send=v.querySelector("#chat-send"), txt=v.querySelector("#chat-text");
-    const doSend=async()=>{ const t=txt.value; if(!t.trim())return; txt.value=""; try{ await sendMessage(t); }catch(e){ toast("Couldn’t send — check connection"); } };
+    const send=v.querySelector("#chat-send"), txt=v.querySelector("#chat-text"), pop=v.querySelector("#mention-pop");
+    const closePop=()=>{ if(pop){ pop.style.display="none"; pop.innerHTML=""; } };
+    const doSend=async()=>{ const t=txt.value; if(!t.trim())return; txt.value=""; closePop(); try{ await sendMessage(t); }catch(e){ toast("Couldn’t send — check connection"); } };
     if(send) send.onclick=doSend;
-    if(txt) txt.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); doSend(); } });
+
+    // current @-fragment immediately before the caret, if any
+    const activeFrag=()=>{
+      const pos=txt.selectionStart||0; const before=txt.value.slice(0,pos);
+      const m=before.match(/(^|\s)@([^\s@]*)$/);
+      return m? {q:m[2], start:pos-m[2].length-1, end:pos} : null;
+    };
+    const renderPop=()=>{
+      const f=activeFrag();
+      if(!f){ closePop(); return; }
+      const others=state.users.filter(u=>u.id!==state.user.id && u.name.toLowerCase().includes(f.q.toLowerCase())).slice(0,6);
+      if(!others.length){ closePop(); return; }
+      pop.innerHTML=others.map(u=>`<button class="mention-opt" data-uid="${u.id}"><span class="mo-av" style="background:${personColor(u.id)}">${esc(initials(u.name))}</span>${esc(u.name)}</button>`).join("");
+      pop.style.display="block";
+      pop.querySelectorAll("[data-uid]").forEach(b=>b.onclick=()=>{
+        const u=state.users.find(x=>x.id===b.dataset.uid);
+        const val=txt.value;
+        txt.value = val.slice(0,f.start) + "@"+u.name+" " + val.slice(f.end);
+        const caret=f.start+u.name.length+2; txt.focus(); txt.setSelectionRange(caret,caret);
+        closePop();
+      });
+    };
+    if(txt){
+      txt.addEventListener("input",renderPop);
+      txt.addEventListener("keydown",e=>{
+        if(e.key==="Enter"){ e.preventDefault(); doSend(); }
+        else if(e.key==="Escape"){ closePop(); }
+      });
+      txt.addEventListener("blur",()=>setTimeout(closePop,150));
+    }
   }
 
   // ---- info ----
@@ -1412,6 +1534,7 @@ function renderModal(){
   if(state.modal.type==="pins"){ renderPinsModal(); return; }
   if(state.modal.type==="pin"){ renderPinModal(); return; }
   if(state.modal.type==="info"){ renderInfoModal(); return; }
+  if(state.modal.type==="shift"){ renderShiftModal(); return; }
   if(state.modal.type==="packlist"){ renderPackListModal(); return; }
   if(state.modal.type!=="event") return;
 
@@ -1704,7 +1827,7 @@ function renderBulkModal(){
 let find = { started:false, enabledOnce:false, geoWatch:null, orientBound:false, orientHandler:null,
              pos:null, acc:null, heading:null, hasOrientation:false, headingMode:"auto", target:null, error:null,
              show:{stages:true,people:true,pins:true}, share:false, shareTimer:null, myUpdated:0, lastWrite:0,
-             lost:false, autoStopAt:0, autoStopTimer:null, packingSubbed:false, notify:false, notifyTimers:[], notifiedChanges:{}, sessionStart:Date.now() };
+             lost:false, autoStopAt:0, autoStopTimer:null, packingSubbed:false, notify:false, notifyTimers:[], notifiedChanges:{}, notifiedMentions:{}, sessionStart:Date.now() };
 
 const R_EARTH = 6371000;
 const toRad = d => d*Math.PI/180, toDeg = r => r*180/Math.PI;
@@ -2133,7 +2256,23 @@ function updateFindDynamic(){
 /* ============================================================
    EXTRAS — chat, info, packing, free-time, reminders, alerts
    ============================================================ */
-function linkify(s){ return esc(s).replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>'); }
+function linkify(s){
+  let out = esc(s).replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+  // highlight @mentions that match a known group member (longest name first)
+  const names=[...state.users].sort((a,b)=>b.name.length-a.name.length);
+  names.forEach(u=>{
+    const safe=esc(u.name).replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+    const re=new RegExp("@"+safe+"(?![\\w])","gi");
+    const me = u.id===state.user.id;
+    out = out.replace(re, `<span class="mention${me?' me':''}">@${esc(u.name)}</span>`);
+  });
+  return out;
+}
+function messageMentionsMe(text){
+  if(!text||!state.user) return false;
+  const safe=state.user.name.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+  return new RegExp("@"+safe+"(?![\\w])","i").test(text);
+}
 function clockMs(ms){ const d=new Date(ms); return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }
 function minToHM(m){ m=((m%1440)+1440)%1440; return fmt12(String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0")); }
 
@@ -2166,6 +2305,12 @@ function scheduleNotifications(){
     if(lead>now && lead-now < 12*3600000)
       find.notifyTimers.push(setTimeout(()=>{ pushNotify("Starting soon", `${e.title} at ${e.stageName} in ~15 min`, "soon-"+e.id); }, lead-now));
   });
+  if(feat("shifts")) (state.shifts||[]).forEach(sh=>{
+    const s=eventStart(sh); if(!s) return;
+    const lead=s.getTime()-15*60000;
+    if(lead>now && lead-now < 12*3600000)
+      find.notifyTimers.push(setTimeout(()=>{ pushNotify("Shift soon", `${sh.label||"Work shift"} starts in ~15 min`, "shift-"+sh.id); }, lead-now));
+  });
 }
 function maybeNotifyChanges(){
   if(!feat("alerts")||!feat("notify")||!find.notify) return;
@@ -2186,19 +2331,28 @@ function viewChat(){
   const msgs=state.messages;
   const body = msgs.length ? msgs.map(m=>{
     const mine=m.userId===state.user.id;
-    return `<div class="msg ${mine?'mine':''}">
+    const pinged = !mine && messageMentionsMe(m.text||"");
+    return `<div class="msg ${mine?'mine':''} ${pinged?'pinged':''}">
       ${mine?'':`<div class="msg-who">${esc(m.name||'?')}</div>`}
       <div class="bubble">${linkify(m.text||"")}</div>
       <div class="msg-time">${m.createdAt&&m.createdAt.toMillis?clockMs(m.createdAt.toMillis()):''}</div>
     </div>`;
-  }).join("") : `<div class="empty"><div class="big">💬</div><h3>No messages yet</h3><div>Say hello — works whenever the app loads, even when other apps get flaky in the crowd.</div></div>`;
-  return `<div class="sec-head"><div><h2>Group chat</h2><div class="lead">Everyone in the group can see this.</div></div></div>
+  }).join("") : `<div class="empty"><div class="big">💬</div><h3>No messages yet</h3><div>Say hello — type @ to tag someone. Works whenever the app loads, even when other apps get flaky in the crowd.</div></div>`;
+  return `<div class="sec-head"><div><h2>Group chat</h2><div class="lead">Everyone can see this · type @ to tag</div></div></div>
     <div class="chat-scroll" id="chat-scroll">${body}</div>
-    <div class="chat-input"><input id="chat-text" placeholder="Message the group…" autocomplete="off" maxlength="500"><button class="btn primary" id="chat-send">Send</button></div>`;
+    <div class="chat-compose">
+      <div class="mention-pop" id="mention-pop" style="display:none"></div>
+      <div class="chat-input"><input id="chat-text" placeholder="Message the group…" autocomplete="off" maxlength="500"><button class="btn primary" id="chat-send">Send</button></div>
+    </div>`;
 }
 async function sendMessage(text){
   text=(text||"").trim(); if(!text) return;
-  await addDoc(colMessages, { userId:state.user.id, name:state.user.name, text:text.slice(0,500), createdAt:serverTimestamp() });
+  const mentions=[];
+  [...state.users].forEach(u=>{
+    const safe=u.name.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+    if(new RegExp("@"+safe+"(?![\\w])","i").test(text)) mentions.push(u.id);
+  });
+  await addDoc(colMessages, { userId:state.user.id, name:state.user.name, text:text.slice(0,500), mentions, createdAt:serverTimestamp() });
 }
 
 /* ---- festival info ---- */
@@ -2238,6 +2392,53 @@ function renderInfoModal(){
     const title=wrap.querySelector("#i-title").value.trim(), body=wrap.querySelector("#i-body").value.trim();
     if(!title) return wrap.querySelector("#i-err").innerHTML=`<div class="err">Give it a title.</div>`;
     try{ await saveInfoItem({id:it.id,title,body}); close(); toast("Saved"); }catch(e){ wrap.querySelector("#i-err").innerHTML=`<div class="err">Couldn’t save.</div>`; }
+  };
+}
+
+/* ---- private work shift modal ---- */
+function renderShiftModal(){
+  const existing=document.querySelector(".modal-bg"); if(existing) existing.remove();
+  const sh=state.modal.data||{};
+  const editing=!!sh.id;
+  let days = editing ? [sh.day] : ["Friday","Saturday","Sunday"];   // sensible default for your case
+  const wrap=document.createElement("div"); wrap.className="modal-bg";
+  wrap.innerHTML=`<div class="modal">
+    <div class="modal-head"><h2>${editing?"Edit shift":"Add work shift"}</h2><button class="btn ghost sm" id="s-close">Close</button></div>
+    <div class="fmt">🔒 Private — only you can see shifts. They block your time so you won’t show as free to the group, without revealing what you’re doing.</div>
+    <div id="s-err"></div>
+    <label class="field"><span>Label</span><input id="s-label" value="${esc(sh.label||"Work shift")}" placeholder="e.g. Bar shift"></label>
+    <div class="field"><span>Day${editing?'':'s'}</span>
+      <div class="day-pick" id="s-days">${DAYS.map(d=>`<button type="button" class="day-opt ${days.includes(d)?'on':''}" data-day="${d}">${d.slice(0,3)}</button>`).join("")}</div>
+    </div>
+    <div class="row">
+      <label class="field"><span>Start</span><input id="s-start" type="time" value="${esc(sh.start||"12:00")}"></label>
+      <label class="field"><span>End</span><input id="s-end" type="time" value="${esc(sh.end||"19:00")}"></label>
+    </div>
+    <label class="field"><span>Note <span class="tag">(optional, private)</span></span><textarea id="s-note" rows="2" placeholder="e.g. meet supervisor at gate B, hi-vis required">${esc(sh.note||"")}</textarea></label>
+    <button class="btn primary block" id="s-save">${editing?"Save shift":"Add shift"+(days.length>1?" ("+days.length+" days)":"")}</button>
+  </div>`;
+  document.body.appendChild(wrap);
+  const close=()=>{ state.modal=null; wrap.remove(); };
+  wrap.querySelector("#s-close").onclick=close; wrap.onclick=e=>{ if(e.target===wrap) close(); };
+  const saveBtn=wrap.querySelector("#s-save");
+  wrap.querySelectorAll("[data-day]").forEach(b=>b.onclick=()=>{
+    const d=b.dataset.day;
+    if(editing){ days=[d]; wrap.querySelectorAll("[data-day]").forEach(x=>x.classList.toggle("on",x===b)); }
+    else { if(days.includes(d)) days=days.filter(x=>x!==d); else days.push(d); b.classList.toggle("on"); saveBtn.textContent="Add shift"+(days.length>1?" ("+days.length+" days)":""); }
+  });
+  const err=m=>wrap.querySelector("#s-err").innerHTML=`<div class="err">${esc(m)}</div>`;
+  saveBtn.onclick=async()=>{
+    const label=wrap.querySelector("#s-label").value.trim()||"Work shift";
+    const start=wrap.querySelector("#s-start").value, end=wrap.querySelector("#s-end").value;
+    const note=wrap.querySelector("#s-note").value;
+    if(!days.length) return err("Pick at least one day.");
+    if(!start) return err("Set a start time.");
+    saveBtn.disabled=true;
+    try{
+      if(editing) await saveShift({id:sh.id, label, day:days[0], start, end, note});
+      else for(const d of days) await saveShift({label, day:d, start, end, note});
+      close(); toast(editing?"Shift saved":`Added ${days.length>1?days.length+" shifts":"shift"}`);
+    }catch(e){ saveBtn.disabled=false; err("Couldn’t save — try again."); }
   };
 }
 
@@ -2290,8 +2491,10 @@ function freeWindows(){
   const out=[]; const ids=new Set(state.picks.map(p=>p.eventId));
   DAYS.forEach(day=>{
     const evs=state.events.filter(e=>ids.has(e.id)&&e.day===day);
-    if(evs.length<2) return;
-    const iv=evs.map(e=>{ let s=toMin(e.start), en=e.end?toMin(e.end):s+60; if(en<=s) en+=1440; return [s,en]; }).sort((a,b)=>a[0]-b[0]);
+    const myShifts=(state.shifts||[]).filter(sh=>sh.day===day);
+    const blocks=[...evs, ...myShifts];
+    if(blocks.length<2) return;
+    const iv=blocks.map(e=>{ let s=festMin(e.start), en=e.end?festMin(e.end):s+60; if(en<=s) en+=1440; return [s,en]; }).sort((a,b)=>a[0]-b[0]);
     const merged=[]; iv.forEach(x=>{ const last=merged[merged.length-1]; if(last && x[0]<=last[1]) last[1]=Math.max(last[1],x[1]); else merged.push([...x]); });
     for(let i=0;i<merged.length-1;i++){ const gap=merged[i+1][0]-merged[i][1]; if(gap>=45) out.push({day, start:merged[i][1], end:merged[i+1][0], mins:gap}); }
   });
