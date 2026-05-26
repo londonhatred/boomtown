@@ -426,6 +426,74 @@
   .seed-live b{color:var(--gold)}
   .seed-live #seed-clock{font-family:"Anton";font-size:16px;margin-left:4px}
 
+  /* ---------- HOME ---------- */
+  .home-hi{display:flex;align-items:flex-end;justify-content:space-between;margin:8px 0 16px}
+  .home-hello{font-size:13px;color:var(--muted);font-weight:600}
+  .home-fname{font-family:"Anton";font-size:28px;line-height:1;text-transform:uppercase;margin-top:3px}
+  .home-count{font-size:13px;color:var(--ink-2);font-weight:600;margin-bottom:14px}
+  .home-count .hc-n{font-family:"Anton";font-size:24px;color:var(--accent);margin-right:4px}
+  .home-card{background:var(--card);border:2px solid var(--ink);border-radius:var(--radius);padding:15px 16px;margin-bottom:12px;width:100%;text-align:left;display:block}
+  .home-card.accent{background:var(--ink);color:var(--paper)}
+  .home-card.accent .find-note,.home-card.accent .hc-meta{color:#cfc7b5}
+  .home-card.accent .area-tag{border-color:rgba(255,255,255,.5)}
+  .home-card.tappable{cursor:pointer}
+  .home-card.tappable:active{transform:translate(1px,1px)}
+  .hc-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .hc-title{font-family:"Archivo";font-weight:800;font-size:15px}
+  .hc-tag{font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.8;margin-bottom:6px}
+  .hc-big{font-family:"Anton";font-size:24px;line-height:1;text-transform:uppercase}
+  .hc-meta{font-size:12.5px;margin-top:8px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .hc-go{font-family:"Anton";color:var(--muted);font-size:20px}
+  .hc-pct{font-family:"Anton";font-size:22px;color:var(--teal)}
+  .hc-count{font-family:"Anton";color:var(--accent);font-size:15px;margin-left:4px}
+
+  .onnow-list,.crew-rows,.today-list{display:flex;flex-direction:column;gap:2px;margin-top:8px}
+  .onnow-row,.crew-row,.today-row{display:flex;align-items:center;gap:9px;padding:8px 2px;border-top:1px solid var(--line);width:100%;text-align:left;font-size:13.5px}
+  .onnow-row:first-child,.crew-row:first-child,.today-row:first-child{border-top:none}
+  .onnow-title,.today-title{flex:1;min-width:0;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .onnow-end,.crew-where{flex:none;font-size:11px;color:var(--muted);font-weight:600}
+  .onnow-mine{color:var(--accent)}
+  .today-time{flex:none;font-family:"Anton";font-size:14px;width:54px}
+  .crew-nm{flex:1;min-width:0;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .crew-row .mo-av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:10px;font-weight:800;flex:none;border:1.5px solid var(--ink)}
+
+  .attn-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+  .attn-pill{padding:8px 12px;border-radius:999px;border:2px solid var(--ink);background:var(--paper);font-weight:700;font-size:12.5px}
+
+  .home-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:4px}
+  .ha-tile{display:flex;flex-direction:column;align-items:center;gap:5px;padding:14px 6px;background:var(--card);border:2px solid var(--ink);border-radius:var(--radius-sm)}
+  .ha-tile:active{transform:translate(1px,1px)}
+  .ha-e{font-size:22px;line-height:1}
+  .ha-l{font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase}
+
+  /* on-now board */
+  .soon-in{font-size:11px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;color:var(--ink-2);background:var(--panel);border:1.5px solid var(--ink);border-radius:2px;padding:1px 7px}
+  .soon-in.live{color:var(--accent-ink);background:var(--accent)}
+
+  /* set recs */
+  .rec-list{display:flex;flex-direction:column;gap:2px}
+  .rec-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line)}
+  .rec-row:first-child{border-top:none}
+  .rec-main{flex:1;min-width:0}
+  .rec-title{font-weight:800;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rec-sub{font-size:11.5px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .sm-add{flex:none;width:34px;height:34px;border-radius:50%;border:2px solid var(--ink);background:var(--paper);display:grid;place-items:center}
+  .sm-add svg{width:16px;height:16px;fill:none;stroke:var(--ink);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  .sm-add.on{background:var(--teal)} .sm-add.on svg{stroke:#fff}
+
+  /* weather strip */
+  .weather-strip{display:flex;align-items:center;gap:10px;background:var(--card);border:2px solid var(--ink);border-radius:var(--radius);padding:11px 15px;margin-bottom:12px;font-size:13px;font-weight:600;flex-wrap:wrap}
+  .ws-day{font-family:"Anton";font-size:15px;text-transform:uppercase}
+  .ws-fc{font-weight:800}
+  .ws-sun{color:var(--muted);font-size:12px;margin-left:auto}
+
+  /* clash resolver */
+  .clash-list{display:flex;flex-direction:column;gap:2px}
+  .clash-item{padding:9px 0;border-top:1px solid var(--line)}
+  .clash-item:first-child{border-top:none}
+  .clash-when{font-family:"Anton";font-size:13px;text-transform:uppercase;color:var(--accent);margin-bottom:3px}
+  .clash-advice{font-size:13px;line-height:1.45}
+
   .offline-bar{position:fixed;left:0;right:0;top:0;z-index:90;display:none;align-items:center;justify-content:center;gap:8px;
     background:var(--ink);color:var(--paper);font-size:12px;font-weight:700;letter-spacing:.02em;padding:7px 14px;text-align:center;line-height:1.3}
   .offline-bar .od{width:8px;height:8px;border-radius:50%;background:var(--gold);flex:none}
@@ -549,7 +617,8 @@ const state = {
   crew: [],                   // local: ids of my "core crew" for meetup weighing
   meetMode: "all",            // "all" | "crew"
   meetDay: null,              // selected day in meetup finder
-  view: "browse",
+  onnowFilter: "all",         // on-now board filter: all | mine | <districtId>
+  view: "home",
   ready: { events:false, users:false, picks:false, structure:false },
   filters: { day:"all", district:"all", search:"" },
   sharedFriend: "all",
@@ -831,6 +900,7 @@ function afterData(){
   if(!allReady()){ root.innerHTML = loaderHTML(); return; }
   renderApp();
   maybeNotifyChanges(); scheduleNotifications();
+  if(navigator.onLine) refreshWeather().then(()=>{ if(state.view==="home"&&!document.querySelector(".modal-bg")) renderView(); });
 }
 
 /* ============================================================
@@ -916,7 +986,7 @@ function renderApp(){
 
 function navHTML(){
   const items = [
-    ["browse","Browse",`<path d="M4 6h16M4 12h16M4 18h16"/>`],
+    ["home","Home",`<path d="M4 11l8-7 8 7"/><path d="M6 10v9h12v-9"/>`],
     ["mine","Plan",`<path d="M5 4h11l4 4v12H5z"/><path d="M9 12l2 2 4-4"/>`],
     ["shared","Group",`<circle cx="9" cy="8" r="3"/><circle cx="17" cy="10" r="2.4"/><path d="M3.5 19c.6-3 3-4.5 5.5-4.5S14 16 14.6 19"/>`],
   ];
@@ -931,6 +1001,8 @@ function navHTML(){
 
 function openMenu(){
   const items=[];
+  items.push(["home","Home","🏠"]);
+  if(feat("onnow")&&festivalStart()) items.push(["onnow","On now & soon","🎶"]);
   items.push(["browse","Browse the lineup","🎫"]);
   items.push(["mine","My plan","🎟️"]);
   items.push(["shared","The group","👥"]);
@@ -961,7 +1033,9 @@ function openMenu(){
 function renderView(){
   if(state.view!=="find" && find.started) stopFindSensors();
   const v = document.getElementById("view");
-  if(state.view==="browse") v.innerHTML = viewBrowse();
+  if(state.view==="home") v.innerHTML = viewHome();
+  else if(state.view==="onnow") v.innerHTML = viewOnNow();
+  else if(state.view==="browse") v.innerHTML = viewBrowse();
   else if(state.view==="mine") v.innerHTML = viewMine();
   else if(state.view==="shared") v.innerHTML = viewShared();
   else if(state.view==="find") v.innerHTML = viewFind();
@@ -1016,6 +1090,399 @@ function groupByDay(list){
   const m = {}; DAYS.forEach(d=>m[d]=[]);
   list.forEach(e=>{ if(!m[e.day]) m[e.day]=[]; m[e.day].push(e); });
   return m;
+}
+
+/* ---------- HOME ---------- */
+// "before" | "during" | "after" | "nodate"
+function festivalPhase(){
+  const base=festivalStart(); if(!base) return "nodate";
+  const now=Date.now();
+  const startMs=new Date(base); startMs.setHours(12,0,0,0);              // gates open ~ noon Wed
+  const endMs=new Date(base); endMs.setDate(endMs.getDate()+DAYS.length-1); endMs.setHours(DAY_ROLLOVER_HOUR,0,0,0); endMs.setDate(endMs.getDate()+1); // ~6am after Sunday
+  if(now < startMs.getTime()) return "before";
+  if(now > endMs.getTime()) return "after";
+  return "during";
+}
+function currentFestivalDay(){
+  // which DAY name "now" belongs to, honouring the 6am rollover
+  const base=festivalStart(); if(!base) return DAYS[0];
+  const now=new Date();
+  let idx=Math.round((new Date(now.getFullYear(),now.getMonth(),now.getDate()) - new Date(base.getFullYear(),base.getMonth(),base.getDate()))/86400000);
+  if(now.getHours() < DAY_ROLLOVER_HOUR) idx-=1;   // early morning belongs to previous day
+  return DAYS[Math.max(0,Math.min(DAYS.length-1,idx))];
+}
+function onNowEvents(){
+  const now=Date.now();
+  return state.events.map(e=>({e,s:eventStart(e),e2:eventEnd(e)})).filter(x=>x.s && x.s.getTime()<=now && x.e2.getTime()>now)
+    .sort((a,b)=>a.e2-b.e2).map(x=>x.e);
+}
+function startingSoonEvents(mins){
+  const now=Date.now(), horizon=now+mins*60000;
+  return state.events.map(e=>({e,s:eventStart(e)})).filter(x=>x.s && x.s.getTime()>now && x.s.getTime()<=horizon)
+    .sort((a,b)=>a.s-b.s).map(x=>x.e);
+}
+function unreadMentionCount(){
+  if(!feat("chat")) return 0;
+  const me=state.user.id;
+  return state.messages.filter(m=>m.userId!==me && (m.createdAt&&m.createdAt.toMillis?m.createdAt.toMillis():0)>find.sessionStart && ((m.mentions&&m.mentions.includes(me))||messageMentionsMe(m.text||""))).length;
+}
+function changedPickCount(){
+  if(!feat("alerts")) return 0;
+  const ids=myPickIds();
+  return state.events.filter(e=>ids.has(e.id)&&eventChanged(e)).length;
+}
+
+function viewHome(){
+  const phase=festivalPhase();
+  const fname=esc(state.structure.festivalName||"Festival");
+  const hi=`<div class="home-hi"><div><div class="home-hello">Hi ${esc(state.user.name.split(/\s+/)[0])} 👋</div><div class="home-fname">${fname}</div></div></div>`;
+
+  if(phase==="before"||phase==="nodate"){
+    return hi + homeBefore(phase);
+  }
+  if(phase==="after"){
+    return hi + `<div class="home-card"><div class="hc-title">That's a wrap 💫</div><div class="find-note">Hope it was magic. ${feat("recap")?'Your festival recap is in the menu.':'Thanks for using the planner!'}</div></div>`
+      + homeQuickActions();
+  }
+  return hi + homeDuring();
+}
+
+function homeBefore(phase){
+  const ids=myPickIds();
+  const picks=state.events.filter(e=>ids.has(e.id));
+  const daysPlanned=new Set(picks.map(e=>e.day));
+  const noPlan=DAYS.filter(d=> state.events.some(e=>e.day===d) && !daysPlanned.has(d));
+  let countdown="";
+  if(phase==="before"){
+    const base=festivalStart(); const startMs=new Date(base); startMs.setHours(12,0,0,0);
+    const days=Math.ceil((startMs.getTime()-Date.now())/86400000);
+    countdown=`<div class="home-count"><span class="hc-n">${days}</span> day${days!==1?'s':''} to go</div>`;
+  } else {
+    countdown=`<div class="home-count"><span class="hc-n">soon</span> set a start date in Manage for countdowns &amp; “up next”</div>`;
+  }
+  // packing progress
+  let pack="";
+  if(feat("packing")){
+    const shared=(state.structure.packingItems||[]).length, mine=(state.myPacking.mine||[]).length;
+    const total=shared+mine, done=(state.myPacking.checked||[]).length;
+    if(total) pack=`<button class="home-card tappable" data-go="packing"><div class="hc-row"><div><div class="hc-title">🎒 Packing</div><div class="find-note">${done}/${total} packed</div></div><div class="hc-pct">${Math.round(done/total*100)}%</div></div><div class="pack-bar" style="margin-top:8px"><div class="pack-fill" style="width:${Math.round(done/total*100)}%"></div></div></button>`;
+  }
+  const planLine = picks.length
+    ? `${picks.length} pick${picks.length>1?'s':''}${noPlan.length?` · nothing planned ${noPlan.length>1?'for '+noPlan.length+' days':'for '+noPlan[0]}`:` · all days covered 🎉`}`
+    : `You haven't picked any acts yet`;
+  return `${countdown}
+    <button class="home-card tappable" data-go="browse"><div class="hc-row"><div><div class="hc-title">🎫 Your plan</div><div class="find-note">${planLine}</div></div><div class="hc-go">›</div></div></button>
+    ${pack}
+    ${feat("info")?`<button class="home-card tappable" data-go="info"><div class="hc-title">ℹ️ Festival info</div><div class="find-note">Travel, essentials &amp; emergency info</div></button>`:""}
+    ${homeQuickActions()}`;
+}
+
+function homeDuring(){
+  const cards=[];
+
+  // 1) NOW / NEXT (personal up-next + what's on now across stages)
+  const np = (feat("nextAct")&&festivalStart()) ? nextPickInfo() : null;
+  let nextCard="";
+  if(np){
+    if(np.shift){
+      const when=np.status==="now"?`On now · until ${esc(fmt12(np.ev.end||""))}`:`${untilText(np.mins)} · ${esc(fmt12(np.ev.start))}`;
+      nextCard=`<div class="home-card accent"><div class="hc-tag">${np.status==="now"?"On shift now":"Your shift up next"}</div><div class="hc-big">🔒 ${esc(np.ev.label||"Work shift")}</div><div class="hc-meta">${when}</div></div>`;
+    } else {
+      const walk = (locationEnabled()&&find.pos) ? walkLineFor(np.ev) : "";
+      const when=np.status==="now"?`On now · until ${esc(fmt12(toHM(np.until)))}`:`${untilText(np.mins)} · ${esc(fmt12(np.ev.start))}`;
+      nextCard=`<div class="home-card accent"><div class="hc-tag">${np.status==="now"?"Happening now":"Up next for you"}</div>
+        <div class="hc-big">${esc(np.ev.title)}</div>
+        <div class="hc-meta"><span class="area-tag" style="--c:${districtColor(np.ev.districtId)}">${esc(np.ev.districtName)}</span> ${esc(np.ev.stageName)} · ${when}${walk?` · ${walk}`:""}</div>
+        ${(locationEnabled()&&stagesWithCoords().some(s=>s.name===np.ev.stageName))?`<button class="btn lime sm" data-goto-stage="${esc(np.ev.stageName)}" style="margin-top:10px">Point me there →</button>`:""}</div>`;
+    }
+  }
+  cards.push(nextCard);
+
+  // weather strip + clash resolver (both auto-hide when empty)
+  cards.push(weatherCard());
+  cards.push(clashCard());
+
+  // 2) ON NOW across the festival (your areas/picks first feel: just show a few)
+  const onNow=onNowEvents();
+  if(onNow.length){
+    const ids=myPickIds();
+    const onnowTarget = (feat("onnow")&&festivalStart()) ? "onnow" : "browse";
+    const rows=onNow.slice(0,6).map(e=>`<button class="onnow-row tappable" data-go="${onnowTarget}"><span class="area-tag" style="--c:${districtColor(e.districtId)}">${esc(e.stageName)}</span><span class="onnow-title">${esc(e.title)}${ids.has(e.id)?' <span class="onnow-mine">★</span>':''}</span><span class="onnow-end">til ${esc(fmt12(e.end||""))}</span></button>`).join("");
+    cards.push(`<div class="home-card"><div class="hc-title">🎶 On now <span class="hc-count">${onNow.length}</span></div><div class="onnow-list">${rows}</div>${onNow.length>6?`<button class="link-btn" data-go="${onnowTarget}" style="margin-top:8px">see all ${onNow.length} →</button>`:""}</div>`);
+  }
+
+  // 3) ACTIVE RALLY CALLS
+  if(feat("overlaps")){
+    const calls=activeCalls();
+    if(calls.length){
+      const rows=calls.slice(0,3).map(c=>{
+        const ins=(c.in||[]).length; const joined=(c.in||[]).includes(state.user.id); const mine=c.userId===state.user.id;
+        return `<div class="call-row"><div class="call-main"><div class="call-title">${callText(c)}</div><div class="call-sub">${esc(c.name||'?')} · ${ins} in</div></div>${mine?'':`<button class="btn ${joined?'lime':'primary'} sm" data-joincall="${c.id}">${joined?'✓ In':'I’m in'}</button>`}</div>`;
+      }).join("");
+      cards.push(`<div class="home-card"><div class="hc-title">📣 Rally calls <span class="live-mini">live</span></div><div class="call-list">${rows}</div><button class="link-btn" data-go="shared" style="margin-top:8px">go to group →</button></div>`);
+    }
+  }
+
+  // 4) NEEDS ATTENTION (mentions, changed picks)
+  const mentions=unreadMentionCount(), changed=changedPickCount();
+  if(mentions||changed){
+    const bits=[];
+    if(mentions) bits.push(`<button class="attn-pill" data-go="chat">💬 ${mentions} mention${mentions>1?'s':''}</button>`);
+    if(changed) bits.push(`<button class="attn-pill" data-go="mine">⚠ ${changed} set time${changed>1?'s':''} changed</button>`);
+    cards.push(`<div class="home-card"><div class="hc-title">Heads up</div><div class="attn-row">${bits.join("")}</div></div>`);
+  }
+
+  // 5) THE CREW (who's sharing, roughly where)
+  if(locationEnabled()){
+    const ppl=peopleWithCoords();
+    if(ppl.length){
+      const rows=ppl.slice(0,6).map(p=>{
+        let where="sharing"; if(find.pos){ const nr=nearestStage(p.lat,p.lng); const d=haversine(find.pos.lat,find.pos.lng,p.lat,p.lng); where=(nr?("near "+nr.stage.name):fmtDist(d)+" away"); }
+        return `<button class="crew-row tappable" data-go="find"><span class="mo-av" style="background:${personColor(p.id)}">${esc(initials(p.name))}</span><span class="crew-nm">${esc(p.name)}${p.lost?' 🆘':''}</span><span class="crew-where">${esc(where)} · ${agoText(p.ts)}</span></button>`;
+      }).join("");
+      cards.push(`<div class="home-card"><div class="hc-title">👥 Your crew <span class="hc-count">${ppl.length}</span></div><div class="crew-rows">${rows}</div></div>`);
+    } else if(!find.share){
+      cards.push(`<div class="home-card"><div class="hc-title">👥 Find your crew</div><div class="find-note">Turn on location sharing so you can find each other.</div><button class="btn primary sm" data-go="find" style="margin-top:10px">Open Find →</button></div>`);
+    }
+  }
+
+  // 6) TODAY'S REMAINING PICKS
+  const today=currentFestivalDay();
+  const ids=myPickIds(); const now=Date.now();
+  const todayLeft=sortEvents(state.events.filter(e=>ids.has(e.id)&&e.day===today)).filter(e=>{ const s=eventStart(e); return s && s.getTime()>now-30*60000; });
+  if(todayLeft.length){
+    const rows=todayLeft.slice(0,5).map(e=>`<button class="today-row tappable" data-go="mine"><span class="today-time">${esc(fmt12(e.start))}</span><span class="today-title">${esc(e.title)}</span><span class="area-tag" style="--c:${districtColor(e.districtId)}">${esc(e.stageName)}</span></button>`).join("");
+    cards.push(`<div class="home-card"><div class="hc-title">📋 Rest of ${today}</div><div class="today-list">${rows}</div>${todayLeft.length>5?`<button class="link-btn" data-go="mine" style="margin-top:8px">full plan →</button>`:""}</div>`);
+  }
+
+  // 7) SET RECOMMENDATIONS
+  cards.push(recsCard());
+
+  // 8) QUICK ACTIONS
+  cards.push(homeQuickActions());
+
+  return cards.filter(Boolean).join("");
+}
+
+function walkLineFor(ev){
+  const st=stagesWithCoords().find(s=>s.name===ev.stageName);
+  if(!st||!find.pos) return "";
+  const sec=walkSecondsFromPos(find.pos, st.id);
+  return sec!=null ? fmtWalk(sec) : "";
+}
+function homeQuickActions(){
+  const acts=[];
+  if(locationEnabled()) acts.push(["find","🧭","Find"]);
+  if(feat("chat")) acts.push(["chat","💬","Chat"]);
+  acts.push(["browse","🎫","Lineup"]);
+  acts.push(["mine","🎟️","My plan"]);
+  if(feat("overlaps")) acts.push(["shared","🤝","Meet up"]);
+  if(feat("packing")) acts.push(["packing","🎒","Packing"]);
+  return `<div class="home-actions">${acts.map(([v,e,l])=>`<button class="ha-tile tappable" data-go="${v}"><span class="ha-e">${e}</span><span class="ha-l">${esc(l)}</span></button>`).join("")}</div>`;
+}
+
+/* ---------- ON NOW & SOON board ---------- */
+function viewOnNow(){
+  if(!festivalStart()) return `<div class="sec-head"><div><h2>On now</h2></div></div>${emptyState("🎶","No festival date set","The organiser needs to set the start date for this to work.")}`;
+  const ids=myPickIds();
+  const f=state.onnowFilter||"all";
+  // build a fast set of my area ids from my picks (for "my areas" filter)
+  const myAreaIds=new Set(state.events.filter(e=>ids.has(e.id)).map(e=>e.districtId));
+  const matchFilter=e=> f==="all" ? true : f==="mine" ? (ids.has(e.id)||myAreaIds.has(e.districtId)) : e.districtId===f;
+
+  const now=onNowEvents().filter(matchFilter);
+  const soon=startingSoonEvents(45).filter(matchFilter);
+
+  const filterChips=`<div class="filters">
+    <button class="chip ${f==='all'?'on':''}" data-onf="all">Everything</button>
+    <button class="chip ${f==='mine'?'on':''}" data-onf="mine">My picks &amp; areas</button>
+    ${state.structure.districts.map(d=>`<button class="chip ${f===d.id?'on':''}" data-onf="${d.id}"><span class="cdot" style="background:${districtColor(d.id)}"></span>${esc(d.name)}</button>`).join("")}
+  </div>`;
+
+  const card=e=>{
+    const walk=(locationEnabled()&&find.pos)?walkLineFor(e):"";
+    const hasLoc=locationEnabled()&&stagesWithCoords().some(s=>s.name===e.stageName);
+    const ss=eventStart(e); const mins=ss?Math.round((ss.getTime()-Date.now())/60000):null;
+    return `<div class="ev" data-ev="${e.id}" style="box-shadow:inset 5px 0 0 ${districtColor(e.districtId)}">
+      <div class="time"><div class="t">${esc(fmt12(e.start))}</div><div class="t2">${e.end?('→ '+esc(fmt12(e.end))):''}</div></div>
+      <div class="body">
+        <h3>${esc(e.title)}${ids.has(e.id)?' <span class="onnow-mine">★</span>':''}</h3>
+        <div class="meta"><span class="area-tag" style="--c:${districtColor(e.districtId)}">${esc(e.districtName)}</span><span class="loc">${esc(e.stageName)}</span></div>
+        <div class="meta">${mins!=null&&mins>0?`<span class="soon-in">in ${mins} min</span>`:`<span class="soon-in live">on now</span>`}${walk?`<span class="loc">${walk}</span>`:""}</div>
+      </div>
+      ${hasLoc?`<div class="act"><button class="pick-btn" data-goto-stage="${esc(e.stageName)}" aria-label="navigate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg></button></div>`:""}
+    </div>`;
+  };
+
+  return `<div class="sec-head"><div><h2>On now &amp; soon</h2><div class="lead">Live across the festival · ${currentFestivalDay()}</div></div></div>
+    ${filterChips}
+    <div class="day-label">On now${now.length?` <span class="hc-count">${now.length}</span>`:''}</div>
+    ${now.length?now.map(card).join(""):`<div class="find-note" style="padding:8px 2px">Nothing ${f==='all'?'':'matching'} playing right now.</div>`}
+    <div class="day-label" style="margin-top:22px">Starting soon</div>
+    ${soon.length?soon.map(card).join(""):`<div class="find-note" style="padding:8px 2px">Nothing in the next 45 min${f==='all'?'':' here'}.</div>`}`;
+}
+
+/* ---------- SET RECOMMENDATIONS ---------- */
+// acts your crew (or group) is seeing that you're free for and haven't picked
+function setRecs(limit){
+  if(!feat("recs")||!festivalStart()) return [];
+  const me=state.user.id;
+  const myIds=myPickIds();
+  // who counts: crew if set & in crew mode-ish, else whole group (minus me)
+  let peers = state.users.map(u=>u.id).filter(id=>id!==me);
+  if(state.crew && state.crew.length) peers = peers.filter(id=>state.crew.includes(id));
+  const peerSet=new Set(peers);
+  // my busy intervals per day (picks + shifts) for "am I free" test
+  const myBusy={};
+  DAYS.forEach(d=>{ myBusy[d]=[]; });
+  state.events.filter(e=>myIds.has(e.id)).forEach(e=>{ (myBusy[e.day]=myBusy[e.day]||[]).push(timeRangeMin(e)); });
+  (state.shifts||[]).forEach(sh=>{ (myBusy[sh.day]=myBusy[sh.day]||[]).push(timeRangeMin({day:sh.day,start:sh.start,end:sh.end||addHour(sh.start)})); });
+  const freeFor=e=>{ const [s,en]=timeRangeMin(e); return !(myBusy[e.day]||[]).some(([bs,be])=> s<be && bs<en); };
+  // count peer picks per event
+  const peerCount={};
+  state.picks.forEach(p=>{ if(p.userId!==me && peerSet.has(p.userId)) peerCount[p.eventId]=(peerCount[p.eventId]||0)+1; });
+  const now=Date.now();
+  const recs=state.events.filter(e=>{
+    if(myIds.has(e.id)) return false;                 // already going
+    if(!peerCount[e.id]) return false;                // nobody's going
+    const ss=eventStart(e); if(ss && ss.getTime()<now-30*60000) return false;  // already passed
+    return freeFor(e);                                // you're free
+  }).map(e=>({e, n:peerCount[e.id], who:state.picks.filter(p=>p.eventId===e.id && peerSet.has(p.userId)).map(p=>{const u=state.users.find(x=>x.id===p.userId);return u?u.name:"?";})}))
+    .sort((a,b)=> b.n-a.n || (eventStart(a.e)?.getTime()||0)-(eventStart(b.e)?.getTime()||0));
+  return limit?recs.slice(0,limit):recs;
+}
+function recsCard(){
+  const recs=setRecs(4);
+  if(!recs.length) return "";
+  const crewWord = (state.crew&&state.crew.length)?"your crew":"the group";
+  const rows=recs.map(r=>{
+    const shown=r.who.slice(0,3).map(esc).join(", ")+(r.who.length>3?` +${r.who.length-3}`:"");
+    return `<div class="rec-row">
+      <div class="rec-main"><div class="rec-title">${esc(r.e.title)}</div>
+        <div class="rec-sub"><span class="area-tag" style="--c:${districtColor(r.e.districtId)}">${esc(r.e.stageName)}</span> ${esc(r.e.day.slice(0,3))} ${esc(fmt12(r.e.start))} · ${esc(shown)}</div></div>
+      <button class="pick-btn sm-add" data-pick="${r.e.id}" aria-label="add"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></button>
+    </div>`;
+  }).join("");
+  return `<div class="free-card"><div class="free-head">🔥 ${crewWord} are seeing</div>
+    <div class="find-note" style="margin-bottom:8px">Acts ${crewWord} picked that you're free for. Tap ✓ to add.</div>
+    <div class="rec-list">${rows}</div></div>`;
+}
+
+/* ---------- WEATHER (cached, sunrise/sunset offline) ---------- */
+function festivalCoords(){
+  // average of pinned stages, else null
+  const ss=stagesWithCoords(); if(!ss.length) return null;
+  return { lat: ss.reduce((a,s)=>a+s.lat,0)/ss.length, lng: ss.reduce((a,s)=>a+s.lng,0)/ss.length };
+}
+// daylight from lat/long + date — pure math, works offline
+function sunTimes(date,lat,lng){
+  const rad=Math.PI/180;
+  const dayMs=86400000, J1970=2440588, J2000=2451545;
+  const toJulian=d=>d.valueOf()/dayMs-0.5+J1970;
+  const toDays=d=>toJulian(d)-J2000;
+  const e=rad*23.4397;
+  const M=rad*(357.5291+0.98560028*toDays(date));
+  const C=rad*(1.9148*Math.sin(M)+0.02*Math.sin(2*M)+0.0003*Math.sin(3*M));
+  const L=M+C+rad*102.9372+Math.PI;
+  const dec=Math.asin(Math.sin(0)*Math.cos(e)+Math.cos(0)*Math.sin(e)*Math.sin(L));
+  const lw=rad*-lng;
+  const n=Math.round(toDays(date)-0.0009-lw/(2*Math.PI));
+  const ds=0.0009+lw/(2*Math.PI)+n;
+  const Ms=rad*(357.5291+0.98560028*(ds+ (J2000-J2000)));
+  // simpler: use approximate transit
+  const Jtransit=J2000+ds+0.0053*Math.sin(M)-0.0069*Math.sin(2*(M+C+rad*102.9372+Math.PI));
+  const h0=(-0.83)*rad;
+  const w0=Math.acos((Math.sin(h0)-Math.sin(rad*lat)*Math.sin(dec))/(Math.cos(rad*lat)*Math.cos(dec)));
+  if(isNaN(w0)) return null;
+  const Jset=Jtransit+ (w0/(2*Math.PI));
+  const Jrise=Jtransit-(w0/(2*Math.PI));
+  const fromJulian=j=>new Date((j+0.5-J1970)*dayMs);
+  return { sunrise:fromJulian(Jrise), sunset:fromJulian(Jset) };
+}
+function weatherCard(){
+  if(!feat("weather")||!festivalStart()) return "";
+  const co=festivalCoords();
+  const day=currentFestivalDay();
+  const date=dateForDay(day)||new Date();
+  let sunLine="";
+  if(co){
+    const st=sunTimes(date,co.lat,co.lng);
+    if(st&&st.sunrise&&st.sunset) sunLine=`🌅 ${clockMs(st.sunrise.getTime())} · 🌇 ${clockMs(st.sunset.getTime())}`;
+  }
+  // cached forecast (fetched by refreshWeather when online)
+  const w=state.structure.weatherCache;
+  let fc="";
+  if(w && w.daily){
+    const dstr=date.toISOString().slice(0,10);
+    const i=(w.daily.time||[]).indexOf(dstr);
+    if(i>=0){
+      const hi=Math.round(w.daily.temperature_2m_max[i]), lo=Math.round(w.daily.temperature_2m_min[i]);
+      const rain=w.daily.precipitation_probability_max?w.daily.precipitation_probability_max[i]:null;
+      fc=`${hi}° / ${lo}°${rain!=null?` · ☔ ${rain}%`:""}`;
+    }
+  }
+  if(!sunLine && !fc) return "";
+  return `<div class="weather-strip"><span class="ws-day">${day.slice(0,3)}</span>${fc?`<span class="ws-fc">${fc}</span>`:""}${sunLine?`<span class="ws-sun">${sunLine}</span>`:""}</div>`;
+}
+async function refreshWeather(){
+  if(!feat("weather")) return;
+  const co=festivalCoords(); if(!co) return;
+  // only refetch every ~3h
+  const w=state.structure.weatherCache;
+  if(w && w.fetchedAt && Date.now()-w.fetchedAt < 3*3600000) return;
+  try{
+    const url=`https://api.open-meteo.com/v1/forecast?latitude=${co.lat.toFixed(3)}&longitude=${co.lng.toFixed(3)}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=10`;
+    const res=await fetch(url); if(!res.ok) return;
+    const data=await res.json();
+    if(state.user && state.user.admin) await saveStructure({...state.structure, weatherCache:{ daily:data.daily, fetchedAt:Date.now() }});
+    else state.structure.weatherCache={ daily:data.daily, fetchedAt:Date.now() };  // local only for non-admins
+  }catch(e){}
+}
+
+/* ---------- CLASH RESOLVER ---------- */
+function dayClashes(day){
+  const ids=myPickIds();
+  const list=sortEvents(state.events.filter(e=>ids.has(e.id)&&e.day===day));
+  const pairs=[];
+  for(let i=0;i<list.length;i++)for(let j=i+1;j<list.length;j++){
+    if(overlaps(list[i],list[j])){
+      const [as,ae]=timeRangeMin(list[i]), [bs,be]=timeRangeMin(list[j]);
+      const overlapMin=Math.min(ae,be)-Math.max(as,bs);
+      pairs.push({a:list[i],b:list[j],overlapMin});
+    }
+  }
+  return pairs;
+}
+function clashAdvice(a,b){
+  // which starts first / ends first → suggest catching the start of one then walking
+  const [as,ae]=timeRangeMin(a),[bs,be]=timeRangeMin(b);
+  const first = as<=bs ? a : b, second = as<=bs ? b : a;
+  const [fs,fe]=timeRangeMin(first), [ss,se]=timeRangeMin(second);
+  const catchMin = ss-fs; // minutes of `first` before `second` starts
+  // walk time between the two stages
+  let walk=null;
+  const sa=stagesWithCoords().find(s=>s.name===first.stageName), sb=stagesWithCoords().find(s=>s.name===second.stageName);
+  if(sa&&sb) walk=walkSeconds(sa.id,sb.id);
+  const walkM=walk!=null?Math.max(1,Math.round(walk/60)):null;
+  let line;
+  if(catchMin>=20){
+    line=`Catch ~${catchMin} min of <b>${esc(first.title)}</b>, then head to <b>${esc(second.title)}</b>`;
+    if(walkM!=null) line+=` (~${walkM} min walk${catchMin-walkM<10?`, you'll arrive a touch late`:''})`;
+  } else {
+    line=`<b>${esc(first.title)}</b> &amp; <b>${esc(second.title)}</b> barely overlap — you'd only catch ~${catchMin} min of the first`;
+    if(walkM!=null) line+=` and it's a ~${walkM} min walk between them`;
+  }
+  return line;
+}
+function clashCard(){
+  const ids=myPickIds();
+  const days=DAYS.filter(d=> state.events.some(e=>ids.has(e.id)&&e.day===d));
+  const all=[]; days.forEach(d=>{ dayClashes(d).forEach(c=>all.push({day:d,...c})); });
+  if(!all.length) return "";
+  const rows=all.slice(0,5).map(c=>`<div class="clash-item"><div class="clash-when">${c.day.slice(0,3)} · ${esc(fmt12(c.a.start))}</div><div class="clash-advice">${clashAdvice(c.a,c.b)}</div></div>`).join("");
+  return `<div class="free-card" style="border-color:var(--accent)"><div class="free-head">⚠ ${all.length} clash${all.length>1?'es':''} in your plan</div>
+    <div class="find-note" style="margin-bottom:8px">Overlapping picks — here's how to make the most of each.</div>
+    <div class="clash-list">${rows}</div>${all.length>5?`<div class="find-note" style="margin-top:8px">+${all.length-5} more</div>`:""}</div>`;
 }
 
 /* ---------- BROWSE ---------- */
@@ -1114,6 +1581,7 @@ function viewMine(){
       <div class="stat"><div class="n">${daysActive}</div><div class="l">Days out</div></div>
       <div class="stat"><div class="n">${[...clashSet].filter(x=>typeof x==='string'&&!x.startsWith('sh:')).length||0}</div><div class="l">Clashes</div></div>
     </div>
+    ${clashCard()}
     ${DAYS.filter(d=>byDay[d]&&byDay[d].length).map(d=>`
       <div class="day-label">${d}</div>
       ${byDay[d].map(item=> item.kind==="ev"
@@ -1308,7 +1776,10 @@ function viewAdmin(){
          ["overlaps","Free-time finder","Suggests gaps to meet up / eat in the Group tab"],
          ["alerts","Set-time change alerts","Flags picks on people’s plans when a time changes"],
          ["notify","Reminders / notifications","Lets people opt in to “starting soon” nudges"],
-         ["shifts","Private work shifts","Lets anyone add private shifts that block their free time"]].map(([k,t,d])=>`
+         ["shifts","Private work shifts","Lets anyone add private shifts that block their free time"],
+         ["onnow","On now &amp; soon board","Live view of what’s playing across stages right now"],
+         ["recs","Set recommendations","Suggests acts your crew are seeing that you’re free for"],
+         ["weather","Weather &amp; daylight","Shows forecast + sunrise/sunset on Home"]].map(([k,t,d])=>`
         <div class="share-row" style="border:none;padding:8px 0;margin:0;background:none;border-top:1px solid var(--line)">
           <div style="min-width:0"><b style="font-size:13.5px">${t}</b><div class="find-note">${d}</div></div>
           <button class="switch ${feat(k)?'on':''}" data-feat="${k}" role="switch" aria-checked="${feat(k)}"><span></span></button>
@@ -1382,6 +1853,12 @@ function wireView(){
   const v = document.getElementById("view");
   if(!v) return;
 
+  // home / generic navigation tiles
+  v.querySelectorAll("[data-go]").forEach(b=>b.onclick=(e)=>{
+    if(e.target.closest("[data-joincall],[data-goto-stage]")) return; // let specific actions handle themselves
+    state.view=b.dataset.go; renderApp();
+  });
+
   // pick toggles (browse / mine / shared)
   v.querySelectorAll("[data-pick]").forEach(b=>b.onclick=async()=>{
     b.classList.toggle("on");
@@ -1401,6 +1878,7 @@ function wireView(){
 
   // ---- shared friend selector ----
   v.querySelectorAll("[data-friend]").forEach(b=>b.onclick=()=>{ state.sharedFriend=b.dataset.friend; renderView(); });
+  v.querySelectorAll("[data-onf]").forEach(b=>b.onclick=()=>{ state.onnowFilter=b.dataset.onf; renderView(); });
   // ---- meetup finder ----
   v.querySelectorAll("[data-meetmode]").forEach(b=>b.onclick=()=>{ state.meetMode=b.dataset.meetmode; renderView(); });
   v.querySelectorAll("[data-meetday]").forEach(b=>b.onclick=()=>{ state.meetDay=b.dataset.meetday; renderView(); });
@@ -2534,9 +3012,21 @@ function scheduleNotifications(){
   const ids=myPickIds(), now=Date.now();
   state.events.filter(e=>ids.has(e.id)).forEach(e=>{
     const s=eventStart(e); if(!s) return;
+    // standard 15-min "starting soon"
     const lead=s.getTime()-15*60000;
     if(lead>now && lead-now < 12*3600000)
       find.notifyTimers.push(setTimeout(()=>{ pushNotify("Starting soon", `${e.title} at ${e.stageName} in ~15 min`, "soon-"+e.id); }, lead-now));
+    // "leave now" — fire earlier by the estimated walk time, if we can estimate it
+    const st=stagesWithCoords().find(x=>x.name===e.stageName);
+    if(st){
+      const walkSec = find.pos ? walkSecondsFromPos(find.pos, st.id) : null;
+      if(walkSec && walkSec>3*60){                       // only worth it if >3 min away
+        const walkMin=Math.round(walkSec/60);
+        const leaveAt=s.getTime()-walkSec*1000-2*60000;  // leave + 2 min buffer
+        if(leaveAt>now && leaveAt-now < 12*3600000 && leaveAt < lead)  // only if earlier than the 15-min nudge
+          find.notifyTimers.push(setTimeout(()=>{ pushNotify("Time to head over", `Leave now for ${e.title} — ~${walkMin} min walk to ${e.stageName}`, "leave-"+e.id); }, leaveAt-now));
+      }
+    }
   });
   if(feat("shifts")) (state.shifts||[]).forEach(sh=>{
     const s=eventStart(sh); if(!s) return;
