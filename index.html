@@ -392,6 +392,38 @@
     background:var(--card);font-weight:700;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-2)}
   .day-opt.on{background:var(--ink);color:var(--paper)}
 
+  /* meetup heatmap + windows */
+  .hm-wrap{margin:4px 0 6px}
+  .hm{display:flex;gap:1px;height:34px;border:2px solid var(--ink);border-radius:var(--radius-sm);overflow:hidden}
+  .hm-cell{flex:1;background:var(--teal);min-width:0}
+  .hm-ticks{display:flex;justify-content:space-between;font-size:9px;color:var(--muted);font-weight:700;margin-top:3px;letter-spacing:.02em}
+  .hm-legend{display:flex;justify-content:space-between;align-items:center;margin:2px 0 10px}
+  .link-btn{background:none;border:none;color:var(--accent);font-weight:700;font-size:11.5px;text-decoration:underline;padding:0}
+  .meet-list{display:flex;flex-direction:column;gap:8px}
+  .meet-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--paper);border:1.5px solid var(--ink);border-radius:var(--radius-sm);width:100%;text-align:left;cursor:pointer}
+  .meet-row .mr-time{flex:none;min-width:108px}
+  .meet-row .mr-time b{display:block;font-size:13.5px}
+  .meet-row .mr-time span{font-size:10.5px;color:var(--muted);font-weight:700}
+  .meet-row .mr-bar{flex:1;height:8px;background:var(--panel);border:1.5px solid var(--ink);border-radius:999px;overflow:hidden}
+  .meet-row .mr-fill{height:100%;background:var(--teal)}
+  .meet-row .mr-go{font-family:"Anton";color:var(--muted);font-size:18px}
+
+  /* rally calls */
+  .live-mini{font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-ink);background:var(--accent);border:1.5px solid var(--ink);border-radius:2px;padding:1px 6px;vertical-align:2px}
+  .call-list{display:flex;flex-direction:column;gap:8px}
+  .call-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--paper);border:1.5px solid var(--ink);border-radius:var(--radius-sm)}
+  .call-main{flex:1;min-width:0}
+  .call-title{font-weight:800;font-size:14px}
+  .call-sub{font-size:11.5px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  /* crew picker */
+  .crew-list{display:flex;flex-direction:column;gap:7px;max-height:50dvh;overflow-y:auto}
+  .crew-opt{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;text-align:left;font-weight:700;font-size:14px;
+    background:var(--card);border:2px solid var(--ink);border-radius:var(--radius-sm)}
+  .crew-opt.on{background:var(--panel)}
+  .crew-opt .crew-chk{margin-left:auto;font-weight:900;color:var(--teal);font-size:16px}
+  .crew-opt .mo-av{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:11px;font-weight:800;flex:none;border:1.5px solid var(--ink)}
+
   .offline-bar{position:fixed;left:0;right:0;top:0;z-index:90;display:none;align-items:center;justify-content:center;gap:8px;
     background:var(--ink);color:var(--paper);font-size:12px;font-weight:700;letter-spacing:.02em;padding:7px 14px;text-align:center;line-height:1.3}
   .offline-bar .od{width:8px;height:8px;border-radius:50%;background:var(--gold);flex:none}
@@ -492,6 +524,7 @@ const colPicks     = collection(db, "picks");
 const colLocations = collection(db, "locations");
 const colPins      = collection(db, "pins");
 const colMessages  = collection(db, "messages");
+const colCalls     = collection(db, "calls");
 const colPacking   = collection(db, "packing");
 const colShifts    = collection(db, "shifts");
 
@@ -508,6 +541,10 @@ const state = {
   menuOpen: false,
   locations: [],              // [{id(userId),name,lat,lng,acc,updatedAt}]
   pins: [],                   // [{id,ownerId,ownerName,label,type,lat,lng,shared,updatedAt}]
+  calls: [],                  // live rally calls: [{id,userId,name,kind,label,at,in:[ids],createdAt,expiresAt}]
+  crew: [],                   // local: ids of my "core crew" for meetup weighing
+  meetMode: "all",            // "all" | "crew"
+  meetDay: null,              // selected day in meetup finder
   view: "browse",
   ready: { events:false, users:false, picks:false, structure:false },
   filters: { day:"all", district:"all", search:"" },
@@ -639,6 +676,7 @@ async function deleteEvent(id){
    ============================================================ */
 let authMode = "login";
 let adminSel = { on:false, ids:new Set() };
+try{ state.crew = JSON.parse(localStorage.getItem("fp_crew")||"[]"); }catch(e){ state.crew=[]; }
 
 // PWA: register the service worker (offline app shell + notifications)
 if("serviceWorker" in navigator){
@@ -711,6 +749,28 @@ function subscribeAll(){
     state.messages = snap.docs.map(d=>({id:d.id,...d.data()}))
       .sort((a,b)=>((a.createdAt&&a.createdAt.toMillis?a.createdAt.toMillis():0)-(b.createdAt&&b.createdAt.toMillis?b.createdAt.toMillis():0)));
     if(state.user){ maybeNotifyMentions(); if((state.view==="chat"||state.view==="browse") && !document.querySelector(".modal-bg")) renderApp(); }
+  });
+  onSnapshot(colCalls, snap=>{
+    state.calls = snap.docs.map(d=>({id:d.id,...d.data()}));
+    if(state.user){ maybeNotifyCalls(); if(!document.querySelector(".modal-bg")) renderApp(); }
+  });
+}
+function activeCalls(){
+  const now=Date.now();
+  return state.calls
+    .filter(c=> (c.expiresAt||0) > now)
+    .sort((a,b)=>((b.createdAt&&b.createdAt.toMillis?b.createdAt.toMillis():0)-(a.createdAt&&a.createdAt.toMillis?a.createdAt.toMillis():0)));
+}
+function maybeNotifyCalls(){
+  if(!state.user || !feat("overlaps")) return;
+  const me=state.user.id;
+  activeCalls().forEach(c=>{
+    if(c.userId===me) return;
+    const t=(c.createdAt&&c.createdAt.toMillis)?c.createdAt.toMillis():0;
+    if(t<=find.sessionStart) return;
+    if(find.notifiedCalls&&find.notifiedCalls[c.id]) return;
+    find.notifiedCalls=find.notifiedCalls||{}; find.notifiedCalls[c.id]=true;
+    if(feat("notify") && find.notify) pushNotify(`${c.name||"Someone"}: ${callText(c)}`, "Tap to join in the app", "call-"+c.id);
   });
 }
 function maybeNotifyMentions(){
@@ -1120,7 +1180,8 @@ function viewShared(){
   return `
     <div class="sec-head"><div><h2>The group</h2><div class="lead">${lead}</div></div></div>
     <div class="filters">${friendChips}</div>
-    ${friend==="all"?freeTimeCard():""}
+    ${friend==="all"?meetupCard():""}
+    ${friend==="all"?callsCard():""}
     ${body}
   `;
 }
@@ -1323,6 +1384,21 @@ function wireView(){
 
   // ---- shared friend selector ----
   v.querySelectorAll("[data-friend]").forEach(b=>b.onclick=()=>{ state.sharedFriend=b.dataset.friend; renderView(); });
+  // ---- meetup finder ----
+  v.querySelectorAll("[data-meetmode]").forEach(b=>b.onclick=()=>{ state.meetMode=b.dataset.meetmode; renderView(); });
+  v.querySelectorAll("[data-meetday]").forEach(b=>b.onclick=()=>{ state.meetDay=b.dataset.meetday; renderView(); });
+  const crewEdit=v.querySelector("#crew-edit"); if(crewEdit) crewEdit.onclick=()=>{ state.modal={type:"crew"}; renderModal(); };
+  v.querySelectorAll("[data-meetwin]").forEach(b=>b.onclick=()=>{
+    const [day,mid]=b.dataset.meetwin.split("|");
+    const people=meetPeople(); const {free,busy}=whoFreeAt(day,+mid,people);
+    const fNames=free.map(id=>{const u=state.users.find(x=>x.id===id);return u?u.name:"?";});
+    const bNames=busy.map(id=>{const u=state.users.find(x=>x.id===id);return u?u.name:"?";});
+    state.modal={type:"meetwin",data:{day,mid:+mid,free:fNames,busy:bNames}}; renderModal();
+  });
+  // ---- rally calls ----
+  const callNew=v.querySelector("#call-new"); if(callNew) callNew.onclick=()=>{ state.modal={type:"call"}; renderModal(); };
+  v.querySelectorAll("[data-joincall]").forEach(b=>b.onclick=async()=>{ const c=state.calls.find(x=>x.id===b.dataset.joincall); if(c){ try{ await joinCall(c); }catch(e){ toast("Couldn’t update"); } } });
+  v.querySelectorAll("[data-endcall]").forEach(b=>b.onclick=async()=>{ if(confirm("End this call?")){ await endCall(b.dataset.endcall); toast("Call ended"); } });
 
   // ---- find / compass ----
   if(state.view==="find"){
@@ -1535,6 +1611,9 @@ function renderModal(){
   if(state.modal.type==="pin"){ renderPinModal(); return; }
   if(state.modal.type==="info"){ renderInfoModal(); return; }
   if(state.modal.type==="shift"){ renderShiftModal(); return; }
+  if(state.modal.type==="call"){ renderCallModal(); return; }
+  if(state.modal.type==="crew"){ renderCrewModal(); return; }
+  if(state.modal.type==="meetwin"){ renderMeetWinModal(); return; }
   if(state.modal.type==="packlist"){ renderPackListModal(); return; }
   if(state.modal.type!=="event") return;
 
@@ -1827,7 +1906,7 @@ function renderBulkModal(){
 let find = { started:false, enabledOnce:false, geoWatch:null, orientBound:false, orientHandler:null,
              pos:null, acc:null, heading:null, hasOrientation:false, headingMode:"auto", target:null, error:null,
              show:{stages:true,people:true,pins:true}, share:false, shareTimer:null, myUpdated:0, lastWrite:0,
-             lost:false, autoStopAt:0, autoStopTimer:null, packingSubbed:false, notify:false, notifyTimers:[], notifiedChanges:{}, notifiedMentions:{}, sessionStart:Date.now() };
+             lost:false, autoStopAt:0, autoStopTimer:null, packingSubbed:false, notify:false, notifyTimers:[], notifiedChanges:{}, notifiedMentions:{}, notifiedCalls:{}, sessionStart:Date.now() };
 
 const R_EARTH = 6371000;
 const toRad = d => d*Math.PI/180, toDeg = r => r*180/Math.PI;
@@ -2487,25 +2566,221 @@ function renderPackListModal(){
 }
 
 /* ---- free-time finder ---- */
-function freeWindows(){
-  const out=[]; const ids=new Set(state.picks.map(p=>p.eventId));
-  DAYS.forEach(day=>{
-    const evs=state.events.filter(e=>ids.has(e.id)&&e.day===day);
-    const myShifts=(state.shifts||[]).filter(sh=>sh.day===day);
-    const blocks=[...evs, ...myShifts];
-    if(blocks.length<2) return;
-    const iv=blocks.map(e=>{ let s=festMin(e.start), en=e.end?festMin(e.end):s+60; if(en<=s) en+=1440; return [s,en]; }).sort((a,b)=>a[0]-b[0]);
-    const merged=[]; iv.forEach(x=>{ const last=merged[merged.length-1]; if(last && x[0]<=last[1]) last[1]=Math.max(last[1],x[1]); else merged.push([...x]); });
-    for(let i=0;i<merged.length-1;i++){ const gap=merged[i+1][0]-merged[i][1]; if(gap>=45) out.push({day, start:merged[i][1], end:merged[i+1][0], mins:gap}); }
-  });
-  return out;
+/* ============================================================
+   GROUP MEETUP FINDER — availability across people, not just gaps
+   ============================================================ */
+const MEET_START=12*60, MEET_END=30*60;          // festival-day window: noon → 6am next
+const MEET_STEP=15;                               // resolution in minutes
+
+// people we weigh: those who've actually planned (>=2 picks), optionally limited to my crew
+function meetPeople(){
+  const planned={};
+  state.picks.forEach(p=>{ planned[p.userId]=(planned[p.userId]||0)+1; });
+  let ids=state.users.map(u=>u.id).filter(id=>(planned[id]||0)>=2);
+  if(state.meetMode==="crew" && state.crew.length){
+    const crewSet=new Set([...state.crew, state.user.id]);
+    ids=ids.filter(id=>crewSet.has(id));
+  }
+  return ids;
 }
-function freeTimeCard(){
+// busy intervals (festival-day minutes) for a given person on a given day
+function busyFor(userId,day){
+  const ids=new Set(state.picks.filter(p=>p.userId===userId).map(p=>p.eventId));
+  const evs=state.events.filter(e=>ids.has(e.id)&&e.day===day);
+  const blocks=evs.slice();
+  if(userId===state.user.id) (state.shifts||[]).filter(sh=>sh.day===day).forEach(sh=>blocks.push(sh));
+  return blocks.map(e=>{ let s=festMin(e.start), en=e.end?festMin(e.end):s+60; if(en<=s) en+=1440; return [s,en]; });
+}
+// for each step in the day, how many of `people` are free
+function availabilityProfile(day, people){
+  const slots=[];
+  const busy=people.map(id=>busyFor(id,day));
+  for(let t=MEET_START;t<MEET_END;t+=MEET_STEP){
+    let free=0;
+    busy.forEach(intervals=>{ const b=intervals.some(([s,e])=> t>=s && t<e); if(!b) free++; });
+    slots.push(free);
+  }
+  return slots; // array of counts, index i => time MEET_START + i*MEET_STEP
+}
+// merge contiguous steps where free-count stays high into ranked windows
+function bestWindows(day, people, minLen){
+  const prof=availabilityProfile(day,people);
+  const n=people.length||1;
+  // threshold: at least ~60% free (and at least 2), so it stays useful at scale
+  const need=Math.max(2, Math.ceil(n*0.6));
+  const wins=[]; let i=0;
+  while(i<prof.length){
+    if(prof[i]>=need){
+      let j=i, minFree=prof[i];
+      while(j<prof.length && prof[j]>=need){ minFree=Math.min(minFree,prof[j]); j++; }
+      const start=MEET_START+i*MEET_STEP, end=MEET_START+j*MEET_STEP, len=end-start;
+      if(len>=minLen) wins.push({day,start,end,len,minFree,maxFree:Math.max(...prof.slice(i,j))});
+      i=j;
+    } else i++;
+  }
+  return wins.sort((a,b)=> b.maxFree-a.maxFree || b.len-a.len);
+}
+function whoFreeAt(day, minute, people){
+  const free=[],busy=[];
+  people.forEach(id=>{ const b=busyFor(id,day).some(([s,e])=>minute>=s&&minute<e); (b?busy:free).push(id); });
+  return {free,busy};
+}
+
+function meetupCard(){
   if(!feat("overlaps")) return "";
-  const w=freeWindows();
-  if(!w.length) return "";
-  const top=w.slice(0,5).map(g=>`<div class="free-row"><span class="free-day">${g.day.slice(0,3)}</span><b>${minToHM(g.start)} – ${minToHM(g.end)}</b><span class="free-len">${Math.floor(g.mins/60)?Math.floor(g.mins/60)+'h ':''}${g.mins%60?g.mins%60+'m':''} free</span></div>`).join("");
-  return `<div class="free-card"><div class="free-head">🍔 Good times to meet up / eat</div><div class="find-note" style="margin-bottom:8px">Gaps where nobody in the group has anything booked.</div>${top}</div>`;
+  const people=meetPeople();
+  const totalPlanned=people.length;
+  const days=DAYS.filter(d=> state.events.some(e=>e.day===d) );
+  if(!state.meetDay || !days.includes(state.meetDay)){
+    // default to a day that has events; prefer today-ish later, simple for now
+    state.meetDay = days[0]||DAYS[0];
+  }
+  const day=state.meetDay;
+
+  const modeTabs=`<div class="mode-toggle" style="margin-bottom:10px">
+    <button data-meetmode="all" class="${state.meetMode!=='crew'?'on':''}">Whole group</button>
+    <button data-meetmode="crew" class="${state.meetMode==='crew'?'on':''}">My crew${state.crew.length?` (${state.crew.length})`:''}</button>
+  </div>`;
+  const dayTabs=`<div class="filters" style="margin-bottom:10px">${days.map(d=>`<button class="chip ${d===day?'on':''}" data-meetday="${d}">${d.slice(0,3)}</button>`).join("")}</div>`;
+
+  if(state.meetMode==="crew" && !state.crew.length){
+    return `<div class="free-card">
+      <div class="free-head">🤝 When can we meet?</div>
+      ${modeTabs}
+      <div class="find-note">Pick your core crew — the few people you actually want to link up with — and I’ll show when most of you are free.</div>
+      <button class="btn primary block" id="crew-edit" style="margin-top:10px">Choose my crew</button>
+    </div>`;
+  }
+  if(totalPlanned<1){
+    return `<div class="free-card"><div class="free-head">🤝 When can we meet?</div>${modeTabs}
+      <div class="find-note">Once a few people have picked some acts, I’ll show the best times to meet up here.</div></div>`;
+  }
+
+  // heatmap strip
+  const prof=availabilityProfile(day,people);
+  const maxN=people.length||1;
+  const cells=prof.map((free,i)=>{
+    const t=MEET_START+i*MEET_STEP;
+    const ratio=free/maxN;
+    return `<span class="hm-cell" style="opacity:${0.12+ratio*0.88}" title="${minToHM(t)} · ${free}/${maxN} free"></span>`;
+  }).join("");
+  // hour ticks
+  const ticks=[];
+  for(let t=MEET_START;t<=MEET_END;t+=180){ ticks.push(`<span>${minToHM(t).replace(':00','')}</span>`); }
+
+  const wins=bestWindows(day,people,30).slice(0,4);
+  const winRows = wins.length ? wins.map(w=>{
+    const mid=Math.round((w.start+w.end)/2/MEET_STEP)*MEET_STEP;
+    return `<div class="meet-row" data-meetwin="${day}|${mid}">
+      <div class="mr-time"><b>${minToHM(w.start)}–${minToHM(w.end)}</b><span>${w.maxFree}/${maxN} free</span></div>
+      <div class="mr-bar"><div class="mr-fill" style="width:${Math.round(w.maxFree/maxN*100)}%"></div></div>
+      <span class="mr-go">›</span>
+    </div>`;
+  }).join("") : `<div class="find-note">No clear window today — try the whole group, or use a rally call below to find people in the moment.</div>`;
+
+  return `<div class="free-card">
+    <div class="free-head">🤝 When can we meet?</div>
+    ${modeTabs}${dayTabs}
+    <div class="hm-wrap"><div class="hm">${cells}</div><div class="hm-ticks">${ticks.join("")}</div></div>
+    <div class="hm-legend"><span class="find-note">weighing ${maxN} ${state.meetMode==='crew'?'crew':'who’ve planned'}</span>
+      ${state.meetMode==='crew'?`<button class="link-btn" id="crew-edit">edit crew</button>`:''}</div>
+    <div class="meet-list">${winRows}</div>
+  </div>`;
+}
+
+/* ---- live rally calls ---- */
+const CALL_KINDS={ food:{e:"🍔",label:"Food"}, drinks:{e:"🍺",label:"Drinks"}, coffee:{e:"☕️",label:"Coffee/break"}, meet:{e:"📍",label:"Meet up"} };
+function callText(c){ const k=CALL_KINDS[c.kind]||CALL_KINDS.meet; return `${k.e} ${esc(c.label||k.label)}${c.at?` · ${esc(c.at)}`:" · now"}`; }
+async function createCall(kind,label,at){
+  const ttl=2*3600000; // calls live 2h
+  await addDoc(colCalls,{ userId:state.user.id, name:state.user.name, kind, label:(label||"").trim(), at:(at||"").trim(),
+    "in":[state.user.id], createdAt:serverTimestamp(), expiresAt:Date.now()+ttl });
+}
+async function joinCall(c){
+  const set=new Set(c.in||[]); set.has(state.user.id)?set.delete(state.user.id):set.add(state.user.id);
+  await updateDoc(doc(db,"calls",c.id), { "in":[...set] });
+}
+async function endCall(id){ await deleteDoc(doc(db,"calls",id)); }
+function callsCard(){
+  if(!feat("overlaps")) return "";
+  const calls=activeCalls();
+  const mineActive = calls.some(c=>c.userId===state.user.id);
+  const list = calls.length ? calls.map(c=>{
+    const ins=(c.in||[]); const joined=ins.includes(state.user.id); const mine=c.userId===state.user.id;
+    const names=ins.map(id=>{ const u=state.users.find(x=>x.id===id); return u?u.name:"?"; });
+    return `<div class="call-row">
+      <div class="call-main"><div class="call-title">${callText(c)}</div>
+        <div class="call-sub">${esc(c.name||'?')} · ${ins.length} in${ins.length?': '+names.slice(0,4).map(esc).join(", ")+(names.length>4?` +${names.length-4}`:''):''}</div></div>
+      ${mine?`<button class="btn danger sm" data-endcall="${c.id}">End</button>`
+            :`<button class="btn ${joined?'lime':'primary'} sm" data-joincall="${c.id}">${joined?'✓ In':'I’m in'}</button>`}
+    </div>`;
+  }).join("") : `<div class="find-note">Nobody’s called anything yet. Keen for food or a break? Send a call and see who joins.</div>`;
+  return `<div class="free-card" style="margin-top:14px">
+    <div class="free-head">📣 Rally calls <span class="live-mini">live</span></div>
+    <div class="call-list">${list}</div>
+    <button class="btn primary block" id="call-new" style="margin-top:12px">${mineActive?'Send another call':'Start a call'}</button>
+  </div>`;
+}
+function renderCallModal(){
+  const existing=document.querySelector(".modal-bg"); if(existing) existing.remove();
+  let kind="food";
+  const wrap=document.createElement("div"); wrap.className="modal-bg";
+  wrap.innerHTML=`<div class="modal">
+    <div class="modal-head"><h2>Start a rally call</h2><button class="btn ghost sm" id="c-close">Close</button></div>
+    <div class="find-note" style="margin-bottom:10px">Broadcast what you’re keen for — people tap “I’m in” so you get a live count.</div>
+    <div class="type-chips" id="c-kinds">${Object.entries(CALL_KINDS).map(([k,m])=>`<button class="type-chip ${k==='food'?'on':''}" data-ck="${k}">${m.e} ${m.label}</button>`).join("")}</div>
+    <label class="field" style="margin-top:12px"><span>When <span class="tag">(optional — blank = now)</span></span><input id="c-at" placeholder="e.g. ~5pm, in 30 min, after this set"></label>
+    <label class="field"><span>Note <span class="tag">(optional)</span></span><input id="c-label" placeholder="e.g. burrito van by the lake"></label>
+    <button class="btn primary block" id="c-send">Send call</button>
+  </div>`;
+  document.body.appendChild(wrap);
+  const close=()=>{ state.modal=null; wrap.remove(); };
+  wrap.querySelector("#c-close").onclick=close; wrap.onclick=e=>{ if(e.target===wrap) close(); };
+  wrap.querySelectorAll("[data-ck]").forEach(b=>b.onclick=()=>{ kind=b.dataset.ck; wrap.querySelectorAll("[data-ck]").forEach(x=>x.classList.toggle("on",x===b)); });
+  wrap.querySelector("#c-send").onclick=async()=>{
+    try{ await createCall(kind, wrap.querySelector("#c-label").value, wrap.querySelector("#c-at").value); close(); toast("Call sent"); }
+    catch(e){ toast("Couldn’t send — check connection"); }
+  };
+}
+function renderMeetWinModal(){
+  const existing=document.querySelector(".modal-bg"); if(existing) existing.remove();
+  const {day,mid,free,busy}=state.modal.data;
+  const wrap=document.createElement("div"); wrap.className="modal-bg";
+  wrap.innerHTML=`<div class="modal">
+    <div class="modal-head"><h2>${day} · ${minToHM(mid)}</h2><button class="btn ghost sm" id="mw-close">Close</button></div>
+    <div class="free-head" style="font-size:14px;margin-bottom:6px">${free.length} free${busy.length?` · ${busy.length} busy`:''}</div>
+    ${free.length?`<div class="goers" style="margin-bottom:10px">${free.map(n=>`<span class="goer me">${esc(n)}</span>`).join("")}</div>`:''}
+    ${busy.length?`<div class="find-note" style="margin-bottom:4px">Busy then:</div><div class="goers" style="margin-bottom:10px">${busy.map(n=>`<span class="goer">${esc(n)}</span>`).join("")}</div>`:''}
+    <div class="row" style="gap:8px">
+      <button class="btn primary" id="mw-chat" style="flex:1">Suggest in chat</button>
+      <button class="btn lime" id="mw-call" style="flex:1">Start a call</button>
+    </div>
+  </div>`;
+  document.body.appendChild(wrap);
+  const close=()=>{ state.modal=null; wrap.remove(); };
+  wrap.querySelector("#mw-close").onclick=close; wrap.onclick=e=>{ if(e.target===wrap) close(); };
+  wrap.querySelector("#mw-chat").onclick=async()=>{
+    try{ await sendMessage(`Meetup idea: ${day} around ${minToHM(mid)} — ${free.length} of us free then. Who’s in?`); close(); state.view="chat"; renderApp(); }
+    catch(e){ toast("Couldn’t post"); }
+  };
+  wrap.querySelector("#mw-call").onclick=()=>{ state.modal={type:"call"}; renderCallModal(); };
+}
+function renderCrewModal(){
+  const existing=document.querySelector(".modal-bg"); if(existing) existing.remove();
+  const sel=new Set(state.crew);
+  const others=state.users.filter(u=>u.id!==state.user.id);
+  const wrap=document.createElement("div"); wrap.className="modal-bg";
+  wrap.innerHTML=`<div class="modal">
+    <div class="modal-head"><h2>My crew</h2><button class="btn ghost sm" id="cw-close">Close</button></div>
+    <div class="find-note" style="margin-bottom:12px">Pick the people you actually want to meet up with. The finder will weigh just these (plus you). Saved on this phone only.</div>
+    <div class="crew-list">${others.length?others.map(u=>`<button class="crew-opt ${sel.has(u.id)?'on':''}" data-crew="${u.id}"><span class="mo-av" style="background:${personColor(u.id)}">${esc(initials(u.name))}</span>${esc(u.name)}<span class="crew-chk">${sel.has(u.id)?'✓':''}</span></button>`).join(""):'<div class="find-note">No one else has joined yet.</div>'}</div>
+    <button class="btn primary block" id="cw-save" style="margin-top:14px">Save crew</button>
+  </div>`;
+  document.body.appendChild(wrap);
+  const close=()=>{ state.modal=null; wrap.remove(); };
+  wrap.querySelector("#cw-close").onclick=close; wrap.onclick=e=>{ if(e.target===wrap) close(); };
+  wrap.querySelectorAll("[data-crew]").forEach(b=>b.onclick=()=>{ const id=b.dataset.crew; sel.has(id)?sel.delete(id):sel.add(id); b.classList.toggle("on"); b.querySelector(".crew-chk").textContent=sel.has(id)?'✓':''; });
+  wrap.querySelector("#cw-save").onclick=()=>{ state.crew=[...sel]; localStorage.setItem("fp_crew",JSON.stringify(state.crew)); state.meetMode="crew"; close(); renderView(); toast("Crew saved"); };
 }
 </script>
 </body>
