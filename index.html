@@ -74,14 +74,6 @@
 
   .card{background:var(--card);border:2px solid var(--ink);border-radius:var(--radius);padding:16px}
   .muted{color:var(--muted)}
-  .pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:2px;font-size:10.5px;font-weight:700;
-    letter-spacing:.07em;text-transform:uppercase;background:transparent;border:1.5px solid var(--ink);color:var(--ink)}
-  .pill::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--muted)}
-  .pill.music::before{background:var(--teal)}
-  .pill.ceremony::before{background:var(--accent)}
-  .pill.other::before{background:var(--gold)}
-  .pill.day{border-color:var(--ink)}
-  .pill.day::before{display:none}
   .tag{font-size:11px;color:var(--muted);font-weight:600;text-transform:none;letter-spacing:0}
 
   .field{display:block;margin-bottom:12px}
@@ -142,9 +134,11 @@
   .pick-btn svg{width:22px;height:22px;fill:none;stroke:var(--ink);stroke-width:2.4}
   .pick-btn.on{background:var(--accent);border-color:var(--ink)}
   .pick-btn.on svg{stroke:var(--accent-ink)}
-  .ev.clash{box-shadow:var(--hard-sm)}
-  .ev.clash::before{content:"";position:absolute;left:-2px;top:-2px;bottom:-2px;width:6px;background:var(--accent);border:2px solid var(--ink)}
+  .ev.clash{outline:2px solid var(--accent);outline-offset:2px}
   .clash-note{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--accent);margin-top:7px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+  .area-tag{display:inline-flex;align-items:center;font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;
+    color:#fff;background:var(--c,#777);padding:3px 9px;border-radius:2px;border:1.5px solid var(--ink)}
+  .cdot{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--ink);display:inline-block;margin-right:1px;vertical-align:-1px}
 
   .goers{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
   .goer{font-size:11px;font-weight:700;padding:3px 9px;border-radius:2px;background:transparent;border:1.5px solid var(--line-strong);color:var(--ink-2)}
@@ -158,7 +152,12 @@
   .admin-block{margin-bottom:14px}
   .district{background:var(--card);border:2px solid var(--ink);border-radius:var(--radius);margin-bottom:12px;overflow:hidden}
   .district .dh{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;background:var(--ink);color:var(--paper)}
-  .district .dh .nm{font-family:"Anton";font-size:17px;letter-spacing:.02em}
+  .district .dh .nm{font-family:"Anton";font-size:17px;letter-spacing:.02em;display:flex;align-items:center;gap:9px}
+  .dswatch{width:16px;height:16px;border-radius:3px;border:2px solid var(--paper);flex:none}
+  .palette{display:flex;flex-wrap:wrap;gap:7px;padding:11px 14px 4px;align-items:center}
+  .palette .plabel{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-right:2px}
+  .palette .sw{width:26px;height:26px;border-radius:4px;border:2px solid var(--ink);cursor:pointer;position:relative}
+  .palette .sw.on::after{content:"✓";position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:14px;font-weight:900;text-shadow:0 1px 2px rgba(0,0,0,.5)}
   .district .dh .btn{border-color:var(--paper);color:var(--paper)}
   .district .dh .btn.danger{color:var(--paper);border-color:var(--paper)}
   .stages{padding:11px 14px;display:flex;flex-wrap:wrap;gap:8px}
@@ -248,7 +247,18 @@ const FESTIVAL_NAME_DEFAULT = "Our Festival";
 /* ------------------------------------------------------------ */
 
 const DAYS = ["Wednesday","Thursday","Friday","Saturday","Sunday"];
-const TYPES = ["music","ceremony","other"];
+const AREA_COLORS = ["#D6371C","#1E5A50","#2B4C9B","#B5852A","#7A3B6B","#3C6B33","#A0522D","#41566B","#B5306E","#1C1B16"];
+const NO_AREA_COLOR = "#8A8068";
+function districtColor(id){
+  const idx = state.structure.districts.findIndex(x=>x.id===id);
+  if(idx<0) return NO_AREA_COLOR;
+  const d = state.structure.districts[idx];
+  return d.color || AREA_COLORS[idx % AREA_COLORS.length];
+}
+function nextAreaColor(){
+  const used = new Set(state.structure.districts.map(d=>d.color).filter(Boolean));
+  return AREA_COLORS.find(c=>!used.has(c)) || AREA_COLORS[state.structure.districts.length % AREA_COLORS.length];
+}
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import {
@@ -291,7 +301,7 @@ const state = {
   picks: [],                  // [{id,userId,eventId}]
   view: "browse",
   ready: { events:false, users:false, picks:false, structure:false },
-  filters: { day:"all", district:"all", type:"all", search:"" },
+  filters: { day:"all", district:"all", search:"" },
   sharedFriend: "all",
   modal: null
 };
@@ -364,7 +374,7 @@ async function saveEvent(ev){
     districtId:ev.districtId, districtName:ev.districtName,
     stageId:ev.stageId, stageName:ev.stageName,
     day:ev.day, start:ev.start, end:ev.end,
-    title:ev.title.trim(), type:ev.type, notes:(ev.notes||"").trim()
+    title:ev.title.trim(), notes:(ev.notes||"").trim()
   };
   if(ev.id) await updateDoc(doc(db,"events",ev.id), data);
   else await addDoc(colEvents, {...data, createdAt:serverTimestamp()});
@@ -532,8 +542,9 @@ function sortEvents(list){
 function eventCard(ev, {picked, clash}={}){
   const goers = state.picks.filter(p=>p.eventId===ev.id);
   const count = goers.length;
+  const c = districtColor(ev.districtId);
   return `
-  <div class="ev ${clash?'clash':''}" data-ev="${ev.id}">
+  <div class="ev ${clash?'clash':''}" data-ev="${ev.id}" style="box-shadow:inset 5px 0 0 ${c}">
     <div class="time">
       <div class="t">${esc(fmt12(ev.start))}</div>
       <div class="t2">${ev.end?('→ '+esc(fmt12(ev.end))):''}</div>
@@ -541,8 +552,8 @@ function eventCard(ev, {picked, clash}={}){
     <div class="body">
       <h3>${esc(ev.title)}</h3>
       <div class="meta">
-        <span class="pill ${ev.type}">${esc(ev.type)}</span>
-        <span class="loc">${esc(ev.districtName)} · ${esc(ev.stageName)}</span>
+        <span class="area-tag" style="--c:${c}">${esc(ev.districtName)}</span>
+        <span class="loc">${esc(ev.stageName)}</span>
       </div>
       ${ev.notes?`<div class="notes">${esc(ev.notes)}</div>`:""}
       ${clash?`<div class="clash-note">⚠ Overlaps with another pick</div>`:""}
@@ -575,16 +586,15 @@ function viewBrowse(){
   let list = state.events.slice();
   if(f.day!=="all") list = list.filter(e=>e.day===f.day);
   if(f.district!=="all") list = list.filter(e=>e.districtId===f.district);
-  if(f.type!=="all") list = list.filter(e=>e.type===f.type);
   if(f.search) list = list.filter(e=>(e.title||"").toLowerCase().includes(f.search.toLowerCase()) || (e.districtName||"").toLowerCase().includes(f.search.toLowerCase()) || (e.stageName||"").toLowerCase().includes(f.search.toLowerCase()));
   list = sortEvents(list);
 
   const dayChips = ["all",...DAYS].map(d=>`<button class="chip ${f.day===d?'on':''}" data-fday="${d}">${d==="all"?"All days":d.slice(0,3)}</button>`).join("");
   const distChips = ["all",...state.structure.districts.map(d=>d.id)].map(id=>{
     const d = state.structure.districts.find(x=>x.id===id);
-    return `<button class="chip ${f.district===id?'on':''}" data-fdist="${id}">${id==="all"?"All areas":esc(d?d.name:"")}</button>`;
+    const dot = id==="all" ? "" : `<span class="cdot" style="background:${districtColor(id)}"></span>`;
+    return `<button class="chip ${f.district===id?'on':''}" data-fdist="${id}">${dot}${id==="all"?"All areas":esc(d?d.name:"")}</button>`;
   }).join("");
-  const typeChips = ["all",...TYPES].map(t=>`<button class="chip ${f.type===t?'on':''}" data-ftype="${t}">${t==="all"?"All types":t[0].toUpperCase()+t.slice(1)}</button>`).join("");
 
   let body;
   if(state.events.length===0){
@@ -604,7 +614,6 @@ function viewBrowse(){
     <input class="search" id="search" placeholder="Search acts, stages, areas…" value="${esc(f.search)}">
     <div class="filters">${dayChips}</div>
     <div class="filters">${distChips}</div>
-    <div class="filters">${typeChips}</div>
     ${body}
   `;
 }
@@ -618,7 +627,7 @@ function viewMine(){
   for(let i=0;i<list.length;i++) for(let j=i+1;j<list.length;j++){
     if(overlaps(list[i],list[j])){ clashSet.add(list[i].id); clashSet.add(list[j].id); }
   }
-  const byType = t => list.filter(e=>e.type===t).length;
+  const daysActive = new Set(list.map(e=>e.day)).size;
 
   if(list.length===0){
     return `
@@ -629,9 +638,9 @@ function viewMine(){
   return `
     <div class="sec-head"><div><h2>My plan</h2><div class="lead">${list.length} pick${list.length>1?'s':''}${clashSet.size?` · ⚠ ${clashSet.size/2|0} clash${clashSet.size>2?'es':''}`:''}</div></div></div>
     <div class="stat-row">
-      <div class="stat"><div class="n">${byType('music')}</div><div class="l">Music</div></div>
-      <div class="stat"><div class="n">${byType('ceremony')}</div><div class="l">Ceremonies</div></div>
-      <div class="stat"><div class="n">${byType('other')}</div><div class="l">Other</div></div>
+      <div class="stat"><div class="n">${list.length}</div><div class="l">Picks</div></div>
+      <div class="stat"><div class="n">${daysActive}</div><div class="l">Days out</div></div>
+      <div class="stat"><div class="n">${clashSet.size/2|0}</div><div class="l">Clashes</div></div>
     </div>
     ${DAYS.filter(d=>g[d]&&g[d].length).map(d=>`
       <div class="day-label">${d}</div>
@@ -692,12 +701,13 @@ function viewShared(){
 function sharedCard(ev){
   const goers = state.picks.filter(p=>p.eventId===ev.id);
   const mine = myPickIds().has(ev.id);
+  const c = districtColor(ev.districtId);
   return `
-  <div class="ev" data-ev="${ev.id}">
+  <div class="ev" data-ev="${ev.id}" style="box-shadow:inset 5px 0 0 ${c}">
     <div class="time"><div class="t">${esc(fmt12(ev.start))}</div><div class="t2">${ev.end?('→ '+esc(fmt12(ev.end))):''}</div></div>
     <div class="body">
       <h3>${esc(ev.title)} <span class="count-badge">· ${goers.length} going</span></h3>
-      <div class="meta"><span class="pill ${ev.type}">${esc(ev.type)}</span><span class="loc">${esc(ev.districtName)} · ${esc(ev.stageName)}</span></div>
+      <div class="meta"><span class="area-tag" style="--c:${c}">${esc(ev.districtName)}</span><span class="loc">${esc(ev.stageName)}</span></div>
       <div class="goers">${attendeeChips(goers)}</div>
     </div>
     <div class="act">
@@ -711,14 +721,20 @@ function sharedCard(ev){
 /* ---------- ADMIN ---------- */
 function viewAdmin(){
   const s = state.structure;
-  const districtsHTML = s.districts.length ? s.districts.map(d=>`
+  const districtsHTML = s.districts.length ? s.districts.map(d=>{
+    const dc = districtColor(d.id);
+    return `
     <div class="district" data-d="${d.id}">
-      <div class="dh">
-        <div class="nm">${esc(d.name)}</div>
+      <div class="dh" style="box-shadow:inset 6px 0 0 ${dc}">
+        <div class="nm"><span class="dswatch" style="background:${dc}"></span>${esc(d.name)}</div>
         <div style="display:flex;gap:6px">
           <button class="btn ghost sm" data-rename-d="${d.id}">Rename</button>
           <button class="btn danger sm" data-del-d="${d.id}">Delete</button>
         </div>
+      </div>
+      <div class="palette">
+        <span class="plabel">Colour</span>
+        ${AREA_COLORS.map(c=>`<button class="sw ${c.toLowerCase()===dc.toLowerCase()?'on':''}" style="background:${c}" data-setcolor="${d.id}:${c}" aria-label="set area colour"></button>`).join("")}
       </div>
       <div class="stages">
         ${(d.stages||[]).map(st=>`<span class="stage-chip">${esc(st.name)} <button data-del-s="${d.id}:${st.id}" title="remove stage">✕</button></span>`).join("") || '<span class="tag">No stages yet</span>'}
@@ -727,7 +743,8 @@ function viewAdmin(){
         <input placeholder="Add a stage…" data-stage-input="${d.id}">
         <button class="btn lime sm" data-add-s="${d.id}">Add</button>
       </div>
-    </div>`).join("") : emptyState("🏗️","No districts yet","Add your first district below (e.g. Main Field, The Glade).");
+    </div>`;
+  }).join("") : emptyState("🏗️","No districts yet","Add your first district below (e.g. Main Field, The Glade).");
 
   return `
     <div class="sec-head"><div><h2>Manage festival</h2><div class="lead">Districts, stages and the full lineup.</div></div></div>
@@ -770,11 +787,11 @@ function adminEventList(){
   return DAYS.filter(d=>g[d]&&g[d].length).map(d=>`
     <div class="day-label">${d}</div>
     ${g[d].map(e=>`
-      <div class="ev" data-ev="${e.id}">
+      <div class="ev" data-ev="${e.id}" style="box-shadow:inset 5px 0 0 ${districtColor(e.districtId)}">
         <div class="time"><div class="t">${esc(fmt12(e.start))}</div><div class="t2">${e.end?('→ '+esc(fmt12(e.end))):''}</div></div>
         <div class="body">
           <h3>${esc(e.title)}</h3>
-          <div class="meta"><span class="pill ${e.type}">${esc(e.type)}</span><span class="loc">${esc(e.districtName)} · ${esc(e.stageName)}</span></div>
+          <div class="meta"><span class="area-tag" style="--c:${districtColor(e.districtId)}">${esc(e.districtName)}</span><span class="loc">${esc(e.stageName)}</span></div>
         </div>
         <div class="act" style="flex-direction:column;gap:6px">
           <button class="btn ghost sm" data-edit-ev="${e.id}">Edit</button>
@@ -807,7 +824,6 @@ function wireView(){
   if(search) search.oninput = e=>{ state.filters.search=e.target.value; const pos=e.target.selectionStart; renderView(); const s2=document.querySelector("#search"); if(s2){s2.focus(); s2.setSelectionRange(pos,pos);} };
   v.querySelectorAll("[data-fday]").forEach(b=>b.onclick=()=>{ state.filters.day=b.dataset.fday; renderView(); });
   v.querySelectorAll("[data-fdist]").forEach(b=>b.onclick=()=>{ state.filters.district=b.dataset.fdist; renderView(); });
-  v.querySelectorAll("[data-ftype]").forEach(b=>b.onclick=()=>{ state.filters.type=b.dataset.ftype; renderView(); });
 
   // ---- shared friend selector ----
   v.querySelectorAll("[data-friend]").forEach(b=>b.onclick=()=>{ state.sharedFriend=b.dataset.friend; renderView(); });
@@ -822,9 +838,14 @@ function wireView(){
   if(addDist) addDist.onclick = async()=>{
     const inp = v.querySelector("#new-dist"); const name=inp.value.trim();
     if(!name) return;
-    const districts=[...state.structure.districts, {id:uid(),name,stages:[]}];
+    const districts=[...state.structure.districts, {id:uid(),name,stages:[],color:nextAreaColor()}];
     await saveStructure({...state.structure,districts}); inp.value="";
   };
+  v.querySelectorAll("[data-setcolor]").forEach(b=>b.onclick=async()=>{
+    const [did,color]=b.dataset.setcolor.split(":");
+    const districts=state.structure.districts.map(x=>x.id===did?{...x,color}:x);
+    await saveStructure({...state.structure,districts});
+  });
   v.querySelectorAll("[data-del-d]").forEach(b=>b.onclick=async()=>{
     const id=b.dataset.delD;
     const d = state.structure.districts.find(x=>x.id===id);
@@ -896,14 +917,9 @@ function renderModal(){
           <select id="m-stage">${stages.map(s=>`<option value="${s.id}" ${s.id===selStage?'selected':''}>${esc(s.name)}</option>`).join("") || `<option value="">— add a stage first —</option>`}</select>
         </label>
       </div>
-      <div class="row">
-        <label class="field"><span>Day</span>
-          <select id="m-day">${DAYS.map(d=>`<option ${ev.day===d?'selected':''}>${d}</option>`).join("")}</select>
-        </label>
-        <label class="field"><span>Type</span>
-          <select id="m-type">${TYPES.map(t=>`<option value="${t}" ${ev.type===t?'selected':''}>${t[0].toUpperCase()+t.slice(1)}</option>`).join("")}</select>
-        </label>
-      </div>
+      <label class="field"><span>Day</span>
+        <select id="m-day">${DAYS.map(d=>`<option ${ev.day===d?'selected':''}>${d}</option>`).join("")}</select>
+      </label>
       <div class="row">
         <label class="field"><span>Start</span><input id="m-start" type="time" value="${esc(ev.start||"")}"></label>
         <label class="field"><span>End</span><input id="m-end" type="time" value="${esc(ev.end||"")}"></label>
@@ -932,14 +948,13 @@ function renderModal(){
     const start=wrap.querySelector("#m-start").value;
     const end=wrap.querySelector("#m-end").value;
     const day=wrap.querySelector("#m-day").value;
-    const type=wrap.querySelector("#m-type").value;
     const notes=wrap.querySelector("#m-notes").value;
     const fail=m=>errBox.innerHTML=`<div class="err">${esc(m)}</div>`;
     if(!title) return fail("Give the event a title.");
     if(!d||!s) return fail("Pick a district and stage.");
     if(!start) return fail("Set a start time.");
     try{
-      await saveEvent({ id:ev.id, districtId:did, districtName:d.name, stageId:sid, stageName:s.name, day, start, end, title, type, notes });
+      await saveEvent({ id:ev.id, districtId:did, districtName:d.name, stageId:sid, stageName:s.name, day, start, end, title, notes });
       close(); toast(ev.id?"Saved":"Added to lineup");
     }catch(e){ fail("Couldn't save — try again."); }
   };
@@ -957,7 +972,6 @@ function openBulk(){
     day:DAYS[0],
     districtId: d0 ? d0.id : "",
     stageId: d0 && d0.stages && d0.stages[0] ? d0.stages[0].id : "",
-    type:"music",
     createMissing:false
   };
   state.modal = {type:"bulk"};
@@ -1002,7 +1016,7 @@ function parseBulk(){
       else { r.err="Need: Start | Title"; rows.push(r); continue; }
       const dist = state.structure.districts.find(d=>d.id===bulk.districtId);
       const stage = dist && (dist.stages||[]).find(s=>s.id===bulk.stageId);
-      r.day=bulk.day; r.title=title; r.type=bulk.type;
+      r.day=bulk.day; r.title=title;
       r.districtName = dist?dist.name:""; r.stageName = stage?stage.name:"";
       r.districtId=bulk.districtId; r.stageId=bulk.stageId;
       r.start=parseTime(start); r.end=end?parseTime(end):"";
@@ -1012,14 +1026,13 @@ function parseBulk(){
       else if(end && !r.end){ r.err="Bad end time"; }
       else r.ok=true;
     } else {
-      // mixed: Day | District | Stage | Title | Start [| End [| Type]]
+      // mixed: Day | District | Stage | Title | Start [| End]
       if(f.length<5){ r.err="Need: Day | District | Stage | Title | Start"; rows.push(r); continue; }
       const day=matchDay(f[0]);
       const distName=f[1], stageName=f[2], title=f[3], start=f[4];
-      const end=f[5]||""; const typeRaw=(f[6]||"").trim().toLowerCase();
+      const end=f[5]||"";
       r.day=day; r.districtName=distName; r.stageName=stageName; r.title=title;
       r.start=parseTime(start); r.end=end?parseTime(end):"";
-      r.type=TYPES.includes(typeRaw)?typeRaw:"music";
       const dist=findDistrict(distName);
       const stage=dist?findStage(dist,stageName):null;
       if(!day){ r.err="Unknown day '"+f[0]+"'"; }
@@ -1045,16 +1058,15 @@ function renderBulkModal(){
     <code>Start | End | Title</code> &nbsp;— or just <code>Start | Title</code> if there's no end time.<br>
     Times are flexible: <code>18:00</code>, <code>1800</code>, <code>6pm</code>, <code>6:30pm</code> all work.`;
   const mixedFmt = `One act per line, fields separated by <code>|</code> or a tab:<br>
-    <code>Day | District | Stage | Title | Start | End | Type</code><br>
-    <code>End</code> and <code>Type</code> are optional (type defaults to music). Day can be short, e.g. <code>Fri</code>.`;
+    <code>Day | District | Stage | Title | Start | End</code><br>
+    <code>End</code> is optional. Day can be short, e.g. <code>Fri</code>.`;
 
   const sameControls = `
     <div class="row">
       <label class="field"><span>Day</span><select id="bk-day">${DAYS.map(d=>`<option ${bulk.day===d?'selected':''}>${d}</option>`).join("")}</select></label>
-      <label class="field"><span>Type</span><select id="bk-type">${TYPES.map(t=>`<option value="${t}" ${bulk.type===t?'selected':''}>${t[0].toUpperCase()+t.slice(1)}</option>`).join("")}</select></label>
+      <label class="field"><span>District</span><select id="bk-dist">${districts.map(d=>`<option value="${d.id}" ${distObj&&d.id===distObj.id?'selected':''}>${esc(d.name)}</option>`).join("")}</select></label>
     </div>
     <div class="row">
-      <label class="field"><span>District</span><select id="bk-dist">${districts.map(d=>`<option value="${d.id}" ${distObj&&d.id===distObj.id?'selected':''}>${esc(d.name)}</option>`).join("")}</select></label>
       <label class="field"><span>Stage</span><select id="bk-stage">${stages.map(s=>`<option value="${s.id}" ${bulk.stageId===s.id?'selected':''}>${esc(s.name)}</option>`).join("")||'<option value="">— add a stage —</option>'}</select></label>
     </div>`;
   const mixedControls = `
@@ -1071,7 +1083,7 @@ function renderBulkModal(){
       </div>
       ${bulk.mode==='same'?sameControls:mixedControls}
       <div class="fmt">${bulk.mode==='same'?sameFmt:mixedFmt}</div>
-      <textarea class="bulk-ta" id="bk-text" placeholder="${bulk.mode==='same'?'18:00 | 19:00 | The Opening Act\n19:30 | 21:00 | Headliner':'Friday | Main Field | Lakeside Stage | Headliner | 21:00 | 22:30 | music'}">${esc(bulk.text)}</textarea>
+      <textarea class="bulk-ta" id="bk-text" placeholder="${bulk.mode==='same'?'18:00 | 19:00 | The Opening Act\n19:30 | 21:00 | Headliner':'Friday | Main Field | Lakeside Stage | Headliner | 21:00 | 22:30'}">${esc(bulk.text)}</textarea>
       <div id="bk-preview"></div>
       <button class="btn primary block" id="bk-go">Add events</button>
     </div>`;
@@ -1110,7 +1122,6 @@ function renderBulkModal(){
 
   ta.oninput=()=>{ bulk.text=ta.value; refreshPreview(); };
   const sd=wrap.querySelector("#bk-day"); if(sd) sd.onchange=()=>{bulk.day=sd.value;refreshPreview();};
-  const st=wrap.querySelector("#bk-type"); if(st) st.onchange=()=>{bulk.type=st.value;refreshPreview();};
   const sdist=wrap.querySelector("#bk-dist"); if(sdist) sdist.onchange=()=>{
     bulk.districtId=sdist.value;
     const d=districts.find(x=>x.id===bulk.districtId); bulk.stageId=d&&d.stages[0]?d.stages[0].id:"";
@@ -1146,7 +1157,7 @@ function renderBulkModal(){
           did=d?d.id:""; dnm=d?d.name:r.districtName; sid=s?s.id:""; snm=s?s.name:r.stageName;
         }
         return { districtId:did, districtName:dnm, stageId:sid, stageName:snm,
-                 day:r.day, start:r.start, end:r.end||"", title:r.title.trim(), type:r.type, notes:"" };
+                 day:r.day, start:r.start, end:r.end||"", title:r.title.trim(), notes:"" };
       });
 
       // 3) write in small batches
