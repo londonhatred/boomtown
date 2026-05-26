@@ -1671,9 +1671,20 @@ function clusterAdvice(items){
     return header;
   }
 
+  // ----- shift swallows the whole cluster: route is just the shift, everything else missed -----
+  const shiftItem = items.find(x=>x.isShift);
+  if(shiftItem && missed.length && route.every(r=>r.shift)){
+    const missedActs = missed.filter(m=>!m.isShift).map(m=>esc(m.e.title));
+    return `<span class="ca-conflict">🔒 You're working ${esc(fmt12(shiftItem.e.start))}–${esc(fmt12(shiftItem.e.end))}</span> — you'll miss ${missedActs.join(", ")}.`;
+  }
+
   // ----- normal single-or-no must-see routing -----
   if(route.length<=1){
-    const stages=[...new Set(items.map(x=>x.e.stageName))];
+    // if the one surviving item is a shift, there's nothing to "pick"
+    if(route.length===1 && route[0].shift){
+      return `<span class="ca-conflict">🔒 You're working ${esc(fmt12(route[0].item.e.start))}–${esc(fmt12(route[0].item.e.end))}</span>${missed.length?` — you'll miss ${missed.filter(m=>!m.isShift).map(m=>esc(m.e.title)).join(", ")}.`:'.'}`;
+    }
+    const stages=[...new Set(items.filter(x=>!x.isShift).map(x=>x.e.stageName))];
     let maxWm=null;
     for(let i=0;i<stages.length;i++)for(let j=i+1;j<stages.length;j++){ const wm=walkMinBetween(stages[i],stages[j]); if(wm!=null&&(maxWm==null||wm>maxWm)) maxWm=wm; }
     let line=`<span class="ca-lead">Pick one</span> — these run at the same time${maxWm!=null?`, stages ~${maxWm} min apart`:''}.`;
@@ -2013,6 +2024,15 @@ function viewAdmin(){
       <div class="find-note" style="margin-top:6px">Run this once just before the festival to wipe any test data so it relearns on-site.${s.walkReset?` Last reset: ${new Date(s.walkReset).toLocaleString()}.`:''}</div>
     </div>`:""}
 
+    <div class="card admin-block" style="border-color:var(--violet)">
+      <div style="font-family:Anton;font-size:15px;text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px;color:var(--violet)">🧪 Test day</div>
+      <div class="find-note" style="margin-bottom:12px">For trying the live, time-based features today. Sets the festival date to today and drops in a few sample acts timed around right now (one on-now, one soon, a clash) so On-now, Up-next, leave-now alarms and clash routing all come alive. Pin nearby real spots as their stages to test walk times.</div>
+      ${(()=>{ const tc=state.events.filter(e=>e.testDay).length; return tc?`<div class="find-note" style="margin-bottom:10px">${tc} test act${tc>1?'s':''} currently in your lineup.</div>`:''; })()}
+      <button class="btn primary block" id="test-setup" style="margin-bottom:8px">Set up a test day (now)</button>
+      <button class="btn danger block" id="test-clear">Remove all test data</button>
+      <div class="find-note" style="margin-top:6px">Test acts are tagged separately and removed cleanly — your real lineup is untouched. Run “Remove all test data” (and “Reset walk-time data” above) before the real festival.</div>
+    </div>
+
     <div class="card admin-block">
       <div style="font-family:Anton;font-size:15px;text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px">App features</div>
       ${[["chat","Group chat","Shared message board for the crew"],
@@ -2246,6 +2266,20 @@ function wireView(){
     resetWalk.disabled=true; resetWalk.textContent="Clearing…";
     try{ await clearWalkData(); toast("Walk-time data cleared"); renderView(); }
     catch(e){ resetWalk.disabled=false; resetWalk.textContent="Reset walk-time data"; toast("Couldn't clear — try again"); }
+  };
+  const testSetup=v.querySelector("#test-setup");
+  if(testSetup) testSetup.onclick=async()=>{
+    if(!confirm("Set the festival date to TODAY and add sample test acts timed around now? This is for testing the live features. Your real lineup acts stay, but the date changes — remove test data and reset the date before the real event.")) return;
+    testSetup.disabled=true; testSetup.textContent="Setting up…";
+    try{ await setupTestDay(); toast("Test day ready — check Home & On now"); renderApp(); }
+    catch(e){ testSetup.disabled=false; testSetup.textContent="Set up a test day (now)"; toast("Couldn't set up — try again"); }
+  };
+  const testClear=v.querySelector("#test-clear");
+  if(testClear) testClear.onclick=async()=>{
+    if(!confirm("Remove all test acts and their picks? Your real lineup is untouched. (You may also want to clear the festival date if you set it to today.)")) return;
+    testClear.disabled=true; testClear.textContent="Removing…";
+    try{ await clearTestData(); toast("Test data removed"); renderView(); }
+    catch(e){ testClear.disabled=false; testClear.textContent="Remove all test data"; toast("Couldn't remove — try again"); }
   };
   v.querySelectorAll("[data-feat]").forEach(b=>b.onclick=async()=>{
     const k=b.dataset.feat; const features={...(state.structure.features||{})}; features[k]=!feat(k);
@@ -2769,6 +2803,47 @@ async function clearWalkData(){
   const ids=snap.docs.map(d=>d.id);
   for(let i=0;i<ids.length;i+=20){ await Promise.all(ids.slice(i,i+20).map(id=>deleteDoc(doc(db,"legs",id)))); }
   await saveStructure({...state.structure, walkReset:Date.now()});
+}
+// --- Test day stopgap: festival = today + sample acts timed around now ---
+async function setupTestDay(){
+  const today=new Date();
+  const ymd=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
+  await saveStructure({...state.structure, festivalStartDate:ymd});
+  const day=DAYS[0]; // today maps to the first festival day
+  // ensure at least one district/stage to attach to
+  let districts=state.structure.districts||[];
+  if(!districts.length){
+    const did="td_"+Math.random().toString(36).slice(2,7);
+    districts=[{id:did, name:"Test Area", stages:[{id:"td_s1",name:"Test Stage A"},{id:"td_s2",name:"Test Stage B"}]}];
+    await saveStructure({...state.structure, festivalStartDate:ymd, districts});
+  }
+  const d0=districts[0];
+  const stA=(d0.stages&&d0.stages[0])||{id:"td_s1",name:"Test Stage A"};
+  const stB=(d0.stages&&d0.stages[1])||stA;
+  const mins=d=>{ const t=new Date(Date.now()+d*60000); return toHM(t); };
+  // sample acts around now: one on-now, one starting ~8 min, plus a clash pair ~20 min in
+  const samples=[
+    {title:"TEST · On Now Act", st:stA, start:mins(-20), end:mins(40)},
+    {title:"TEST · Starting Soon", st:stB, start:mins(8),  end:mins(68)},
+    {title:"TEST · Clash One",  st:stA, start:mins(25), end:mins(85)},
+    {title:"TEST · Clash Two",  st:stB, start:mins(35), end:mins(95)},
+  ];
+  for(const sm of samples){
+    await addDoc(colEvents, {
+      districtId:d0.id, districtName:d0.name, stageId:sm.st.id, stageName:sm.st.name,
+      day, start:sm.start, end:sm.end, title:sm.title, notes:"", testDay:true, createdAt:serverTimestamp()
+    });
+  }
+}
+async function clearTestData(){
+  const snap=await getDocs(colEvents);
+  const testIds=snap.docs.filter(d=>d.data().testDay).map(d=>d.id);
+  for(let i=0;i<testIds.length;i+=20){ await Promise.all(testIds.slice(i,i+20).map(id=>deleteDoc(doc(db,"events",id)))); }
+  // also remove picks/mustSee on those events
+  const psnap=await getDocs(colPicks);
+  const tset=new Set(testIds);
+  const delPicks=psnap.docs.filter(d=>tset.has(d.data().eventId)).map(d=>d.id);
+  for(let i=0;i<delPicks.length;i+=20){ await Promise.all(delPicks.slice(i,i+20).map(id=>deleteDoc(doc(db,"picks",id)))); }
 }
 function walkAdminStatus(){
   const n=state.legs.length;
