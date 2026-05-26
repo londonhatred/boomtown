@@ -492,7 +492,9 @@
   .clash-item{padding:9px 0;border-top:1px solid var(--line)}
   .clash-item:first-child{border-top:none}
   .clash-when{font-family:"Anton";font-size:13px;text-transform:uppercase;color:var(--accent);margin-bottom:3px}
-  .clash-advice{font-size:13px;line-height:1.45}
+  .clash-acts{font-size:13px;line-height:1.5;font-weight:700;margin-bottom:4px}
+  .clash-acts .ci-stage{font-weight:600;color:var(--muted);font-size:11.5px}
+  .clash-advice{font-size:12.5px;line-height:1.45;color:var(--ink-2)}
 
   .offline-bar{position:fixed;left:0;right:0;top:0;z-index:90;display:none;align-items:center;justify-content:center;gap:8px;
     background:var(--ink);color:var(--paper);font-size:12px;font-weight:700;letter-spacing:.02em;padding:7px 14px;text-align:center;line-height:1.3}
@@ -1440,49 +1442,73 @@ async function refreshWeather(){
 }
 
 /* ---------- CLASH RESOLVER ---------- */
-function dayClashes(day){
+// group a day's picks into clusters of mutually-overlapping events
+function clashClusters(day){
   const ids=myPickIds();
-  const list=sortEvents(state.events.filter(e=>ids.has(e.id)&&e.day===day));
-  const pairs=[];
-  for(let i=0;i<list.length;i++)for(let j=i+1;j<list.length;j++){
-    if(overlaps(list[i],list[j])){
-      const [as,ae]=timeRangeMin(list[i]), [bs,be]=timeRangeMin(list[j]);
-      const overlapMin=Math.min(ae,be)-Math.max(as,bs);
-      pairs.push({a:list[i],b:list[j],overlapMin});
+  const list=sortEvents(state.events.filter(e=>ids.has(e.id)&&e.day===day))
+    .map(e=>({e, r:timeRangeMin(e)}));
+  const clusters=[];
+  let cur=null, curEnd=-1;
+  list.forEach(item=>{
+    const [s,en]=item.r;
+    if(cur && s < curEnd){           // overlaps the running cluster window
+      cur.push(item); curEnd=Math.max(curEnd,en);
+    } else {
+      if(cur && cur.length>1) clusters.push(cur);
+      cur=[item]; curEnd=en;
     }
-  }
-  return pairs;
+  });
+  if(cur && cur.length>1) clusters.push(cur);
+  return clusters;   // only clusters with a genuine clash (2+)
 }
-function clashAdvice(a,b){
-  // which starts first / ends first → suggest catching the start of one then walking
-  const [as,ae]=timeRangeMin(a),[bs,be]=timeRangeMin(b);
-  const first = as<=bs ? a : b, second = as<=bs ? b : a;
-  const [fs,fe]=timeRangeMin(first), [ss,se]=timeRangeMin(second);
-  const catchMin = ss-fs; // minutes of `first` before `second` starts
-  // walk time between the two stages
-  let walk=null;
-  const sa=stagesWithCoords().find(s=>s.name===first.stageName), sb=stagesWithCoords().find(s=>s.name===second.stageName);
-  if(sa&&sb) walk=walkSeconds(sa.id,sb.id);
-  const walkM=walk!=null?Math.max(1,Math.round(walk/60)):null;
-  let line;
-  if(catchMin>=20){
-    line=`Catch ~${catchMin} min of <b>${esc(first.title)}</b>, then head to <b>${esc(second.title)}</b>`;
-    if(walkM!=null) line+=` (~${walkM} min walk${catchMin-walkM<10?`, you'll arrive a touch late`:''})`;
-  } else {
-    line=`<b>${esc(first.title)}</b> &amp; <b>${esc(second.title)}</b> barely overlap — you'd only catch ~${catchMin} min of the first`;
-    if(walkM!=null) line+=` and it's a ~${walkM} min walk between them`;
+function walkMinBetween(aName,bName){
+  const sa=stagesWithCoords().find(s=>s.name===aName), sb=stagesWithCoords().find(s=>s.name===bName);
+  if(!sa||!sb) return null;
+  const w=walkSeconds(sa.id,sb.id);
+  return w!=null?Math.max(1,Math.round(w/60)):null;
+}
+function clusterAdvice(items){
+  // items: [{e, r:[start,end]}] sorted by start. Decide if there's a real "catch then move" route.
+  const sorted=[...items].sort((a,b)=>a.r[0]-b.r[0]);
+  const first=sorted[0], next=sorted[1];
+  const gap = next.r[0]-first.r[0];           // minutes of `first` before the next one starts
+  const sameStage = first.e.stageName===next.e.stageName;
+  // route advice only when one act clearly fits before another (>=15 min head start, different stages)
+  if(gap>=15 && !sameStage){
+    const wm=walkMinBetween(first.e.stageName, next.e.stageName);
+    const catchable = wm!=null ? Math.max(0, gap-wm) : gap;
+    let line=`Catch ~${gap} min of <b>${esc(first.e.title)}</b>, then head to <b>${esc(next.e.title)}</b>`;
+    if(wm!=null) line+= ` (~${wm} min walk${catchable<10?`, arriving a little late`:''})`;
+    return line;
   }
-  return line;
+  // otherwise: simultaneous-ish → pick one, show how far apart the stages are
+  const stages=[...new Set(sorted.map(x=>x.e.stageName))];
+  if(stages.length>1){
+    // show the longest walk among the clashing stages, as a "how spread out" hint
+    let maxWm=null;
+    for(let i=0;i<stages.length;i++)for(let j=i+1;j<stages.length;j++){ const wm=walkMinBetween(stages[i],stages[j]); if(wm!=null&&(maxWm==null||wm>maxWm)) maxWm=wm; }
+    return `These run at the same time — you'll have to pick one${maxWm!=null?` (stages are ~${maxWm} min apart)`:''}.`;
+  }
+  return `These run at the same time on the same stage — pick one.`;
 }
 function clashCard(){
   const ids=myPickIds();
   const days=DAYS.filter(d=> state.events.some(e=>ids.has(e.id)&&e.day===d));
-  const all=[]; days.forEach(d=>{ dayClashes(d).forEach(c=>all.push({day:d,...c})); });
-  if(!all.length) return "";
-  const rows=all.slice(0,5).map(c=>`<div class="clash-item"><div class="clash-when">${c.day.slice(0,3)} · ${esc(fmt12(c.a.start))}</div><div class="clash-advice">${clashAdvice(c.a,c.b)}</div></div>`).join("");
-  return `<div class="free-card" style="border-color:var(--accent)"><div class="free-head">⚠ ${all.length} clash${all.length>1?'es':''} in your plan</div>
-    <div class="find-note" style="margin-bottom:8px">Overlapping picks — here's how to make the most of each.</div>
-    <div class="clash-list">${rows}</div>${all.length>5?`<div class="find-note" style="margin-top:8px">+${all.length-5} more</div>`:""}</div>`;
+  const clusters=[];
+  days.forEach(d=>{ clashClusters(d).forEach(c=>clusters.push({day:d, items:c})); });
+  if(!clusters.length) return "";
+  const rows=clusters.slice(0,6).map(c=>{
+    const start=c.items.map(x=>x.r[0]).reduce((a,b)=>Math.min(a,b));
+    const acts=c.items.map(x=>`${esc(x.e.title)} <span class="ci-stage">${esc(x.e.stageName)}</span>`).join("<br>");
+    return `<div class="clash-item">
+      <div class="clash-when">${c.day.slice(0,3)} · ${minToHM(start)} · ${c.items.length} clash</div>
+      <div class="clash-acts">${acts}</div>
+      <div class="clash-advice">${clusterAdvice(c.items)}</div>
+    </div>`;
+  }).join("");
+  return `<div class="free-card" style="border-color:var(--accent)"><div class="free-head">⚠ ${clusters.length} clash${clusters.length>1?'es':''} in your plan</div>
+    <div class="find-note" style="margin-bottom:8px">Overlapping picks — grouped by when they collide.</div>
+    <div class="clash-list">${rows}</div>${clusters.length>6?`<div class="find-note" style="margin-top:8px">+${clusters.length-6} more</div>`:""}</div>`;
 }
 
 /* ---------- BROWSE ---------- */
