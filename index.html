@@ -136,7 +136,7 @@
   .ev .meta{display:flex;flex-wrap:wrap;gap:7px;margin-top:7px;align-items:center}
   .ev .loc{font-size:12px;color:var(--ink-2);font-weight:600;text-transform:uppercase;letter-spacing:.03em}
   .ev .notes{font-size:13px;color:var(--ink-2);margin-top:7px}
-  .ev .act{flex:none;display:flex;align-items:center}
+  .ev .act{flex:none;display:flex;flex-direction:column;align-items:center;gap:6px;justify-content:center}
   .pick-btn{width:44px;height:44px;border-radius:var(--radius-sm);display:grid;place-items:center;background:var(--paper);border:2px solid var(--ink)}
   .pick-btn svg{width:22px;height:22px;fill:none;stroke:var(--ink);stroke-width:2.4}
   .pick-btn.on{background:var(--accent);border-color:var(--ink)}
@@ -497,6 +497,12 @@
   .clash-advice{font-size:12.5px;line-height:1.5;color:var(--ink-2)}
   .clash-advice .ca-lead{font-weight:800;color:var(--ink);text-transform:uppercase;font-size:11px;letter-spacing:.04em}
   .clash-advice .ca-miss{display:block;margin-top:4px;color:var(--muted);font-style:italic}
+  .clash-advice .ca-conflict{display:block;margin-bottom:5px;color:var(--accent);font-weight:700}
+  .clash-advice .ca-dur{color:var(--muted);font-size:11px;font-weight:600;white-space:nowrap}
+  .must-star{color:var(--gold)}
+  .fmust{font-size:10px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;color:var(--gold);border:1.5px solid var(--gold);border-radius:2px;padding:1px 6px}
+  .must-btn{flex:none;width:38px;height:38px;border-radius:var(--radius-sm);border:2px solid var(--ink);background:var(--paper);font-size:18px;line-height:1;color:var(--muted)}
+  .must-btn.on{background:var(--gold);color:#fff;border-color:var(--ink)}
 
   .offline-bar{position:fixed;left:0;right:0;top:0;z-index:90;display:none;align-items:center;justify-content:center;gap:8px;
     background:var(--ink);color:var(--paper);font-size:12px;font-weight:700;letter-spacing:.02em;padding:7px 14px;text-align:center;line-height:1.3}
@@ -726,6 +732,22 @@ async function togglePick(eventId){
   const has = state.picks.some(p=>p.id===id);
   if(has) await deleteDoc(ref);
   else await setDoc(ref, { userId:state.user.id, eventId, createdAt:serverTimestamp() });
+}
+// must-see lives on the pick doc; marking must-see implies the pick exists
+async function toggleMustSee(eventId){
+  const id = `${state.user.id}__${eventId}`;
+  const ref = doc(db,"picks",id);
+  const p = state.picks.find(x=>x.id===id);
+  const next = !(p && p.mustSee);
+  await setDoc(ref, { userId:state.user.id, eventId, mustSee:next, createdAt:(p&&p.createdAt)||serverTimestamp() }, {merge:true});
+}
+function myMustSee(){ return new Set(state.picks.filter(p=>p.userId===state.user.id && p.mustSee).map(p=>p.eventId)); }
+function mustSeeCount(eventId){ // how many of crew/group marked must-see (info)
+  const me=state.user.id;
+  let peers=state.users.map(u=>u.id).filter(id=>id!==me);
+  if(state.crew && state.crew.length) peers=peers.filter(id=>state.crew.includes(id));
+  const peerSet=new Set(peers);
+  return state.picks.filter(p=>p.eventId===eventId && p.mustSee && peerSet.has(p.userId)).length;
 }
 async function saveEvent(ev){
   const data = {
@@ -1084,6 +1106,9 @@ function eventCard(ev, {picked, clash, changed}={}){
   const goers = state.picks.filter(p=>p.eventId===ev.id);
   const count = goers.length;
   const c = districtColor(ev.districtId);
+  const mine = myPickIds().has(ev.id);
+  const must = myMustSee().has(ev.id);
+  const friendsMust = mustSeeCount(ev.id);
   return `
   <div class="ev ${clash?'clash':''}" data-ev="${ev.id}" style="box-shadow:inset 5px 0 0 ${c}">
     <div class="time">
@@ -1091,18 +1116,20 @@ function eventCard(ev, {picked, clash, changed}={}){
       <div class="t2">${ev.end?('→ '+esc(fmt12(ev.end))):''}</div>
     </div>
     <div class="body">
-      <h3>${esc(ev.title)}</h3>
+      <h3>${esc(ev.title)}${must?' <span class="must-star">★</span>':''}</h3>
       <div class="meta">
         <span class="area-tag" style="--c:${c}">${esc(ev.districtName)}</span>
         <span class="loc">${esc(ev.stageName)}</span>
         ${changed?'<span class="changed-badge">⚠ time changed</span>':''}
+        ${friendsMust?`<span class="fmust">★ ${friendsMust} must-see</span>`:''}
       </div>
       ${ev.notes?`<div class="notes">${esc(ev.notes)}</div>`:""}
       ${clash?`<div class="clash-note">⚠ Overlaps with another pick</div>`:""}
       ${count?`<div class="goers">${attendeeChips(goers)}</div>`:""}
     </div>
     <div class="act">
-      <button class="pick-btn ${picked?'on':''}" data-pick="${ev.id}" aria-label="add to my plan">
+      ${mine?`<button class="must-btn ${must?'on':''}" data-must="${ev.id}" aria-label="must-see" title="Must-see">${must?'★':'☆'}</button>`:""}
+      <button class="pick-btn ${picked||mine?'on':''}" data-pick="${ev.id}" aria-label="add to my plan">
         <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
       </button>
     </div>
@@ -1502,49 +1529,93 @@ function crewGoing(eventId){
   const peerSet=new Set(peers);
   return state.picks.filter(p=>p.eventId===eventId && peerSet.has(p.userId)).length;
 }
-// Greedy route through a clash cluster that tries to catch SOME of as many acts as possible.
-// You may leave an act early to reach the next; an act counts if you can see >= MIN_WORTH of it.
+// Route through a clash cluster. Protects must-see acts in full (reserving their time);
+// routes the rest into the gaps around them. Returns {route, missed, mustConflict}.
+const MIN_WORTH=10;     // minutes — ignore slivers smaller than this
+const SOLID_CHUNK=20;   // minutes — below this counts as a "sliver" worth flagging
 function planCluster(items){
+  const must = myMustSee();
   const sorted=[...items].sort((a,b)=> a.r[0]-b.r[0] || a.r[1]-b.r[1]);
-  const MIN_WORTH=10;            // minutes — ignore slivers smaller than this
+  const musts = sorted.filter(x=>must.has(x.e.id));
+  // unavoidable must-see vs must-see clash?
+  let mustConflict=null;
+  for(let i=0;i<musts.length;i++)for(let j=i+1;j<musts.length;j++){
+    const [as,ae]=musts[i].r, [bs,be]=musts[j].r;
+    if(as<be && bs<ae) mustConflict=[musts[i],musts[j]];
+  }
+  // protected = non-overlapping subset of must-sees (earliest-ending wins on conflict)
+  const protectedSet=new Set();
+  const protectedBlocks=[]; // [start,end] reserved
+  if(musts.length){
+    [...musts].sort((a,b)=>a.r[1]-b.r[1]).forEach(m=>{
+      const [s,e]=m.r;
+      const clashesProtected = protectedBlocks.some(([ps,pe])=> s<pe && ps<e);
+      if(!clashesProtected){ protectedSet.add(m.e.id); protectedBlocks.push([s,e]); }
+    });
+  }
+  const isFree=(s,e)=> !protectedBlocks.some(([ps,pe])=> s<pe && ps<e);  // does [s,e] avoid all protected blocks?
   const route=[]; const missed=[];
-  let freeAt=null, atStage=null;   // when you become free, and where
+  let freeAt=null, atStage=null;
   for(let i=0;i<sorted.length;i++){
     const it=sorted[i]; const [s,e]=it.r;
-    const arrive = freeAt===null ? s : Math.max(s, freeAt + (walkMinBetween(atStage,it.e.stageName)||0));
-    if(e-arrive < MIN_WORTH){ missed.push(it); continue; }   // can't get a worthwhile chunk
-    // when must we leave to catch the NEXT worthwhile act? leave as late as possible.
-    let leaveBy=e;
-    const nxt=sorted[i+1];
-    if(nxt){
-      const wm=walkMinBetween(it.e.stageName, nxt.e.stageName)||0;
-      // to catch >=MIN_WORTH of next, be there by (nxt.end - MIN_WORTH); leave by that minus walk
-      const mustLeave = Math.min(e, (nxt.r[1]-MIN_WORTH) - wm);
-      if(mustLeave>=arrive+ MIN_WORTH) leaveBy=Math.min(e, Math.max(mustLeave, arrive)); // stay as long as we can but still make next
-      else leaveBy=e; // can't help next anyway, stay to end
+    const isProtected=protectedSet.has(it.e.id);
+    if(isProtected){
+      route.push({item:it, seeFrom:s, seeTo:e, seeMin:e-s, partialStart:false, partialEnd:false, must:true});
+      freeAt=e; atStage=it.e.stageName; continue;
     }
-    route.push({item:it, seeFrom:arrive, seeTo:leaveBy, partialStart:arrive>s, partialEnd:leaveBy<e});
+    // routed act: arrive after being free + walk, but also can't use time inside a protected block
+    let arrive = freeAt===null ? s : Math.max(s, freeAt + (walkMinBetween(atStage,it.e.stageName)||0));
+    // push arrival past any protected block we'd be inside
+    protectedBlocks.forEach(([ps,pe])=>{ if(arrive<pe && ps<=arrive) arrive=pe; });
+    // the latest we could stay: until our own end, or until a protected block starts (must leave to be there)
+    let cap=e;
+    protectedBlocks.forEach(([ps,pe])=>{ if(ps>=arrive && ps<cap) cap=ps; });   // a protected act starts → must go
+    if(cap-arrive < MIN_WORTH){ missed.push(it); continue; }
+    let leaveBy=cap;
+    const nxt=sorted[i+1];
+    if(nxt && cap===e){  // only trim for next if we weren't already cut off by a protected block
+      const wm=walkMinBetween(it.e.stageName, nxt.e.stageName)||0;
+      const nxtProtected=protectedSet.has(nxt.e.id);
+      const beThereBy = nxtProtected ? nxt.r[0] : (nxt.r[1]-MIN_WORTH);
+      const mustLeave = Math.min(e, beThereBy - wm);
+      if(mustLeave>=arrive+MIN_WORTH) leaveBy=Math.min(cap, Math.max(mustLeave, arrive));
+    }
+    route.push({item:it, seeFrom:arrive, seeTo:leaveBy, seeMin:leaveBy-arrive, partialStart:arrive>s, partialEnd:leaveBy<e, must:false});
     freeAt=leaveBy; atStage=it.e.stageName;
   }
-  return {route, missed};
+  route.sort((a,b)=>a.seeFrom-b.seeFrom);
+  return {route, missed, mustConflict};
 }
 function clusterAdvice(items){
-  const {route, missed}=planCluster(items);
+  const {route, missed, mustConflict}=planCluster(items);
+  // hard must-see vs must-see clash → say it loudly
+  let conflictNote="";
+  if(mustConflict){
+    conflictNote=`<span class="ca-conflict">★ ${esc(mustConflict[0].e.title)} &amp; ★ ${esc(mustConflict[1].e.title)} are both must-see but overlap — you can't catch both in full.</span> `;
+  }
   if(route.length<=1){
     const stages=[...new Set(items.map(x=>x.e.stageName))];
     let maxWm=null;
     for(let i=0;i<stages.length;i++)for(let j=i+1;j<stages.length;j++){ const wm=walkMinBetween(stages[i],stages[j]); if(wm!=null&&(maxWm==null||wm>maxWm)) maxWm=wm; }
-    return `<span class="ca-lead">Pick one</span> — these run at the same time${maxWm!=null?`, stages ~${maxWm} min apart`:''}.`;
+    return conflictNote+`<span class="ca-lead">Pick one</span> — these run at the same time${maxWm!=null?`, stages ~${maxWm} min apart`:''}.`;
   }
   const parts=route.map((r,i)=>{
     const t=esc(r.item.e.title);
-    if(i===0) return `<b>${t}</b> till ${minToHM(r.seeTo)}`;
+    const star=r.must?'★ ':'';
+    const dur=`<span class="ca-dur">~${r.seeMin} min</span>`;
+    if(i===0) return `${star}<b>${t}</b> till ${minToHM(r.seeTo)} ${dur}`;
     const wm=walkMinBetween(route[i-1].item.e.stageName, r.item.e.stageName);
-    const verb = r.partialStart ? `catch <b>${t}</b> from ${minToHM(r.seeFrom)}` : `<b>${t}</b>`;
-    return `${verb}${wm!=null?` (~${wm} min walk)`:''}${r.partialEnd?` till ${minToHM(r.seeTo)}`:''}`;
+    const verb = r.partialStart ? `catch ${star}<b>${t}</b> from ${minToHM(r.seeFrom)}` : `${star}<b>${t}</b>`;
+    return `${verb}${wm!=null?` (~${wm} min walk)`:''}${r.partialEnd?` till ${minToHM(r.seeTo)}`:''} ${dur}`;
   });
-  let line=`<span class="ca-lead">One option:</span> ${parts.join(" → ")} — catches all ${route.length}.`;
+  // sliver check: any non-must segment under SOLID_CHUNK
+  const slivers=route.filter(r=>!r.must && r.seeMin<SOLID_CHUNK);
+  let line=`${conflictNote}<span class="ca-lead">One option:</span> ${parts.join(" → ")}.`;
   if(missed.length) line += ` <span class="ca-miss">Can't also fit ${missed.map(m=>esc(m.e.title)).join(", ")}.</span>`;
+  if(slivers.length>=Math.max(1,route.length-1) && route.length>=2 && !route.some(r=>r.must)){
+    // most of the route is slivers and nothing is locked → suggest committing
+    line += ` <span class="ca-miss">That's a lot of dashing for short bits — you might enjoy committing to one or two instead.</span>`;
+  }
   return line;
 }
 function clashCard(){
@@ -1949,6 +2020,9 @@ function wireView(){
   v.querySelectorAll("[data-pick]").forEach(b=>b.onclick=async()=>{
     b.classList.toggle("on");
     try{ await togglePick(b.dataset.pick); }catch(e){ toast("Couldn't save — try again"); }
+  });
+  v.querySelectorAll("[data-must]").forEach(b=>b.onclick=async()=>{
+    try{ await toggleMustSee(b.dataset.must); }catch(e){ toast("Couldn't save — try again"); }
   });
   v.querySelectorAll("[data-goto-stage]").forEach(b=>b.onclick=()=>{
     const s=stagesWithCoords().find(x=>x.name===b.dataset.gotoStage);
