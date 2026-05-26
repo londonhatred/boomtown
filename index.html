@@ -2806,44 +2806,57 @@ async function clearWalkData(){
 }
 // --- Test day stopgap: festival = today + sample acts timed around now ---
 async function setupTestDay(){
-  const today=new Date();
-  const ymd=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
-  await saveStructure({...state.structure, festivalStartDate:ymd});
-  const day=DAYS[0]; // today maps to the first festival day
-  // ensure at least one district/stage to attach to
-  let districts=state.structure.districts||[];
-  if(!districts.length){
-    const did="td_"+Math.random().toString(36).slice(2,7);
-    districts=[{id:did, name:"Test Area", stages:[{id:"td_s1",name:"Test Stage A"},{id:"td_s2",name:"Test Stage B"}]}];
-    await saveStructure({...state.structure, festivalStartDate:ymd, districts});
-  }
-  const d0=districts[0];
-  const stA=(d0.stages&&d0.stages[0])||{id:"td_s1",name:"Test Stage A"};
-  const stB=(d0.stages&&d0.stages[1])||stA;
+  // clear any existing test EVENTS first so repeat clicks don't stack (structure handled below)
+  await clearTestEvents();
+  const now=new Date();
+  // The festival "day" that NOW belongs to (honouring the 6am rollover): if it's before 6am,
+  // the festival start date must be YESTERDAY so that tonight's post-midnight times read correctly.
+  const anchor=new Date(now);
+  if(now.getHours() < DAY_ROLLOVER_HOUR) anchor.setDate(anchor.getDate()-1);
+  const ymd=`${anchor.getFullYear()}-${String(anchor.getMonth()+1).padStart(2,"0")}-${String(anchor.getDate()).padStart(2,"0")}`;
+  const day=DAYS[0];
+  // Use a DEDICATED test district with 3 distinct stages so acts spread out and clashes have
+  // real different stages (so walk-time routing works). Append it; don't touch real districts.
+  let districts=(state.structure.districts||[]).filter(d=>d.id!=="td_area" && !d.testDay);
+  let td={id:"td_area", name:"🧪 Test Area", testDay:true, stages:[
+    {id:"td_s1",name:"Test Stage A"},
+    {id:"td_s2",name:"Test Stage B"},
+    {id:"td_s3",name:"Test Stage C"}
+  ]};
+  districts.push(td);
+  await saveStructure({...state.structure, festivalStartDate:ymd, districts});
+  const [stA,stB,stC]=td.stages;
   const mins=d=>{ const t=new Date(Date.now()+d*60000); return toHM(t); };
-  // sample acts around now: one on-now, one starting ~8 min, plus a clash pair ~20 min in
+  // four sample acts across THREE distinct stages: on-now, soon, and a clash pair on different stages
   const samples=[
-    {title:"TEST · On Now Act", st:stA, start:mins(-20), end:mins(40)},
+    {title:"TEST · On Now Act",    st:stA, start:mins(-20), end:mins(40)},
     {title:"TEST · Starting Soon", st:stB, start:mins(8),  end:mins(68)},
-    {title:"TEST · Clash One",  st:stA, start:mins(25), end:mins(85)},
-    {title:"TEST · Clash Two",  st:stB, start:mins(35), end:mins(95)},
+    {title:"TEST · Clash One",     st:stB, start:mins(25), end:mins(85)},
+    {title:"TEST · Clash Two",     st:stC, start:mins(35), end:mins(95)},
   ];
   for(const sm of samples){
     await addDoc(colEvents, {
-      districtId:d0.id, districtName:d0.name, stageId:sm.st.id, stageName:sm.st.name,
+      districtId:td.id, districtName:td.name, stageId:sm.st.id, stageName:sm.st.name,
       day, start:sm.start, end:sm.end, title:sm.title, notes:"", testDay:true, createdAt:serverTimestamp()
     });
   }
 }
-async function clearTestData(){
+async function clearTestEvents(){
   const snap=await getDocs(colEvents);
   const testIds=snap.docs.filter(d=>d.data().testDay).map(d=>d.id);
   for(let i=0;i<testIds.length;i+=20){ await Promise.all(testIds.slice(i,i+20).map(id=>deleteDoc(doc(db,"events",id)))); }
-  // also remove picks/mustSee on those events
   const psnap=await getDocs(colPicks);
   const tset=new Set(testIds);
   const delPicks=psnap.docs.filter(d=>tset.has(d.data().eventId)).map(d=>d.id);
   for(let i=0;i<delPicks.length;i+=20){ await Promise.all(delPicks.slice(i,i+20).map(id=>deleteDoc(doc(db,"picks",id)))); }
+}
+async function clearTestData(){
+  await clearTestEvents();
+  // strip the dedicated test district if present
+  const districts=(state.structure.districts||[]).filter(d=>d.id!=="td_area" && !d.testDay);
+  if(districts.length !== (state.structure.districts||[]).length){
+    await saveStructure({...state.structure, districts});
+  }
 }
 function walkAdminStatus(){
   const n=state.legs.length;
