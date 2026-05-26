@@ -494,7 +494,9 @@
   .clash-when{font-family:"Anton";font-size:13px;text-transform:uppercase;color:var(--accent);margin-bottom:3px}
   .clash-acts{font-size:13px;line-height:1.5;font-weight:700;margin-bottom:4px}
   .clash-acts .ci-stage{font-weight:600;color:var(--muted);font-size:11.5px}
-  .clash-advice{font-size:12.5px;line-height:1.45;color:var(--ink-2)}
+  .clash-advice{font-size:12.5px;line-height:1.5;color:var(--ink-2)}
+  .clash-advice .ca-lead{font-weight:800;color:var(--ink);text-transform:uppercase;font-size:11px;letter-spacing:.04em}
+  .clash-advice .ca-miss{display:block;margin-top:4px;color:var(--muted);font-style:italic}
 
   .offline-bar{position:fixed;left:0;right:0;top:0;z-index:90;display:none;align-items:center;justify-content:center;gap:8px;
     background:var(--ink);color:var(--paper);font-size:12px;font-weight:700;letter-spacing:.02em;padding:7px 14px;text-align:center;line-height:1.3}
@@ -768,6 +770,31 @@ function setupOfflineBanner(){
   sync();
 }
 setupOfflineBanner();
+
+/* ---- time awareness: keep time-sensitive views current as minutes pass ---- */
+// Views whose content depends on the current time (on-now, countdowns, leave-now, today's remaining).
+const TIME_VIEWS = new Set(["home","onnow","mine"]);
+function timeTick(){
+  if(!state.user) return;
+  if(document.hidden) return;                       // don't churn while backgrounded
+  if(document.querySelector(".modal-bg")) return;   // don't redraw under an open modal
+  // don't yank focus mid-typing (chat / search inputs)
+  const ae=document.activeElement;
+  if(ae && (ae.tagName==="INPUT"||ae.tagName==="TEXTAREA")) return;
+  if(TIME_VIEWS.has(state.view)) renderView();
+  scheduleNotifications();                           // re-arm leave-now / starting-soon timers
+}
+// Align the heartbeat to the top of each minute so "on now" flips right on the minute.
+setTimeout(()=>{ timeTick(); setInterval(timeTick, 60000); }, (60-new Date().getSeconds())*1000 + 200);
+
+// When the app comes back to the foreground (was backgrounded/screen off), refresh immediately.
+document.addEventListener("visibilitychange", ()=>{
+  if(document.hidden || !state.user) return;
+  if(!document.querySelector(".modal-bg")){
+    renderApp();                                     // full redraw with current time
+  }
+  if(navigator.onLine) refreshWeather().catch(()=>{});
+});
 
 // Fire a notification via the SW if possible (survives backgrounding better), else direct.
 function pushNotify(title, body, tag){
@@ -1463,33 +1490,62 @@ function clashClusters(day){
 }
 function walkMinBetween(aName,bName){
   const sa=stagesWithCoords().find(s=>s.name===aName), sb=stagesWithCoords().find(s=>s.name===bName);
-  if(!sa||!sb) return null;
-  const w=walkSeconds(sa.id,sb.id);
-  return w!=null?Math.max(1,Math.round(w/60)):null;
+  if(sa&&sb){ const w=walkSeconds(sa.id,sb.id); if(w!=null) return Math.max(1,Math.round(w/60)); }
+  return null;
+}
+// how many of my crew (or whole group if no crew) picked an event
+function crewGoing(eventId){
+  const me=state.user.id;
+  let peers=state.users.map(u=>u.id).filter(id=>id!==me);
+  const usingCrew = state.crew && state.crew.length;
+  if(usingCrew) peers=peers.filter(id=>state.crew.includes(id));
+  const peerSet=new Set(peers);
+  return state.picks.filter(p=>p.eventId===eventId && peerSet.has(p.userId)).length;
+}
+// Greedy route through a clash cluster that tries to catch SOME of as many acts as possible.
+// You may leave an act early to reach the next; an act counts if you can see >= MIN_WORTH of it.
+function planCluster(items){
+  const sorted=[...items].sort((a,b)=> a.r[0]-b.r[0] || a.r[1]-b.r[1]);
+  const MIN_WORTH=10;            // minutes — ignore slivers smaller than this
+  const route=[]; const missed=[];
+  let freeAt=null, atStage=null;   // when you become free, and where
+  for(let i=0;i<sorted.length;i++){
+    const it=sorted[i]; const [s,e]=it.r;
+    const arrive = freeAt===null ? s : Math.max(s, freeAt + (walkMinBetween(atStage,it.e.stageName)||0));
+    if(e-arrive < MIN_WORTH){ missed.push(it); continue; }   // can't get a worthwhile chunk
+    // when must we leave to catch the NEXT worthwhile act? leave as late as possible.
+    let leaveBy=e;
+    const nxt=sorted[i+1];
+    if(nxt){
+      const wm=walkMinBetween(it.e.stageName, nxt.e.stageName)||0;
+      // to catch >=MIN_WORTH of next, be there by (nxt.end - MIN_WORTH); leave by that minus walk
+      const mustLeave = Math.min(e, (nxt.r[1]-MIN_WORTH) - wm);
+      if(mustLeave>=arrive+ MIN_WORTH) leaveBy=Math.min(e, Math.max(mustLeave, arrive)); // stay as long as we can but still make next
+      else leaveBy=e; // can't help next anyway, stay to end
+    }
+    route.push({item:it, seeFrom:arrive, seeTo:leaveBy, partialStart:arrive>s, partialEnd:leaveBy<e});
+    freeAt=leaveBy; atStage=it.e.stageName;
+  }
+  return {route, missed};
 }
 function clusterAdvice(items){
-  // items: [{e, r:[start,end]}] sorted by start. Decide if there's a real "catch then move" route.
-  const sorted=[...items].sort((a,b)=>a.r[0]-b.r[0]);
-  const first=sorted[0], next=sorted[1];
-  const gap = next.r[0]-first.r[0];           // minutes of `first` before the next one starts
-  const sameStage = first.e.stageName===next.e.stageName;
-  // route advice only when one act clearly fits before another (>=15 min head start, different stages)
-  if(gap>=15 && !sameStage){
-    const wm=walkMinBetween(first.e.stageName, next.e.stageName);
-    const catchable = wm!=null ? Math.max(0, gap-wm) : gap;
-    let line=`Catch ~${gap} min of <b>${esc(first.e.title)}</b>, then head to <b>${esc(next.e.title)}</b>`;
-    if(wm!=null) line+= ` (~${wm} min walk${catchable<10?`, arriving a little late`:''})`;
-    return line;
-  }
-  // otherwise: simultaneous-ish → pick one, show how far apart the stages are
-  const stages=[...new Set(sorted.map(x=>x.e.stageName))];
-  if(stages.length>1){
-    // show the longest walk among the clashing stages, as a "how spread out" hint
+  const {route, missed}=planCluster(items);
+  if(route.length<=1){
+    const stages=[...new Set(items.map(x=>x.e.stageName))];
     let maxWm=null;
     for(let i=0;i<stages.length;i++)for(let j=i+1;j<stages.length;j++){ const wm=walkMinBetween(stages[i],stages[j]); if(wm!=null&&(maxWm==null||wm>maxWm)) maxWm=wm; }
-    return `These run at the same time — you'll have to pick one${maxWm!=null?` (stages are ~${maxWm} min apart)`:''}.`;
+    return `<span class="ca-lead">Pick one</span> — these run at the same time${maxWm!=null?`, stages ~${maxWm} min apart`:''}.`;
   }
-  return `These run at the same time on the same stage — pick one.`;
+  const parts=route.map((r,i)=>{
+    const t=esc(r.item.e.title);
+    if(i===0) return `<b>${t}</b> till ${minToHM(r.seeTo)}`;
+    const wm=walkMinBetween(route[i-1].item.e.stageName, r.item.e.stageName);
+    const verb = r.partialStart ? `catch <b>${t}</b> from ${minToHM(r.seeFrom)}` : `<b>${t}</b>`;
+    return `${verb}${wm!=null?` (~${wm} min walk)`:''}${r.partialEnd?` till ${minToHM(r.seeTo)}`:''}`;
+  });
+  let line=`<span class="ca-lead">One option:</span> ${parts.join(" → ")} — catches all ${route.length}.`;
+  if(missed.length) line += ` <span class="ca-miss">Can't also fit ${missed.map(m=>esc(m.e.title)).join(", ")}.</span>`;
+  return line;
 }
 function clashCard(){
   const ids=myPickIds();
@@ -1499,7 +1555,11 @@ function clashCard(){
   if(!clusters.length) return "";
   const rows=clusters.slice(0,6).map(c=>{
     const start=c.items.map(x=>x.r[0]).reduce((a,b)=>Math.min(a,b));
-    const acts=c.items.map(x=>`${esc(x.e.title)} <span class="ci-stage">${esc(x.e.stageName)}</span>`).join("<br>");
+    const acts=c.items.map(x=>{
+      const n=crewGoing(x.e.id);
+      const crewWord=(state.crew&&state.crew.length)?"crew":"going";
+      return `<div class="ci-act"><span class="ci-title">${esc(x.e.title)}</span><span class="ci-stage">${esc(fmt12(x.e.start))}${x.e.end?'–'+esc(fmt12(x.e.end)):''}${n?` · ${n} ${crewWord}`:''}</span></div>`;
+    }).join("");
     return `<div class="clash-item">
       <div class="clash-when">${c.day.slice(0,3)} · ${minToHM(start)} · ${c.items.length} clash</div>
       <div class="clash-acts">${acts}</div>
