@@ -216,6 +216,67 @@
   .prev-row.new .stt{color:var(--teal)}
   .chk{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:600;margin-bottom:12px;cursor:pointer}
   .chk input{width:20px;height:20px;accent-color:var(--accent)}
+
+  /* admin stage rows with location */
+  .stage-list{flex-direction:column;align-items:stretch;gap:7px}
+  .stage-row{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--paper);
+    border:1.5px solid var(--ink);border-radius:var(--radius-sm);padding:7px 9px 7px 12px}
+  .stage-row .sname{font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .stage-row .locdot{font-size:13px}
+  .srow-act{display:flex;gap:6px;flex:none}
+  .btn.xs{padding:6px 9px;font-size:10px;letter-spacing:.04em}
+  .btn.xs.del{padding:6px 8px;color:var(--muted)}
+  .btn.xs.del:hover{color:var(--accent)}
+
+  /* find / compass */
+  .find-enable{text-align:center;padding:30px 18px}
+  .find-enable .big{font-size:46px;margin-bottom:10px}
+  .find-enable h3{font-family:"Anton";font-size:22px;margin-bottom:8px}
+  .find-enable p{color:var(--ink-2);font-size:13.5px;max-width:340px;margin:0 auto 18px;line-height:1.55}
+  .readout{background:var(--ink);color:var(--paper);border-radius:var(--radius);padding:14px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .readout .r-name{font-family:"Anton";font-size:20px;letter-spacing:.02em;line-height:1}
+  .readout .r-dir{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#d8cdb2;margin-top:5px;font-weight:700}
+  .readout .r-dist{font-family:"Anton";font-size:30px;color:var(--paper);line-height:1;text-align:right}
+  .readout .r-dist small{display:block;font-family:"Archivo";font-size:10px;letter-spacing:.06em;color:#d8cdb2;font-weight:700;margin-top:3px;text-transform:uppercase}
+  .radar-wrap{display:flex;justify-content:center;margin:4px 0 12px}
+  #radar{width:100%;max-width:320px;height:auto;touch-action:manipulation}
+  #radar .ring{fill:none;stroke:var(--line-strong);stroke-width:1.5}
+  #radar .ring-lbl{fill:var(--muted);font:600 9px Archivo,sans-serif;letter-spacing:.04em}
+  #radar .cross{stroke:var(--line);stroke-width:1}
+  #radar .me{fill:var(--ink)}
+  #radar .fwd{fill:var(--accent)}
+  #radar .fwd-lbl{fill:var(--muted);font:700 9px Archivo,sans-serif;letter-spacing:.08em;text-transform:uppercase}
+  #radar .rdot{cursor:pointer}
+  #radar .rdot circle{stroke:var(--ink);stroke-width:2}
+  #radar .rdot text{fill:var(--ink);font:700 9.5px Archivo,sans-serif}
+  #radar .rdot.sel circle{stroke-width:3}
+  #radar .rdot.sel text{font-weight:800}
+  #radar .needle{fill:var(--accent);stroke:var(--ink);stroke-width:1.5}
+  .find-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+  .find-acc{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+  .mode-toggle{display:flex;border:2px solid var(--ink);border-radius:var(--radius-sm);overflow:hidden}
+  .mode-toggle button{padding:7px 12px;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);background:var(--card)}
+  .mode-toggle button.on{background:var(--ink);color:var(--paper)}
+  .target-chips{display:flex;gap:7px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px}
+  .target-chips::-webkit-scrollbar{display:none}
+  .tchip{flex:none;display:flex;align-items:center;gap:7px;padding:7px 12px;border-radius:2px;font-size:12px;font-weight:700;
+    background:transparent;border:1.5px solid var(--ink);color:var(--ink-2);white-space:nowrap}
+  .tchip.on{background:var(--ink);color:var(--paper)}
+  .tchip .cdot{margin:0}
+  .find-note{font-size:12px;color:var(--muted);line-height:1.5;margin-top:4px}
+  #radar .dot-init{fill:#fff;font:800 8px Archivo,sans-serif;text-shadow:0 1px 1px rgba(0,0,0,.4)}
+  #radar .dot-name{fill:var(--ink);font:700 9.5px Archivo,sans-serif}
+  .share-row{display:flex;align-items:center;justify-content:space-between;gap:14px;background:var(--card);
+    border:2px solid var(--ink);border-radius:var(--radius);padding:13px 15px;margin-bottom:14px}
+  .share-row b{font-size:14px}
+  .switch{flex:none;width:52px;height:30px;border-radius:999px;border:2px solid var(--ink);background:var(--paper);position:relative;transition:background .15s}
+  .switch span{position:absolute;top:2px;left:2px;width:22px;height:22px;border-radius:50%;background:var(--ink);transition:transform .15s}
+  .switch.on{background:var(--accent)}
+  .switch.on span{transform:translateX(22px);background:var(--accent-ink)}
+  .live-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;background:var(--accent);
+    color:var(--accent-ink);font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border:2px solid var(--ink)}
+  .live-pill .dot{width:8px;height:8px;border-radius:50%;background:var(--accent-ink);animation:blink 1.4s infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
 </style>
 </head>
 <body>
@@ -291,6 +352,7 @@ const refStructure = doc(db, "meta", "structure");
 const colEvents    = collection(db, "events");
 const colUsers     = collection(db, "users");
 const colPicks     = collection(db, "picks");
+const colLocations = collection(db, "locations");
 
 /* ---- App state ---- */
 const state = {
@@ -299,6 +361,7 @@ const state = {
   events: [],                 // [{id,...}]
   users: [],                  // [{id,name,admin}]
   picks: [],                  // [{id,userId,eventId}]
+  locations: [],              // [{id(userId),name,lat,lng,acc,updatedAt}]
   view: "browse",
   ready: { events:false, users:false, picks:false, structure:false },
   filters: { day:"all", district:"all", search:"" },
@@ -422,6 +485,10 @@ function subscribeAll(){
     state.picks = snap.docs.map(d=>({id:d.id,...d.data()}));
     state.ready.picks=true; afterData();
   });
+  onSnapshot(colLocations, snap=>{
+    state.locations = snap.docs.map(d=>({id:d.id,...d.data()}));
+    if(state.user && state.view==="find" && find.kind==="people") renderView();
+  });
 }
 
 function allReady(){ return Object.values(state.ready).every(Boolean); }
@@ -497,6 +564,7 @@ function renderApp(){
           </div>
         </div>
         <div class="who">
+          ${find.share?`<button class="live-pill" id="stop-share" title="Stop sharing your location"><span class="dot"></span>Live</button>`:""}
           <div class="avatar ${u.admin?'adm':''}" title="${esc(u.name)}">${esc(initials(u.name))}</div>
           <button class="btn ghost sm" id="logout">Exit</button>
         </div>
@@ -506,6 +574,8 @@ function renderApp(){
     ${navHTML()}
   `;
   root.querySelector("#logout").onclick = logout;
+  const stopShareBtn = root.querySelector("#stop-share");
+  if(stopShareBtn) stopShareBtn.onclick = ()=>{ stopShare(); renderApp(); };
   root.querySelectorAll(".nav-inner button").forEach(b=>b.onclick=()=>{ state.view=b.dataset.v; renderApp(); });
   renderView();
   if(state.modal) renderModal();
@@ -514,8 +584,9 @@ function renderApp(){
 function navHTML(){
   const items = [
     ["browse","Browse",`<path d="M4 6h16M4 12h16M4 18h16"/>`],
-    ["mine","My plan",`<path d="M5 4h11l4 4v12H5z"/><path d="M9 12l2 2 4-4"/>`],
+    ["mine","Plan",`<path d="M5 4h11l4 4v12H5z"/><path d="M9 12l2 2 4-4"/>`],
     ["shared","Group",`<circle cx="9" cy="8" r="3"/><circle cx="17" cy="10" r="2.4"/><path d="M3.5 19c.6-3 3-4.5 5.5-4.5S14 16 14.6 19"/>`],
+    ["find","Find",`<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>`],
   ];
   if(state.user.admin) items.push(["admin","Manage",`<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2 2M16.4 16.4l2 2M18.4 5.6l-2 2M7.6 16.4l-2 2"/>`]);
   return `<nav class="nav"><div class="nav-inner">${items.map(([v,l,svg])=>`
@@ -526,10 +597,12 @@ function navHTML(){
 }
 
 function renderView(){
+  if(state.view!=="find" && find.started) stopFindSensors();
   const v = document.getElementById("view");
   if(state.view==="browse") v.innerHTML = viewBrowse();
   else if(state.view==="mine") v.innerHTML = viewMine();
   else if(state.view==="shared") v.innerHTML = viewShared();
+  else if(state.view==="find") v.innerHTML = viewFind();
   else if(state.view==="admin") v.innerHTML = viewAdmin();
   wireView();
 }
@@ -736,8 +809,18 @@ function viewAdmin(){
         <span class="plabel">Colour</span>
         ${AREA_COLORS.map(c=>`<button class="sw ${c.toLowerCase()===dc.toLowerCase()?'on':''}" style="background:${c}" data-setcolor="${d.id}:${c}" aria-label="set area colour"></button>`).join("")}
       </div>
-      <div class="stages">
-        ${(d.stages||[]).map(st=>`<span class="stage-chip">${esc(st.name)} <button data-del-s="${d.id}:${st.id}" title="remove stage">✕</button></span>`).join("") || '<span class="tag">No stages yet</span>'}
+      <div class="stages stage-list">
+        ${(d.stages||[]).length ? (d.stages||[]).map(st=>{
+          const pinned = (typeof st.lat==="number" && typeof st.lng==="number");
+          return `<div class="stage-row">
+            <span class="sname">${pinned?'<span class="locdot">📍</span>':''}${esc(st.name)}</span>
+            <div class="srow-act">
+              <button class="btn ghost xs" data-loc-s="${d.id}:${st.id}">${pinned?'Re-pin':'Set 📍'}</button>
+              ${pinned?`<button class="btn ghost xs" data-clearloc-s="${d.id}:${st.id}">Clear</button>`:''}
+              <button class="btn ghost xs del" data-del-s="${d.id}:${st.id}" title="remove stage">✕</button>
+            </div>
+          </div>`;
+        }).join("") : '<span class="tag">No stages yet</span>'}
       </div>
       <div class="add-inline">
         <input placeholder="Add a stage…" data-stage-input="${d.id}">
@@ -828,6 +911,17 @@ function wireView(){
   // ---- shared friend selector ----
   v.querySelectorAll("[data-friend]").forEach(b=>b.onclick=()=>{ state.sharedFriend=b.dataset.friend; renderView(); });
 
+  // ---- find / compass ----
+  if(state.view==="find"){
+    const en=v.querySelector("#find-enable-btn"); if(en) en.onclick=()=>{ find.enabledOnce=true; enableFind(); };
+    if(find.enabledOnce && !find.started && !find.error) startFindSensors();
+    v.querySelectorAll("[data-fkind]").forEach(b=>b.onclick=()=>{ find.kind=b.dataset.fkind; find.target=null; renderView(); });
+    const shareTog=v.querySelector("#share-toggle"); if(shareTog) shareTog.onclick=()=>{ if(find.share) stopShare(); else startShare(); renderApp(); };
+    v.querySelectorAll("[data-target]").forEach(b=>b.onclick=()=>{ find.target=b.dataset.target; renderView(); });
+    v.querySelectorAll("[data-fmode]").forEach(b=>b.onclick=()=>{ find.headingMode=b.dataset.fmode; renderView(); });
+    if(find.started && find.pos) updateFindDynamic();
+  }
+
   // ---- admin ----
   const saveName = v.querySelector("#save-name");
   if(saveName) saveName.onclick = async()=>{
@@ -866,6 +960,35 @@ function wireView(){
     const name=inp.value.trim(); if(!name) return;
     const districts=state.structure.districts.map(d=>d.id===did?{...d,stages:[...(d.stages||[]),{id:uid(),name}]}:d);
     await saveStructure({...state.structure,districts}); inp.value="";
+  });
+  v.querySelectorAll("[data-loc-s]").forEach(b=>b.onclick=()=>{
+    const [did,sid]=b.dataset.locS.split(":");
+    const dist=state.structure.districts.find(x=>x.id===did);
+    const st=dist&&(dist.stages||[]).find(x=>x.id===sid);
+    if(!st) return;
+    const saveCoords=async(lat,lng)=>{
+      const districts=state.structure.districts.map(d=>d.id!==did?d:{...d,stages:d.stages.map(s=>s.id!==sid?s:{...s,lat,lng})});
+      await saveStructure({...state.structure,districts}); toast(`Pinned ${st.name}`);
+    };
+    const manual=()=>{
+      const v2=prompt(`Enter coordinates for "${st.name}" as: latitude, longitude`, (typeof st.lat==="number")?`${st.lat}, ${st.lng}`:"");
+      if(!v2) return;
+      const m=v2.split(/[, ]+/).map(x=>parseFloat(x)).filter(n=>!isNaN(n));
+      if(m.length!==2||Math.abs(m[0])>90||Math.abs(m[1])>180){ toast("Couldn't read those coordinates"); return; }
+      saveCoords(m[0],m[1]);
+    };
+    if(!navigator.geolocation){ manual(); return; }
+    const orig=b.textContent; b.textContent="Locating…"; b.disabled=true;
+    navigator.geolocation.getCurrentPosition(
+      pos=>{ b.textContent=orig; b.disabled=false; saveCoords(+pos.coords.latitude.toFixed(6),+pos.coords.longitude.toFixed(6)); },
+      err=>{ b.textContent=orig; b.disabled=false; toast(err.code===1?"Location blocked — enter manually":"No GPS fix — enter manually"); manual(); },
+      {enableHighAccuracy:true,timeout:12000,maximumAge:0}
+    );
+  });
+  v.querySelectorAll("[data-clearloc-s]").forEach(b=>b.onclick=async()=>{
+    const [did,sid]=b.dataset.clearlocS.split(":");
+    const districts=state.structure.districts.map(d=>d.id!==did?d:{...d,stages:d.stages.map(s=>{ if(s.id!==sid) return s; const {lat,lng,...rest}=s; return rest; })});
+    await saveStructure({...state.structure,districts}); toast("Location cleared");
   });
   v.querySelectorAll("[data-del-s]").forEach(b=>b.onclick=async()=>{
     const [did,sid]=b.dataset.delS.split(":");
@@ -1174,6 +1297,281 @@ function renderBulkModal(){
   };
 
   refreshPreview();
+}
+
+/* ============================================================
+   FIND — GPS compass + radar to stages
+   ============================================================ */
+let find = { started:false, enabledOnce:false, geoWatch:null, orientBound:false, orientHandler:null,
+             pos:null, acc:null, heading:null, hasOrientation:false, headingMode:"auto", target:null, error:null,
+             kind:"stages", share:false, shareWatch:null, lastWrite:0 };
+
+const R_EARTH = 6371000;
+const toRad = d => d*Math.PI/180, toDeg = r => r*180/Math.PI;
+function haversine(la1,lo1,la2,lo2){
+  const dLa=toRad(la2-la1), dLo=toRad(lo2-lo1);
+  const a=Math.sin(dLa/2)**2 + Math.cos(toRad(la1))*Math.cos(toRad(la2))*Math.sin(dLo/2)**2;
+  return R_EARTH*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function bearing(la1,lo1,la2,lo2){
+  const y=Math.sin(toRad(lo2-lo1))*Math.cos(toRad(la2));
+  const x=Math.cos(toRad(la1))*Math.sin(toRad(la2)) - Math.sin(toRad(la1))*Math.cos(toRad(la2))*Math.cos(toRad(lo2-lo1));
+  return (toDeg(Math.atan2(y,x))+360)%360;
+}
+function fmtDist(m){ return m<1000 ? Math.round(m/5)*5+" m" : (m/1000).toFixed(m<10000?1:0)+" km"; }
+function cardinal(deg){ return ["N","NE","E","SE","S","SW","W","NW"][Math.round(((deg%360)/45))%8]; }
+function relDirText(rel){
+  const r=((rel%360)+360)%360;
+  const i=Math.round(r/45)%8;
+  return ["straight ahead","ahead & right","to your right","behind-right","behind you","behind-left","to your left","ahead & left"][i];
+}
+function stagesWithCoords(){
+  const out=[];
+  state.structure.districts.forEach(d=>(d.stages||[]).forEach(s=>{
+    if(typeof s.lat==="number" && typeof s.lng==="number")
+      out.push({id:s.id,name:s.name,sub:d.name,color:districtColor(d.id),lat:s.lat,lng:s.lng});
+  }));
+  return out;
+}
+function personColor(id){ let h=0; for(let i=0;i<id.length;i++) h=(h*31+id.charCodeAt(i))>>>0; return AREA_COLORS[h%AREA_COLORS.length]; }
+function peopleWithCoords(){
+  const now=Date.now(); const out=[];
+  state.locations.forEach(l=>{
+    if(l.id===state.user.id) return;
+    if(typeof l.lat!=="number" || typeof l.lng!=="number") return;
+    const ts = (l.updatedAt && l.updatedAt.toMillis) ? l.updatedAt.toMillis() : now;
+    if(now-ts > 5*60*1000) return;            // hide stale (>5 min)
+    const u=state.users.find(x=>x.id===l.id);
+    out.push({id:l.id, name:(u?u.name:(l.name||"Friend")), sub:"sharing live", color:personColor(l.id), lat:l.lat, lng:l.lng, ts});
+  });
+  return out;
+}
+function currentTargets(){ return find.kind==="people" ? peopleWithCoords() : stagesWithCoords(); }
+function agoText(ts){ const s=Math.round((Date.now()-ts)/1000); if(s<20) return "just now"; if(s<60) return s+"s ago"; const m=Math.round(s/60); return m+" min ago"; }
+
+/* ---- live location sharing ---- */
+function writeMyLocation(){
+  if(!find.share || !find.pos || !state.user) return;
+  const now=Date.now();
+  if(find.lastWrite && now-find.lastWrite < 8000) return;   // throttle writes
+  find.lastWrite=now;
+  setDoc(doc(db,"locations",state.user.id),
+    { name:state.user.name, lat:+find.pos.lat.toFixed(6), lng:+find.pos.lng.toFixed(6), acc:find.acc||null, updatedAt:serverTimestamp() }
+  ).catch(()=>{});
+}
+function startShare(){
+  if(find.shareWatch!=null) return;
+  if(!navigator.geolocation){ toast("Location not supported"); return; }
+  find.share=true; find.lastWrite=0;
+  find.shareWatch=navigator.geolocation.watchPosition(
+    p=>{ find.pos={lat:p.coords.latitude,lng:p.coords.longitude}; find.acc=p.coords.accuracy; writeMyLocation();
+         if(state.view==="find" && document.getElementById("radar")) updateFindDynamic(); },
+    e=>{ if(e.code===1){ toast("Location blocked"); stopShare(); renderApp(); } },
+    {enableHighAccuracy:true,maximumAge:5000,timeout:20000}
+  );
+}
+function stopShare(){
+  find.share=false;
+  if(find.shareWatch!=null && navigator.geolocation) navigator.geolocation.clearWatch(find.shareWatch);
+  find.shareWatch=null;
+  if(state.user) deleteDoc(doc(db,"locations",state.user.id)).catch(()=>{});
+}
+window.addEventListener("pagehide",()=>{ if(find.share && state.user){ try{ deleteDoc(doc(db,"locations",state.user.id)); }catch(e){} } });
+
+function enableFind(){
+  // iOS needs an explicit gesture-triggered permission request for the compass
+  try{
+    if(typeof DeviceOrientationEvent!=="undefined" && typeof DeviceOrientationEvent.requestPermission==="function"){
+      DeviceOrientationEvent.requestPermission().then(()=>bindOrientation()).catch(()=>{});
+    }
+  }catch(e){}
+  startFindSensors();
+}
+function bindOrientation(){
+  if(find.orientBound) return;
+  const handler=ev=>{
+    let h=null;
+    if(typeof ev.webkitCompassHeading==="number" && !isNaN(ev.webkitCompassHeading)) h=ev.webkitCompassHeading;
+    else if(ev.alpha!=null){ const off=(screen.orientation&&screen.orientation.angle)||0; h=(360-ev.alpha+off)%360; }
+    if(h==null||isNaN(h)) return;
+    find.heading=h;
+    const had=find.hasOrientation; find.hasOrientation=true;
+    if(state.view==="find"){ if(!had) renderView(); else updateFindDynamic(); }
+  };
+  find.orientHandler=handler;
+  window.addEventListener("deviceorientationabsolute",handler,true);
+  window.addEventListener("deviceorientation",handler,true);
+  find.orientBound=true;
+}
+function startFindSensors(){
+  if(find.started) return;
+  find.started=true; find.error=null;
+  if(navigator.geolocation){
+    find.geoWatch=navigator.geolocation.watchPosition(
+      p=>{ find.pos={lat:p.coords.latitude,lng:p.coords.longitude}; find.acc=p.coords.accuracy; find.error=null;
+           if(state.view==="find"){ if(!document.getElementById("radar")) renderView(); else updateFindDynamic(); } },
+      e=>{ find.error = e.code===1 ? "denied" : "unavailable"; if(state.view==="find") renderView(); },
+      {enableHighAccuracy:true,maximumAge:2000,timeout:20000}
+    );
+  } else { find.error="unsupported"; }
+  bindOrientation();
+  if(state.view==="find") renderView();
+}
+function stopFindSensors(){
+  if(find.geoWatch!=null && navigator.geolocation) navigator.geolocation.clearWatch(find.geoWatch);
+  find.geoWatch=null;
+  if(find.orientBound && find.orientHandler){
+    window.removeEventListener("deviceorientationabsolute",find.orientHandler,true);
+    window.removeEventListener("deviceorientation",find.orientHandler,true);
+  }
+  find.orientBound=false; find.started=false;
+}
+
+function viewFind(){
+  const head = `<div class="sec-head"><div><h2>Find your way</h2><div class="lead">Live compass to stages and your crew.</div></div></div>`;
+
+  if(!find.started && !find.enabledOnce){
+    return head + `<div class="card find-enable">
+      <div class="big">🧭</div><h3>Point me there</h3>
+      <p>Uses your phone's GPS and compass to show how far away each stage — and each friend who's sharing — is, and which way to walk. Needs phone signal and your permission.</p>
+      <button class="btn primary" id="find-enable-btn">Turn on location</button>
+      <p class="find-note" style="margin-top:16px">Seeing others doesn't share your own location — that's a separate toggle you control.</p>
+    </div>`;
+  }
+  if(find.error){
+    const msg = find.error==="denied" ? "Location permission was blocked. Enable it for this site in your browser settings, then try again."
+            : find.error==="unsupported" ? "This browser doesn't support location."
+            : "Couldn't get a GPS fix — make sure location is on and you have signal.";
+    return head + `<div class="card find-enable"><div class="big">📡</div><h3>Can't get your location</h3>
+      <p>${esc(msg)}</p><button class="btn primary" id="find-enable-btn">Try again</button></div>`;
+  }
+  if(!find.pos){
+    return head + `<div class="loader" style="min-height:40dvh"><div><div class="spin"></div>Getting your location…</div></div>`;
+  }
+
+  const kindToggle = `<div class="mode-toggle" style="margin-bottom:14px;width:100%">
+      <button data-fkind="stages" class="${find.kind!=='people'?'on':''}" style="flex:1">Stages</button>
+      <button data-fkind="people" class="${find.kind==='people'?'on':''}" style="flex:1">People</button>
+    </div>`;
+
+  const shareRow = find.kind==="people" ? `
+    <div class="share-row">
+      <div style="min-width:0">
+        <b>Share my location</b>
+        <div class="find-note">${find.share ? "You're live — your group can see you on their radar." : "Let your group find you. Live location is shared with people in this app only while this is on."}</div>
+      </div>
+      <button class="switch ${find.share?'on':''}" id="share-toggle" role="switch" aria-checked="${find.share}"><span></span></button>
+    </div>` : "";
+
+  const targets = currentTargets();
+  if(!targets.length){
+    const empty = find.kind==="people"
+      ? `<div class="card find-enable"><div class="big">🫂</div><h3>No one's sharing yet</h3>
+          <p>Turn on “Share my location” above so your friends can see you, and ask them to do the same. Anyone sharing will appear here.</p></div>`
+      : `<div class="card find-enable"><div class="big">📍</div><h3>No stage locations yet</h3>
+          <p>${state.user.admin ? "Head to Manage, and on the day stand at each stage and tap “Set 📍” to pin it." : "Your organiser will pin the stages on the day. Check back then!"}</p></div>`;
+    return head + kindToggle + shareRow + empty;
+  }
+  if(!find.target || !targets.find(t=>t.id===find.target)) find.target = targets[0].id;
+
+  const compassAvail = find.hasOrientation;
+  const headingUp = find.headingMode!=="north" && compassAvail;
+
+  const tchips = targets.map(t=>`<button class="tchip ${t.id===find.target?'on':''}" data-target="${t.id}">
+      <span class="cdot" style="background:${t.color}"></span>${esc(t.name)}</button>`).join("");
+
+  const modeToggle = compassAvail ? `<div class="mode-toggle">
+      <button data-fmode="auto" class="${headingUp?'on':''}">Compass</button>
+      <button data-fmode="north" class="${!headingUp?'on':''}">North up</button>
+    </div>` : `<span class="find-note">Compass not available — showing north-up</span>`;
+
+  const dots = targets.map(t=>{
+    const label = t.name.length>12 ? t.name.slice(0,11)+'…' : t.name;
+    const inner = find.kind==="people"
+      ? `<circle r="9" fill="${t.color}"></circle><text class="dot-init" x="0" y="3" text-anchor="middle">${esc(initials(t.name))}</text><text class="dot-name" x="13" y="3.5">${esc(label)}</text>`
+      : `<circle r="7" fill="${t.color}"></circle><text class="dot-name" x="11" y="3.5">${esc(label)}</text>`;
+    return `<g class="rdot ${t.id===find.target?'sel':''}" id="dot-${t.id}" data-target="${t.id}" transform="translate(140,140)">${inner}</g>`;
+  }).join("");
+
+  const tgt = targets.find(t=>t.id===find.target);
+  const mapsLink = `https://www.google.com/maps/dir/?api=1&destination=${tgt.lat},${tgt.lng}`;
+  const mapsLabel = find.kind==="people" ? `Open ${esc(tgt.name)}'s spot in Maps ↗` : `Open “${esc(tgt.name)}” in Maps ↗`;
+  const calNote = find.kind==="people"
+    ? "People move and GPS lags a little, so treat this as “roughly that way”. Tap a friend to track them."
+    : "Hold the phone flat and level for the compass. If the arrow drifts, wave the phone in a figure-8, or switch to North-up.";
+
+  return head + kindToggle + shareRow + `
+    <div class="readout" id="find-readout">
+      <div style="min-width:0"><div class="r-name">${esc(tgt.name)}</div><div class="r-dir">—</div></div>
+      <div class="r-dist">…<small>${find.kind==="people"?"away":"away"}</small></div>
+    </div>
+    <div class="find-bar">
+      <span class="find-acc" id="find-acc">${find.acc?('GPS ±'+Math.round(find.acc)+' m'):'locating…'}</span>
+      ${modeToggle}
+    </div>
+    <div class="radar-wrap">
+      <svg id="radar" viewBox="0 0 280 280" xmlns="http://www.w3.org/2000/svg">
+        <circle class="ring" cx="140" cy="140" r="120"></circle>
+        <circle class="ring" cx="140" cy="140" r="60"></circle>
+        <line class="cross" x1="140" y1="20" x2="140" y2="260"></line>
+        <line class="cross" x1="20" y1="140" x2="260" y2="140"></line>
+        <text class="ring-lbl" id="ring-half" x="144" y="84">·</text>
+        <text class="ring-lbl" id="ring-full" x="144" y="26">·</text>
+        <text class="fwd-lbl" id="fwd-label" x="140" y="14" text-anchor="middle">▲</text>
+        <polygon class="needle" id="findarrow" points="140,34 132,150 140,140 148,150" style="display:none"></polygon>
+        ${dots}
+        <circle class="fwd" cx="140" cy="22" r="4"></circle>
+        <circle class="me" cx="140" cy="140" r="6"></circle>
+      </svg>
+    </div>
+    <div class="target-chips">${tchips}</div>
+    <a class="btn ghost block" href="${mapsLink}" target="_blank" rel="noopener">${mapsLabel}</a>
+    <p class="find-note" style="margin-top:12px">${calNote}</p>
+  `;
+}
+
+function updateFindDynamic(){
+  const radar=document.getElementById("radar");
+  if(!radar || !find.pos) return;
+  const targets=currentTargets();
+  if(!targets.length) return;
+  const headingUp = find.headingMode!=="north" && find.hasOrientation;
+  const heading = headingUp ? (find.heading||0) : 0;
+  const cx=140, cy=140, maxR=120;
+
+  const items=targets.map(t=>({ ...t,
+    d:haversine(find.pos.lat,find.pos.lng,t.lat,t.lng),
+    b:bearing(find.pos.lat,find.pos.lng,t.lat,t.lng) }));
+  const scale=Math.max(...items.map(s=>s.d), 30);
+
+  items.forEach(s=>{
+    const rel=(headingUp? s.b-heading : s.b)*Math.PI/180;
+    const rr=Math.min(s.d/scale,1)*maxR;
+    const x=cx+Math.sin(rel)*rr, y=cy-Math.cos(rel)*rr;
+    const g=document.getElementById("dot-"+s.id);
+    if(g){ g.setAttribute("transform",`translate(${x.toFixed(1)},${y.toFixed(1)})`); g.classList.toggle("sel",s.id===find.target); }
+  });
+
+  const r1=document.getElementById("ring-half"); if(r1) r1.textContent=fmtDist(scale/2);
+  const r2=document.getElementById("ring-full"); if(r2) r2.textContent=fmtDist(scale);
+  const fwd=document.getElementById("fwd-label"); if(fwd) fwd.textContent = headingUp ? "▲" : "N";
+
+  const t=items.find(s=>s.id===find.target);
+  const arrow=document.getElementById("findarrow");
+  const ro=document.getElementById("find-readout");
+  if(t){
+    const rel = headingUp ? t.b-heading : t.b;
+    if(arrow){ arrow.style.display=""; arrow.setAttribute("transform",`rotate(${rel.toFixed(1)} 140 140)`); }
+    if(ro){
+      ro.querySelector(".r-name").textContent=t.name;
+      ro.querySelector(".r-dist").innerHTML=`${fmtDist(t.d)}<small>away</small>`;
+      let dir = headingUp ? relDirText(rel) : (cardinal(t.b)+" of you");
+      if(find.kind==="people" && t.ts) dir += " · "+agoText(t.ts);
+      ro.querySelector(".r-dir").textContent = dir;
+    }
+  } else if(arrow){ arrow.style.display="none"; }
+
+  const acc=document.getElementById("find-acc"); if(acc && find.acc) acc.textContent="GPS ±"+Math.round(find.acc)+" m";
 }
 </script>
 </body>
