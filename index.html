@@ -398,7 +398,8 @@ async function deleteEvent(id){
 /* ============================================================
    BOOT
    ============================================================ */
-const savedUid = localStorage.getItem("fp_uid");
+   let authMode = "login";
+   const savedUid = localStorage.getItem("fp_uid");
 subscribeAll();
 if(savedUid){ root.innerHTML = loaderHTML(); }
 else { renderAuth(); }
@@ -449,7 +450,6 @@ function afterData(){
 /* ============================================================
    AUTH SCREEN
    ============================================================ */
-let authMode = "login";
 function renderAuth(){
   root.innerHTML = `
   <div class="auth-wrap"><div class="auth">
