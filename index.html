@@ -23,6 +23,7 @@
     --accent-ink:#FBF4E4;
     --teal:#1E5A50;
     --gold:#B5852A;
+    --violet:#6B4FA0;
     --radius:6px;
     --radius-sm:4px;
     --hard:3px 3px 0 var(--ink);
@@ -277,6 +278,35 @@
     color:var(--accent-ink);font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border:2px solid var(--ink)}
   .live-pill .dot{width:8px;height:8px;border-radius:50%;background:var(--accent-ink);animation:blink 1.4s infinite}
   @keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+  .legend{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px}
+  .leg{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:2px;font-size:11.5px;font-weight:700;
+    letter-spacing:.03em;text-transform:uppercase;background:transparent;border:1.5px solid var(--ink);color:var(--ink-2);opacity:.45}
+  .leg.on{opacity:1}
+  .leg b{font-family:"Anton";font-weight:400;font-size:13px}
+  .leg .ldot{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--ink)}
+  .cemoji{font-size:14px;line-height:1}
+  #radar .dot-emoji{font-size:11px}
+  .type-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px}
+  .type-chip{padding:9px 13px;border-radius:var(--radius-sm);font-size:13px;font-weight:700;
+    background:var(--card);border:2px solid var(--ink);color:var(--ink)}
+  .type-chip.on{background:var(--ink);color:var(--paper)}
+  .pin-shared{font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--accent-ink);
+    background:var(--teal);border:1.5px solid var(--ink);border-radius:2px;padding:1px 6px;margin-left:4px}
+  .find-actions{display:flex;gap:8px;margin-bottom:14px}
+  .find-actions .btn{flex:1;padding:10px 6px;font-size:11px}
+  .next-card{background:var(--ink);color:var(--paper);border-radius:var(--radius);padding:15px 16px;margin-bottom:14px}
+  .next-card.live{background:var(--accent)}
+  .next-card .nc-tag{font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.8;margin-bottom:5px}
+  .next-card .nc-name{font-family:"Anton";font-size:22px;line-height:1;text-transform:uppercase}
+  .next-card .nc-meta{font-size:12.5px;margin-top:8px;opacity:.95;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .next-card .area-tag{border-color:rgba(255,255,255,.5)}
+  .lost-banner{display:flex;align-items:center;gap:8px;width:100%;background:var(--accent);color:var(--accent-ink);
+    border:2px solid var(--ink);border-radius:var(--radius-sm);padding:11px 14px;margin-bottom:14px;font-size:13.5px;font-weight:700;text-align:left;
+    box-shadow:var(--hard-sm)}
+  .lost-banner b{font-weight:800}
+  .tchip.lost{border-color:var(--accent);color:var(--accent)}
+  #radar .lost-ring{fill:none;stroke:#D6371C;stroke-width:3;animation:lostpulse 1.1s infinite}
+  @keyframes lostpulse{0%,100%{opacity:.2}50%{opacity:.9}}
 </style>
 </head>
 <body>
@@ -353,6 +383,7 @@ const colEvents    = collection(db, "events");
 const colUsers     = collection(db, "users");
 const colPicks     = collection(db, "picks");
 const colLocations = collection(db, "locations");
+const colPins      = collection(db, "pins");
 
 /* ---- App state ---- */
 const state = {
@@ -362,6 +393,7 @@ const state = {
   users: [],                  // [{id,name,admin}]
   picks: [],                  // [{id,userId,eventId}]
   locations: [],              // [{id(userId),name,lat,lng,acc,updatedAt}]
+  pins: [],                   // [{id,ownerId,ownerName,label,type,lat,lng,shared,updatedAt}]
   view: "browse",
   ready: { events:false, users:false, picks:false, structure:false },
   filters: { day:"all", district:"all", search:"" },
@@ -393,6 +425,32 @@ function fmt12(t){
 function initials(name){
   return name.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase() || "?";
 }
+/* admin feature flags (default ON) and festival-date helpers */
+function feat(name){ const f=state.structure.features; return f ? f[name]!==false : true; }
+function festivalStart(){ const s=state.structure.festivalStartDate; return s ? new Date(s+"T00:00:00") : null; }
+function dateForDay(day){ const base=festivalStart(); if(!base) return null; const d=new Date(base); d.setDate(d.getDate()+Math.max(0,DAYS.indexOf(day))); return d; }
+function eventStart(ev){ const d=dateForDay(ev.day); if(!d||!ev.start) return null; const [h,m]=ev.start.split(":").map(Number); const dt=new Date(d); dt.setHours(h,m||0,0,0); return dt; }
+function eventEnd(ev){ const s=eventStart(ev); if(!s) return null; if(!ev.end) return new Date(s.getTime()+60*60000); const [h,m]=ev.end.split(":").map(Number); const dt=new Date(s); dt.setHours(h,m||0,0,0); if(dt<=s) dt.setDate(dt.getDate()+1); return dt; }
+function nextPickInfo(){
+  if(!festivalStart()) return null;
+  const ids=myPickIds();
+  const items=state.events.filter(e=>ids.has(e.id)).map(e=>({ev:e,s:eventStart(e),e2:eventEnd(e)})).filter(x=>x.s);
+  if(!items.length) return null;
+  const now=Date.now();
+  const onNow=items.filter(x=>x.s.getTime()<=now && x.e2.getTime()>now).sort((a,b)=>a.e2-b.e2)[0];
+  if(onNow) return {ev:onNow.ev, status:"now", until:onNow.e2};
+  const upcoming=items.filter(x=>x.s.getTime()>now).sort((a,b)=>a.s-b.s)[0];
+  if(upcoming) return {ev:upcoming.ev, status:"soon", at:upcoming.s, mins:Math.round((upcoming.s.getTime()-now)/60000)};
+  return null;
+}
+function untilText(mins){
+  if(mins<1) return "any moment";
+  if(mins<60) return `in ${mins} min`;
+  const h=Math.floor(mins/60), m=mins%60;
+  if(mins<24*60) return m? `in ${h}h ${m}m` : `in ${h}h`;
+  const d=Math.round(mins/1440); return `in ${d} day${d>1?'s':''}`;
+}
+function next5am(from){ const d=new Date(from); const r=new Date(d); r.setHours(5,0,0,0); if(r<=d) r.setDate(r.getDate()+1); return r.getTime(); }
 function toast(msg){
   const t=document.createElement("div"); t.className="toast"; t.textContent=msg;
   document.body.appendChild(t); setTimeout(()=>t.remove(),1700);
@@ -462,7 +520,7 @@ function subscribeAll(){
   onSnapshot(refStructure, snap=>{
     if(snap.exists()){
       const d = snap.data();
-      state.structure = { festivalName:d.festivalName||FESTIVAL_NAME_DEFAULT, districts:d.districts||[] };
+      state.structure = { ...d, festivalName:d.festivalName||FESTIVAL_NAME_DEFAULT, districts:d.districts||[] };
     }
     state.ready.structure=true; afterData();
   }, ()=>{ state.ready.structure=true; afterData(); });
@@ -487,7 +545,11 @@ function subscribeAll(){
   });
   onSnapshot(colLocations, snap=>{
     state.locations = snap.docs.map(d=>({id:d.id,...d.data()}));
-    if(state.user && state.view==="find" && find.kind==="people") renderView();
+    if(state.user && state.view==="find") renderView();
+  });
+  onSnapshot(colPins, snap=>{
+    state.pins = snap.docs.map(d=>({id:d.id,...d.data()}));
+    if(state.user && state.view==="find" && !document.querySelector(".modal-bg")) renderView();
   });
 }
 
@@ -552,6 +614,11 @@ function renderAuth(){
 function loaderHTML(){ return `<div class="loader"><div><div class="spin"></div>Loading the lineup…</div></div>`; }
 
 function renderApp(){
+  if(!locationEnabled()){
+    if(find.share) stopShare();
+    if(find.started) stopFindSensors();
+    if(state.view==="find") state.view="browse";
+  }
   const u = state.user;
   root.innerHTML = `
     <div class="app">
@@ -564,7 +631,7 @@ function renderApp(){
           </div>
         </div>
         <div class="who">
-          ${find.share?`<button class="live-pill" id="stop-share" title="Stop sharing your location"><span class="dot"></span>Live</button>`:""}
+          ${find.lost?`<button class="live-pill lost" id="stop-share"><span class="dot"></span>🆘 Lost</button>`:(find.share?`<button class="live-pill" id="stop-share" title="Stop sharing your location"><span class="dot"></span>Live</button>`:"")}
           <div class="avatar ${u.admin?'adm':''}" title="${esc(u.name)}">${esc(initials(u.name))}</div>
           <button class="btn ghost sm" id="logout">Exit</button>
         </div>
@@ -586,8 +653,8 @@ function navHTML(){
     ["browse","Browse",`<path d="M4 6h16M4 12h16M4 18h16"/>`],
     ["mine","Plan",`<path d="M5 4h11l4 4v12H5z"/><path d="M9 12l2 2 4-4"/>`],
     ["shared","Group",`<circle cx="9" cy="8" r="3"/><circle cx="17" cy="10" r="2.4"/><path d="M3.5 19c.6-3 3-4.5 5.5-4.5S14 16 14.6 19"/>`],
-    ["find","Find",`<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>`],
   ];
+  if(locationEnabled()) items.push(["find","Find",`<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>`]);
   if(state.user.admin) items.push(["admin","Manage",`<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2 2M16.4 16.4l2 2M18.4 5.6l-2 2M7.6 16.4l-2 2"/>`]);
   return `<nav class="nav"><div class="nav-inner">${items.map(([v,l,svg])=>`
     <button data-v="${v}" class="${state.view===v?'on':''}">
@@ -708,8 +775,23 @@ function viewMine(){
       ${emptyState("🎟️","Nothing picked yet","Go to Browse and tap the ✓ on acts you want to catch.")}`;
   }
   const g = groupByDay(list);
+  let nextCard="";
+  if(feat("nextAct") && festivalStart()){
+    const np=nextPickInfo();
+    if(np){
+      const hasLoc = locationEnabled() && stagesWithCoords().some(s=>s.name===np.ev.stageName);
+      const when = np.status==="now" ? `On now · until ${esc(fmt12(toHM(np.until)))}` : `${untilText(np.mins)} · ${esc(fmt12(np.ev.start))}`;
+      nextCard=`<div class="next-card ${np.status==='now'?'live':''}">
+        <div class="nc-tag">${np.status==="now"?"Happening now":"Up next"}</div>
+        <div class="nc-name">${esc(np.ev.title)}</div>
+        <div class="nc-meta"><span class="area-tag" style="--c:${districtColor(np.ev.districtId)}">${esc(np.ev.districtName)}</span> ${esc(np.ev.stageName)} · ${when}</div>
+        ${hasLoc?`<button class="btn lime sm" data-goto-stage="${esc(np.ev.stageName)}" style="margin-top:10px">Point me there →</button>`:""}
+      </div>`;
+    }
+  }
   return `
     <div class="sec-head"><div><h2>My plan</h2><div class="lead">${list.length} pick${list.length>1?'s':''}${clashSet.size?` · ⚠ ${clashSet.size/2|0} clash${clashSet.size>2?'es':''}`:''}</div></div></div>
+    ${nextCard}
     <div class="stat-row">
       <div class="stat"><div class="n">${list.length}</div><div class="l">Picks</div></div>
       <div class="stat"><div class="n">${daysActive}</div><div class="l">Days out</div></div>
@@ -721,6 +803,7 @@ function viewMine(){
     `).join("")}
   `;
 }
+function toHM(date){ return String(date.getHours()).padStart(2,"0")+":"+String(date.getMinutes()).padStart(2,"0"); }
 
 /* ---------- GROUP / SHARED ---------- */
 function viewShared(){
@@ -841,6 +924,34 @@ function viewAdmin(){
       </label>
     </div>
 
+    <div class="card admin-block">
+      <div class="share-row" style="border:none;padding:0;margin:0;background:none">
+        <div style="min-width:0">
+          <b>Location features</b>
+          <div class="find-note">${locationEnabled()?"On — the Find map, stage pins and live sharing are available to everyone.":"Off — the Find tab is hidden for everyone and all live sharing is stopped."}</div>
+        </div>
+        <button class="switch ${locationEnabled()?'on':''}" id="loc-toggle" role="switch" aria-checked="${locationEnabled()}"><span></span></button>
+      </div>
+    </div>
+
+    ${locationEnabled()?`<div class="card admin-block">
+      <div style="font-family:Anton;font-size:15px;text-transform:uppercase;letter-spacing:.03em;margin-bottom:12px">Map extras</div>
+      <label class="field"><span>Festival start date <span class="tag">(the Wednesday — powers the “up next” prompt)</span></span>
+        <div class="row" style="gap:8px"><input id="fest-date" type="date" value="${esc(s.festivalStartDate||"")}"><button class="btn primary" id="save-date" style="flex:none">Save</button></div>
+      </label>
+      ${[["nextAct","“Up next” prompt","Shows your next pick &amp; a “point me there” button"],
+         ["rally","Rally / meet-up point","One shared beacon anyone can drop; clears itself at 5am"],
+         ["pinNotes","Notes on pins","Lets people add a note like “row F, blue flag”"],
+         ["lost","“I’m lost” button","Big SOS that flags someone on everyone’s map"],
+         ["autoStop","Auto-stop sharing","Stops a person’s live sharing after a set time"]].map(([k,t,d])=>`
+        <div class="share-row" style="border:none;padding:8px 0;margin:0;background:none;border-top:1px solid var(--line)">
+          <div style="min-width:0"><b style="font-size:13.5px">${t}</b><div class="find-note">${d}</div></div>
+          <button class="switch ${feat(k)?'on':''}" data-feat="${k}" role="switch" aria-checked="${feat(k)}"><span></span></button>
+        </div>`).join("")}
+      ${feat("autoStop")?`<label class="field" style="margin:12px 0 0"><span>Auto-stop sharing after (hours)</span>
+        <div class="row" style="gap:8px"><input id="autostop-hrs" type="number" min="1" max="24" value="${esc(String(s.autoStopHours||4))}"><button class="btn primary" id="save-autostop" style="flex:none">Save</button></div></label>`:""}
+    </div>`:""}
+
     <div class="sec-head" style="margin-top:24px"><div><h2 style="font-size:18px">Districts &amp; stages</h2></div></div>
     ${districtsHTML}
     <div class="card admin-block" style="margin-top:4px">
@@ -901,6 +1012,11 @@ function wireView(){
     b.classList.toggle("on");
     try{ await togglePick(b.dataset.pick); }catch(e){ toast("Couldn't save — try again"); }
   });
+  v.querySelectorAll("[data-goto-stage]").forEach(b=>b.onclick=()=>{
+    const s=stagesWithCoords().find(x=>x.name===b.dataset.gotoStage);
+    if(s) find.target="st:"+s.id;
+    find.enabledOnce=true; state.view="find"; renderApp();
+  });
 
   // ---- browse filters ----
   const search = v.querySelector("#search");
@@ -914,9 +1030,18 @@ function wireView(){
   // ---- find / compass ----
   if(state.view==="find"){
     const en=v.querySelector("#find-enable-btn"); if(en) en.onclick=()=>{ find.enabledOnce=true; enableFind(); };
-    if(find.enabledOnce && !find.started && !find.error) startFindSensors();
-    v.querySelectorAll("[data-fkind]").forEach(b=>b.onclick=()=>{ find.kind=b.dataset.fkind; find.target=null; renderView(); });
+    if(find.enabledOnce && !find.started && !find.error && locationEnabled()) startFindSensors();
+    v.querySelectorAll("[data-leg]").forEach(b=>b.onclick=()=>{ find.show[b.dataset.leg]=!find.show[b.dataset.leg]; find.target=null; renderView(); });
     const shareTog=v.querySelector("#share-toggle"); if(shareTog) shareTog.onclick=()=>{ if(find.share) stopShare(); else startShare(); renderApp(); };
+    const pinsBtn=v.querySelector("#pins-btn"); if(pinsBtn) pinsBtn.onclick=()=>{ state.modal={type:"pins"}; renderModal(); };
+    const rallyBtn=v.querySelector("#rally-btn"); if(rallyBtn) rallyBtn.onclick=async()=>{ if(getRally()){ find.target="rl:rally"; renderView(); } else { await setRallyHere(); renderView(); } };
+    const rallyMove=v.querySelector("#rally-move"); if(rallyMove) rallyMove.onclick=async()=>{ await setRallyHere(); renderView(); };
+    const rallyClear=v.querySelector("#rally-clear"); if(rallyClear) rallyClear.onclick=async()=>{ await clearRally(); find.target=null; renderView(); };
+    const lostBtn=v.querySelector("#lost-btn"); if(lostBtn) lostBtn.onclick=()=>{
+      if(find.lost){ find.lost=false; writeMyLocation(); toast("Marked safe"); }
+      else { if(!find.share) startShare(); find.lost=true; writeMyLocation(); toast("Marked lost — your group can find you"); }
+      renderApp();
+    };
     v.querySelectorAll("[data-target]").forEach(b=>b.onclick=()=>{ find.target=b.dataset.target; renderView(); });
     v.querySelectorAll("[data-fmode]").forEach(b=>b.onclick=()=>{ find.headingMode=b.dataset.fmode; renderView(); });
     if(find.started && find.pos) updateFindDynamic();
@@ -928,6 +1053,21 @@ function wireView(){
     const name = v.querySelector("#fest-name").value.trim() || FESTIVAL_NAME_DEFAULT;
     await saveStructure({...state.structure, festivalName:name}); toast("Saved");
   };
+  const locTog = v.querySelector("#loc-toggle");
+  if(locTog) locTog.onclick = async()=>{
+    const next = !locationEnabled();
+    if(!next && find.share) stopShare();
+    await saveStructure({...state.structure, locationEnabled:next});
+    toast(next?"Location features on":"Location features off");
+  };
+  const saveDate = v.querySelector("#save-date");
+  if(saveDate) saveDate.onclick = async()=>{ await saveStructure({...state.structure, festivalStartDate:v.querySelector("#fest-date").value||""}); toast("Saved"); };
+  const saveAuto = v.querySelector("#save-autostop");
+  if(saveAuto) saveAuto.onclick = async()=>{ const h=Math.min(24,Math.max(1,+v.querySelector("#autostop-hrs").value||4)); await saveStructure({...state.structure, autoStopHours:h}); toast("Saved"); };
+  v.querySelectorAll("[data-feat]").forEach(b=>b.onclick=async()=>{
+    const k=b.dataset.feat; const features={...(state.structure.features||{})}; features[k]=!feat(k);
+    await saveStructure({...state.structure, features});
+  });
   const addDist = v.querySelector("#add-dist");
   if(addDist) addDist.onclick = async()=>{
     const inp = v.querySelector("#new-dist"); const name=inp.value.trim();
@@ -1014,6 +1154,8 @@ function renderModal(){
   const existing = document.querySelector(".modal-bg");
   if(existing) existing.remove();
   if(state.modal.type==="bulk"){ renderBulkModal(); return; }
+  if(state.modal.type==="pins"){ renderPinsModal(); return; }
+  if(state.modal.type==="pin"){ renderPinModal(); return; }
   if(state.modal.type!=="event") return;
 
   const ev = state.modal.data || {};
@@ -1304,7 +1446,8 @@ function renderBulkModal(){
    ============================================================ */
 let find = { started:false, enabledOnce:false, geoWatch:null, orientBound:false, orientHandler:null,
              pos:null, acc:null, heading:null, hasOrientation:false, headingMode:"auto", target:null, error:null,
-             kind:"stages", share:false, shareWatch:null, lastWrite:0 };
+             show:{stages:true,people:true,pins:true}, share:false, shareTimer:null, myUpdated:0, lastWrite:0,
+             lost:false, autoStopAt:0, autoStopTimer:null };
 
 const R_EARTH = 6371000;
 const toRad = d => d*Math.PI/180, toDeg = r => r*180/Math.PI;
@@ -1340,40 +1483,177 @@ function peopleWithCoords(){
     if(l.id===state.user.id) return;
     if(typeof l.lat!=="number" || typeof l.lng!=="number") return;
     const ts = (l.updatedAt && l.updatedAt.toMillis) ? l.updatedAt.toMillis() : now;
-    if(now-ts > 5*60*1000) return;            // hide stale (>5 min)
+    if(now-ts > 8*60*1000) return;            // hide stale (>8 min, ~5 missed updates)
     const u=state.users.find(x=>x.id===l.id);
-    out.push({id:l.id, name:(u?u.name:(l.name||"Friend")), sub:"sharing live", color:personColor(l.id), lat:l.lat, lng:l.lng, ts});
+    out.push({id:l.id, name:(u?u.name:(l.name||"Friend")), color:personColor(l.id), lat:l.lat, lng:l.lng, ts, lost:!!l.lost});
   });
   return out;
 }
-function currentTargets(){ return find.kind==="people" ? peopleWithCoords() : stagesWithCoords(); }
-function agoText(ts){ const s=Math.round((Date.now()-ts)/1000); if(s<20) return "just now"; if(s<60) return s+"s ago"; const m=Math.round(s/60); return m+" min ago"; }
+const PIN_TYPES = { tent:{e:"⛺",c:"#1E5A50",label:"Tent"}, meet:{e:"📍",c:"#D6371C",label:"Meeting spot"}, car:{e:"🚗",c:"#B5852A",label:"Car"}, other:{e:"⭐",c:"#7A3B6B",label:"Other"} };
+function pinMeta(t){ return PIN_TYPES[t] || PIN_TYPES.other; }
+function pinsForMe(){
+  const me=state.user.id; const out=[];
+  state.pins.forEach(p=>{
+    if(p.id==="rally" || p.type==="rally") return;          // rally handled separately
+    if(typeof p.lat!=="number" || typeof p.lng!=="number") return;
+    const mine = p.ownerId===me;
+    if(!mine && !p.shared) return;
+    const meta=pinMeta(p.type);
+    out.push({id:p.id, name:p.label||meta.label, emoji:meta.e, color:meta.c, lat:p.lat, lng:p.lng,
+              mine, shared:!!p.shared, ownerName:p.ownerName||"", type:p.type, note:p.note||""});
+  });
+  return out;
+}
+function getRally(){
+  if(!feat("rally")) return null;
+  const r=state.pins.find(p=>p.id==="rally") || state.pins.find(p=>p.type==="rally");
+  if(!r || typeof r.lat!=="number") return null;
+  if(r.expiresAt && Date.now()>r.expiresAt){ deleteDoc(doc(db,"pins","rally")).catch(()=>{}); return null; }   // auto-clear
+  return r;
+}
+async function setRallyHere(){
+  if(!find.pos) return toast("No location yet");
+  await setDoc(doc(db,"pins","rally"), { type:"rally", label:"Meet-up point", ownerId:state.user.id, ownerName:state.user.name,
+    lat:+find.pos.lat.toFixed(6), lng:+find.pos.lng.toFixed(6), shared:true, expiresAt:next5am(Date.now()), updatedAt:serverTimestamp() });
+  toast("Rally point set");
+}
+async function clearRally(){ await deleteDoc(doc(db,"pins","rally")).catch(()=>{}); toast("Rally point cleared"); }
+function buildTargets(){
+  const out=[];
+  const rally=getRally();
+  if(rally) out.push({id:"rl:rally", kind:"rally", name:rally.label||"Meet-up point", emoji:"🚩", color:"#D6371C", lat:rally.lat, lng:rally.lng});
+  if(find.show.stages) stagesWithCoords().forEach(s=>out.push({...s, id:"st:"+s.id, kind:"stage"}));
+  if(find.show.pins)   pinsForMe().forEach(p=>out.push({...p, id:"pn:"+p.id, kind:"pin"}));
+  if(find.show.people){
+    const ppl=peopleWithCoords().sort((a,b)=>(b.lost?1:0)-(a.lost?1:0));
+    ppl.forEach(p=>out.push({...p, id:"pe:"+p.id, kind:"person"}));
+  }
+  return out;
+}
+function locationEnabled(){ return state.structure.locationEnabled !== false; }
+function agoText(ts){ if(!ts) return ""; const s=Math.round((Date.now()-ts)/1000); if(s<25) return "just now"; if(s<90) return "1 min ago"; const m=Math.round(s/60); return m+" min ago"; }
 
-/* ---- live location sharing ---- */
+/* ---- pin writes ---- */
+async function savePin(p){
+  const data={ ownerId:state.user.id, ownerName:state.user.name, label:(p.label||"").trim()||pinMeta(p.type).label,
+               type:p.type, lat:+p.lat.toFixed(6), lng:+p.lng.toFixed(6), shared:!!p.shared, note:(p.note||"").trim(), updatedAt:serverTimestamp() };
+  if(p.id) await updateDoc(doc(db,"pins",p.id), data);
+  else await addDoc(colPins, data);
+}
+async function deletePin(id){ await deleteDoc(doc(db,"pins",id)); }
+
+function renderPinsModal(){
+  const existing=document.querySelector(".modal-bg"); if(existing) existing.remove();
+  const mine=state.pins.filter(p=>p.ownerId===state.user.id);
+  const list = mine.length ? mine.map(p=>{
+    const m=pinMeta(p.type);
+    return `<div class="stage-row">
+      <span class="sname">${m.e} ${esc(p.label||m.label)} ${p.shared?'<span class="pin-shared">shared</span>':''}</span>
+      <div class="srow-act">
+        <button class="btn ghost xs" data-edit-pin="${p.id}">Edit</button>
+        <button class="btn ghost xs del" data-del-pin="${p.id}">✕</button>
+      </div>
+    </div>`;
+  }).join("") : '<p class="find-note">No pins yet. Drop one at your current spot below — handy for your tent, the car, or a meeting point.</p>';
+
+  const canAdd = !!find.pos;
+  const wrap=document.createElement("div"); wrap.className="modal-bg";
+  wrap.innerHTML=`
+    <div class="modal">
+      <div class="modal-head"><h2>Your pins</h2><button class="btn ghost sm" id="pn-close">Close</button></div>
+      <div class="stage-list" style="display:flex;flex-direction:column;gap:7px;margin-bottom:14px">${list}</div>
+      <button class="btn primary block" id="pn-add" ${canAdd?'':'disabled'}>＋ Drop a pin at my current spot</button>
+      ${canAdd?'':'<p class="find-note" style="margin-top:10px">Turn on location in the Find tab first so I know where you are.</p>'}
+    </div>`;
+  document.body.appendChild(wrap);
+  const close=()=>{ state.modal=null; wrap.remove(); };
+  wrap.querySelector("#pn-close").onclick=close;
+  wrap.onclick=e=>{ if(e.target===wrap) close(); };
+  const add=wrap.querySelector("#pn-add"); if(add) add.onclick=()=>{ state.modal={type:"pin",data:null}; renderPinModal(); };
+  wrap.querySelectorAll("[data-edit-pin]").forEach(b=>b.onclick=()=>{ const p=state.pins.find(x=>x.id===b.dataset.editPin); state.modal={type:"pin",data:p}; renderPinModal(); });
+  wrap.querySelectorAll("[data-del-pin]").forEach(b=>b.onclick=async()=>{ const p=state.pins.find(x=>x.id===b.dataset.delPin); if(confirm(`Delete pin “${p.label||pinMeta(p.type).label}”?`)){ await deletePin(p.id); toast("Pin deleted"); state.modal={type:"pins"}; renderPinsModal(); } });
+}
+
+function renderPinModal(){
+  const existing=document.querySelector(".modal-bg"); if(existing) existing.remove();
+  const p = state.modal.data || {};
+  const editing = !!p.id;
+  let curType = p.type || "tent";
+  let curShared = !!p.shared;
+  const wrap=document.createElement("div"); wrap.className="modal-bg";
+  const typeBtns = Object.entries(PIN_TYPES).map(([k,m])=>`<button class="type-chip ${k===curType?'on':''}" data-ptype="${k}">${m.e} ${m.label}</button>`).join("");
+  wrap.innerHTML=`
+    <div class="modal">
+      <div class="modal-head"><h2>${editing?"Edit pin":"New pin"}</h2><button class="btn ghost sm" id="p-close">Close</button></div>
+      <div id="p-err"></div>
+      <label class="field"><span>Label</span><input id="p-label" value="${esc(p.label||"")}" placeholder="e.g. Our tent, Big Oak meeting point"></label>
+      <span class="field"><span>Type</span></span>
+      <div class="type-chips" id="p-types">${typeBtns}</div>
+      <label class="chk" style="margin-top:14px"><input type="checkbox" id="p-shared" ${curShared?'checked':''}> Share with everyone in the group</label>
+      ${feat("pinNotes")?`<label class="field" style="margin-top:14px"><span>Note <span class="tag">(optional)</span></span><textarea id="p-note" rows="2" placeholder="e.g. tent row F, by the big blue flag">${esc(p.note||"")}</textarea></label>`:""}
+      <p class="find-note" style="margin-bottom:14px">${editing?"“Move here” updates this pin to wherever you're standing now.":"This pin will be saved at your current location."}</p>
+      <div class="row" style="gap:8px">
+        ${editing?'<button class="btn ghost" id="p-move" style="flex:1">Move here</button>':''}
+        <button class="btn primary" id="p-save" style="flex:2">${editing?"Save":"Drop pin here"}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+  const close=()=>{ state.modal={type:"pins"}; renderPinsModal(); };
+  wrap.querySelector("#p-close").onclick=close;
+  wrap.onclick=e=>{ if(e.target===wrap){ state.modal=null; wrap.remove(); } };
+  wrap.querySelectorAll("[data-ptype]").forEach(b=>b.onclick=()=>{ curType=b.dataset.ptype; wrap.querySelectorAll("[data-ptype]").forEach(x=>x.classList.toggle("on",x===b)); });
+  const err=m=>wrap.querySelector("#p-err").innerHTML=`<div class="err">${esc(m)}</div>`;
+
+  const doSave=async(coords)=>{
+    const label=wrap.querySelector("#p-label").value;
+    const shared=wrap.querySelector("#p-shared").checked;
+    const noteEl=wrap.querySelector("#p-note"); const note=noteEl?noteEl.value:(p.note||"");
+    try{
+      await savePin({ id:p.id, label, type:curType, shared, note, lat:coords.lat, lng:coords.lng });
+      toast(editing?"Pin saved":"Pin dropped"); state.modal={type:"pins"}; renderPinsModal();
+    }catch(e){ err("Couldn't save — try again."); }
+  };
+  wrap.querySelector("#p-save").onclick=()=>{
+    if(editing && p.lat!=null){ doSave({lat:p.lat,lng:p.lng}); }   // keep location, just update fields
+    else if(find.pos){ doSave(find.pos); }
+    else err("No location yet — open the Find tab first.");
+  };
+  const mv=wrap.querySelector("#p-move");
+  if(mv) mv.onclick=()=>{ if(find.pos) doSave(find.pos); else err("No current location yet."); };
+}
+
+/* ---- live location sharing (periodic, battery-friendly) ---- */
 function writeMyLocation(){
   if(!find.share || !find.pos || !state.user) return;
-  const now=Date.now();
-  if(find.lastWrite && now-find.lastWrite < 8000) return;   // throttle writes
-  find.lastWrite=now;
+  find.myUpdated=Date.now();
   setDoc(doc(db,"locations",state.user.id),
-    { name:state.user.name, lat:+find.pos.lat.toFixed(6), lng:+find.pos.lng.toFixed(6), acc:find.acc||null, updatedAt:serverTimestamp() }
+    { name:state.user.name, lat:+find.pos.lat.toFixed(6), lng:+find.pos.lng.toFixed(6), acc:find.acc||null, lost:!!find.lost, updatedAt:serverTimestamp() }
   ).catch(()=>{});
 }
 function startShare(){
-  if(find.shareWatch!=null) return;
+  if(find.shareTimer) return;
   if(!navigator.geolocation){ toast("Location not supported"); return; }
-  find.share=true; find.lastWrite=0;
-  find.shareWatch=navigator.geolocation.watchPosition(
+  if(!locationEnabled()){ toast("Location features are off"); return; }
+  find.share=true;
+  const fix=()=>navigator.geolocation.getCurrentPosition(
     p=>{ find.pos={lat:p.coords.latitude,lng:p.coords.longitude}; find.acc=p.coords.accuracy; writeMyLocation();
          if(state.view==="find" && document.getElementById("radar")) updateFindDynamic(); },
     e=>{ if(e.code===1){ toast("Location blocked"); stopShare(); renderApp(); } },
-    {enableHighAccuracy:true,maximumAge:5000,timeout:20000}
+    {enableHighAccuracy:true,maximumAge:30000,timeout:20000}
   );
+  fix();
+  find.shareTimer=setInterval(fix, 90000);   // ~ every 1.5 min
+  if(feat("autoStop")){
+    const hrs=Math.max(1, +state.structure.autoStopHours || 4);
+    find.autoStopAt=Date.now()+hrs*3600000;
+    find.autoStopTimer=setTimeout(()=>{ stopShare(); toast("Auto-stopped sharing"); if(state.user) renderApp(); }, hrs*3600000);
+  }
 }
 function stopShare(){
-  find.share=false;
-  if(find.shareWatch!=null && navigator.geolocation) navigator.geolocation.clearWatch(find.shareWatch);
-  find.shareWatch=null;
+  find.share=false; find.lost=false;
+  if(find.shareTimer){ clearInterval(find.shareTimer); find.shareTimer=null; }
+  if(find.autoStopTimer){ clearTimeout(find.autoStopTimer); find.autoStopTimer=null; }
+  find.autoStopAt=0;
   if(state.user) deleteDoc(doc(db,"locations",state.user.id)).catch(()=>{});
 }
 window.addEventListener("pagehide",()=>{ if(find.share && state.user){ try{ deleteDoc(doc(db,"locations",state.user.id)); }catch(e){} } });
@@ -1428,12 +1708,16 @@ function stopFindSensors(){
 }
 
 function viewFind(){
-  const head = `<div class="sec-head"><div><h2>Find your way</h2><div class="lead">Live compass to stages and your crew.</div></div></div>`;
+  const head = `<div class="sec-head"><div><h2>Find your way</h2><div class="lead">Stages, your crew &amp; your pins on one compass.</div></div></div>`;
 
+  if(!locationEnabled()){
+    return head + `<div class="card find-enable"><div class="big">🛑</div><h3>Maps are turned off</h3>
+      <p>${state.user.admin ? "You've turned location features off. Turn them back on from the Manage tab." : "The organiser has turned location features off for now."}</p></div>`;
+  }
   if(!find.started && !find.enabledOnce){
     return head + `<div class="card find-enable">
       <div class="big">🧭</div><h3>Point me there</h3>
-      <p>Uses your phone's GPS and compass to show how far away each stage — and each friend who's sharing — is, and which way to walk. Needs phone signal and your permission.</p>
+      <p>Uses your phone's GPS and compass to show how far away each stage, friend and pin is — and which way to walk. Needs phone signal and your permission.</p>
       <button class="btn primary" id="find-enable-btn">Turn on location</button>
       <p class="find-note" style="margin-top:16px">Seeing others doesn't share your own location — that's a separate toggle you control.</p>
     </div>`;
@@ -1449,36 +1733,47 @@ function viewFind(){
     return head + `<div class="loader" style="min-height:40dvh"><div><div class="spin"></div>Getting your location…</div></div>`;
   }
 
-  const kindToggle = `<div class="mode-toggle" style="margin-bottom:14px;width:100%">
-      <button data-fkind="stages" class="${find.kind!=='people'?'on':''}" style="flex:1">Stages</button>
-      <button data-fkind="people" class="${find.kind==='people'?'on':''}" style="flex:1">People</button>
-    </div>`;
-
-  const shareRow = find.kind==="people" ? `
+  const autoStopNote = (find.share && feat("autoStop") && find.autoStopAt) ? ` Auto-stops ${untilText(Math.round((find.autoStopAt-Date.now())/60000))}.` : "";
+  const shareRow = `
     <div class="share-row">
       <div style="min-width:0">
         <b>Share my location</b>
-        <div class="find-note">${find.share ? "You're live — your group can see you on their radar." : "Let your group find you. Live location is shared with people in this app only while this is on."}</div>
+        <div class="find-note">${find.share ? ("You're live"+(find.myUpdated?(" · updated "+agoText(find.myUpdated)):"")+". Updates ~1½ min."+autoStopNote) : "Let your group find you. Shared with people in this app only, while this is on."}</div>
       </div>
       <button class="switch ${find.share?'on':''}" id="share-toggle" role="switch" aria-checked="${find.share}"><span></span></button>
-    </div>` : "";
+    </div>
+    <div class="find-actions">
+      <button class="btn ghost" id="pins-btn">⛺ Pins</button>
+      ${feat("rally")?`<button class="btn ghost" id="rally-btn">🚩 ${getRally()?'Rally':'Set rally'}</button>`:""}
+      ${feat("lost")?`<button class="btn ${find.lost?'primary':'ghost'}" id="lost-btn">${find.lost?'🆘 I’m OK now':'🆘 I’m lost'}</button>`:""}
+    </div>`;
 
-  const targets = currentTargets();
+  // lost banner (someone else marked themselves lost)
+  const lostFriend = feat("lost") ? peopleWithCoords().find(p=>p.lost) : null;
+  const lostBanner = (lostFriend && !find.lost) ? `<button class="lost-banner" data-target="pe:${lostFriend.id}">🆘 <b>${esc(lostFriend.name)}</b> needs help — tap to navigate</button>` : "";
+
+  const counts={ stages:stagesWithCoords().length, people:peopleWithCoords().length, pins:pinsForMe().length };
+  const legend = `<div class="legend">
+    ${[["stages","Stages","var(--ink)"],["people","People","var(--violet)"],["pins","Pins","var(--gold)"]].map(([k,lbl,c])=>
+      `<button class="leg ${find.show[k]?'on':''}" data-leg="${k}"><span class="ldot" style="background:${c}"></span>${lbl} <b>${counts[k]}</b></button>`).join("")}
+  </div>`;
+
+  const targets = buildTargets();
   if(!targets.length){
-    const empty = find.kind==="people"
-      ? `<div class="card find-enable"><div class="big">🫂</div><h3>No one's sharing yet</h3>
-          <p>Turn on “Share my location” above so your friends can see you, and ask them to do the same. Anyone sharing will appear here.</p></div>`
-      : `<div class="card find-enable"><div class="big">📍</div><h3>No stage locations yet</h3>
-          <p>${state.user.admin ? "Head to Manage, and on the day stand at each stage and tap “Set 📍” to pin it." : "Your organiser will pin the stages on the day. Check back then!"}</p></div>`;
-    return head + kindToggle + shareRow + empty;
+    const nothing = !stagesWithCoords().length && !pinsForMe().length && !peopleWithCoords().length && !getRally();
+    const empty = nothing
+      ? `<div class="card find-enable"><div class="big">📍</div><h3>Nothing on the map yet</h3>
+          <p>${state.user.admin ? "On the day, pin the stages from Manage. You and your friends can also drop tent/meeting pins above, and turn on sharing to see each other." : "Your organiser pins the stages on the day. Meanwhile you can drop your own tent or meeting pins above, and turn on sharing to find your friends."}</p></div>`
+      : `<div class="card find-enable"><div class="big">🙈</div><h3>Everything's hidden</h3><p>Turn a category back on in the legend above to see it on the map.</p></div>`;
+    return head + shareRow + lostBanner + legend + empty;
   }
   if(!find.target || !targets.find(t=>t.id===find.target)) find.target = targets[0].id;
 
   const compassAvail = find.hasOrientation;
   const headingUp = find.headingMode!=="north" && compassAvail;
 
-  const tchips = targets.map(t=>`<button class="tchip ${t.id===find.target?'on':''}" data-target="${t.id}">
-      <span class="cdot" style="background:${t.color}"></span>${esc(t.name)}</button>`).join("");
+  const chipIcon = t => (t.kind==="pin"||t.kind==="rally") ? `<span class="cemoji">${t.emoji}</span>` : `<span class="cdot" style="background:${t.color}"></span>`;
+  const tchips = targets.map(t=>`<button class="tchip ${t.id===find.target?'on':''} ${t.lost?'lost':''}" data-target="${t.id}">${chipIcon(t)}${esc(t.name)}</button>`).join("");
 
   const modeToggle = compassAvail ? `<div class="mode-toggle">
       <button data-fmode="auto" class="${headingUp?'on':''}">Compass</button>
@@ -1487,23 +1782,21 @@ function viewFind(){
 
   const dots = targets.map(t=>{
     const label = t.name.length>12 ? t.name.slice(0,11)+'…' : t.name;
-    const inner = find.kind==="people"
-      ? `<circle r="9" fill="${t.color}"></circle><text class="dot-init" x="0" y="3" text-anchor="middle">${esc(initials(t.name))}</text><text class="dot-name" x="13" y="3.5">${esc(label)}</text>`
-      : `<circle r="7" fill="${t.color}"></circle><text class="dot-name" x="11" y="3.5">${esc(label)}</text>`;
+    let inner;
+    if(t.kind==="person") inner=`${t.lost?'<circle class="lost-ring" r="13"></circle>':''}<circle r="9" fill="${t.lost?'#D6371C':t.color}"></circle><text class="dot-init" x="0" y="3" text-anchor="middle">${t.lost?'🆘':esc(initials(t.name))}</text><text class="dot-name" x="13" y="3.5">${esc(label)}</text>`;
+    else if(t.kind==="pin"||t.kind==="rally") inner=`<circle r="9" fill="${t.color}"></circle><text class="dot-emoji" x="0" y="3.4" text-anchor="middle">${t.emoji}</text><text class="dot-name" x="13" y="3.5">${esc(label)}</text>`;
+    else inner=`<circle r="7" fill="${t.color}"></circle><text class="dot-name" x="11" y="3.5">${esc(label)}</text>`;
     return `<g class="rdot ${t.id===find.target?'sel':''}" id="dot-${t.id}" data-target="${t.id}" transform="translate(140,140)">${inner}</g>`;
   }).join("");
 
   const tgt = targets.find(t=>t.id===find.target);
   const mapsLink = `https://www.google.com/maps/dir/?api=1&destination=${tgt.lat},${tgt.lng}`;
-  const mapsLabel = find.kind==="people" ? `Open ${esc(tgt.name)}'s spot in Maps ↗` : `Open “${esc(tgt.name)}” in Maps ↗`;
-  const calNote = find.kind==="people"
-    ? "People move and GPS lags a little, so treat this as “roughly that way”. Tap a friend to track them."
-    : "Hold the phone flat and level for the compass. If the arrow drifts, wave the phone in a figure-8, or switch to North-up.";
+  const mapsLabel = tgt.kind==="person" ? `Open ${esc(tgt.name)}'s spot in Maps ↗` : `Open “${esc(tgt.name)}” in Maps ↗`;
 
-  return head + kindToggle + shareRow + `
+  return head + shareRow + lostBanner + legend + `
     <div class="readout" id="find-readout">
       <div style="min-width:0"><div class="r-name">${esc(tgt.name)}</div><div class="r-dir">—</div></div>
-      <div class="r-dist">…<small>${find.kind==="people"?"away":"away"}</small></div>
+      <div class="r-dist">…<small>away</small></div>
     </div>
     <div class="find-bar">
       <span class="find-acc" id="find-acc">${find.acc?('GPS ±'+Math.round(find.acc)+' m'):'locating…'}</span>
@@ -1526,14 +1819,15 @@ function viewFind(){
     </div>
     <div class="target-chips">${tchips}</div>
     <a class="btn ghost block" href="${mapsLink}" target="_blank" rel="noopener">${mapsLabel}</a>
-    <p class="find-note" style="margin-top:12px">${calNote}</p>
+    ${tgt.kind==="rally"?`<div class="row" style="gap:8px;margin-top:10px"><button class="btn ghost sm" id="rally-move" style="flex:1">Move meet-up here</button><button class="btn danger sm" id="rally-clear" style="flex:1">Clear meet-up</button></div>`:""}
+    <p class="find-note" style="margin-top:12px">Hold the phone flat for the compass. If the arrow drifts, wave it in a figure-8, or switch to North-up. People &amp; pins update roughly every 1½ minutes.</p>
   `;
 }
 
 function updateFindDynamic(){
   const radar=document.getElementById("radar");
   if(!radar || !find.pos) return;
-  const targets=currentTargets();
+  const targets=buildTargets();
   if(!targets.length) return;
   const headingUp = find.headingMode!=="north" && find.hasOrientation;
   const heading = headingUp ? (find.heading||0) : 0;
@@ -1566,7 +1860,9 @@ function updateFindDynamic(){
       ro.querySelector(".r-name").textContent=t.name;
       ro.querySelector(".r-dist").innerHTML=`${fmtDist(t.d)}<small>away</small>`;
       let dir = headingUp ? relDirText(rel) : (cardinal(t.b)+" of you");
-      if(find.kind==="people" && t.ts) dir += " · "+agoText(t.ts);
+      if(t.kind==="person") dir = (t.lost?"🆘 needs help · ":"")+dir+(t.ts?(" · "+agoText(t.ts)):"");
+      else if(t.kind==="rally") dir = "🚩 meet-up point · "+dir;
+      else if(t.kind==="pin") dir += " · "+(t.note?esc(t.note):(t.mine?"your pin":esc(t.ownerName||"shared")+"'s pin"));
       ro.querySelector(".r-dir").textContent = dir;
     }
   } else if(arrow){ arrow.style.display="none"; }
