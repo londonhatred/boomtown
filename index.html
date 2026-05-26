@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#120F1F" />
+<title>Festival Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;800&family=Figtree:ital,wght@0,400;0,500;0,600;0,800;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#120F1F;
+    --bg-2:#0C0A16;
+    --surface:#1C1733;
+    --surface-2:#241D40;
+    --line:rgba(255,255,255,.08);
+    --line-strong:rgba(255,255,255,.16);
+    --text:#F6F0E6;
+    --muted:#9A93B8;
+    --coral:#FF7A45;
+    --pink:#FF4D8D;
+    --lime:#C2FF3D;
+    --violet:#8B6CFF;
+    --danger:#FF5C6C;
+    --sunset:linear-gradient(120deg,#FF7A45 0%,#FF4D8D 60%,#8B6CFF 100%);
+    --radius:18px;
+    --radius-sm:12px;
+    --shadow:0 18px 40px -18px rgba(0,0,0,.7);
+    --safe-b:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(255,77,141,.18), transparent 60%),
+      radial-gradient(1000px 500px at -10% 10%, rgba(139,108,255,.16), transparent 55%),
+      var(--bg);
+    color:var(--text);
+    font-family:"Figtree",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100dvh;
+    line-height:1.45;
+  }
+  h1,h2,h3,.display{font-family:"Unbounded",sans-serif;letter-spacing:-.02em;line-height:1.05;margin:0}
+  button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+  input,select,textarea{font-family:inherit;font-size:16px}
+  a{color:var(--coral)}
+  ::selection{background:var(--pink);color:#fff}
+
+  /* ---------- Layout ---------- */
+  .app{max-width:760px;margin:0 auto;padding:0 16px calc(96px + var(--safe-b))}
+  .topbar{
+    position:sticky;top:0;z-index:40;
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:16px 0 14px;
+    background:linear-gradient(180deg,var(--bg) 60%, transparent);
+    backdrop-filter:blur(6px);
+  }
+  .brand{display:flex;align-items:center;gap:10px;min-width:0}
+  .brand .mark{
+    width:38px;height:38px;border-radius:11px;flex:none;
+    background:var(--sunset);position:relative;overflow:hidden;
+    box-shadow:0 6px 18px -6px rgba(255,77,141,.7);
+  }
+  .brand .mark::after{content:"";position:absolute;inset:0;
+    background:repeating-linear-gradient(90deg,transparent 0 5px,rgba(0,0,0,.18) 5px 6px)}
+  .brand .name{font-family:"Unbounded";font-weight:800;font-size:15px;letter-spacing:-.02em;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .brand .sub{font-size:11.5px;color:var(--muted);margin-top:1px}
+  .who{display:flex;align-items:center;gap:8px;flex:none}
+  .avatar{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+    font-weight:800;font-size:13px;color:#1a1330;background:var(--lime)}
+  .avatar.adm{background:var(--coral);color:#241200}
+
+  /* ---------- Buttons ---------- */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    padding:11px 16px;border-radius:12px;font-weight:700;font-size:14px;
+    background:var(--surface-2);color:var(--text);border:1px solid var(--line);
+    transition:transform .08s ease, filter .15s ease}
+  .btn:active{transform:scale(.97)}
+  .btn.primary{background:var(--sunset);color:#fff;border:none;box-shadow:0 10px 26px -10px rgba(255,77,141,.7)}
+  .btn.lime{background:var(--lime);color:#16210a;border:none}
+  .btn.ghost{background:transparent;border:1px solid var(--line-strong)}
+  .btn.sm{padding:8px 12px;font-size:13px;border-radius:10px}
+  .btn.icon{padding:8px 11px}
+  .btn.danger{background:rgba(255,92,108,.14);color:#ff9aa4;border:1px solid rgba(255,92,108,.3)}
+  .btn:disabled{opacity:.5;pointer-events:none}
+  .btn.block{width:100%}
+
+  /* ---------- Cards / generic ---------- */
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+  .muted{color:var(--muted)}
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;
+    font-size:12px;font-weight:700;background:var(--surface-2);border:1px solid var(--line)}
+  .pill.day{background:rgba(139,108,255,.16);border-color:rgba(139,108,255,.35);color:#cfc2ff}
+  .pill.music{background:rgba(194,255,61,.14);border-color:rgba(194,255,61,.3);color:#dcff7a}
+  .pill.ceremony{background:rgba(255,77,141,.14);border-color:rgba(255,77,141,.32);color:#ffb3cd}
+  .pill.other{background:rgba(255,122,69,.14);border-color:rgba(255,122,69,.32);color:#ffc3a3}
+  .tag{font-size:11px;color:var(--muted)}
+
+  /* ---------- Field ---------- */
+  .field{display:block;margin-bottom:12px}
+  .field>span{display:block;font-size:12.5px;font-weight:700;color:var(--muted);margin-bottom:6px;letter-spacing:.01em}
+  .field input,.field select,.field textarea{
+    width:100%;padding:12px 13px;border-radius:12px;color:var(--text);
+    background:var(--bg-2);border:1px solid var(--line-strong);outline:none}
+  .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--coral)}
+  .row{display:flex;gap:10px}
+  .row>*{flex:1}
+
+  /* ---------- Auth ---------- */
+  .auth-wrap{min-height:100dvh;display:grid;place-items:center;padding:24px}
+  .auth{width:100%;max-width:380px}
+  .auth .hero{text-align:center;margin-bottom:26px}
+  .auth .hero h1{font-size:34px;background:var(--sunset);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .auth .hero p{color:var(--muted);margin:10px 0 0;font-size:14px}
+  .seg{display:flex;background:var(--bg-2);border:1px solid var(--line);border-radius:12px;padding:4px;margin-bottom:18px}
+  .seg button{flex:1;padding:9px;border-radius:9px;font-weight:700;font-size:13.5px;color:var(--muted)}
+  .seg button.on{background:var(--surface-2);color:var(--text)}
+  .note{font-size:12px;color:var(--muted);margin-top:14px;text-align:center;line-height:1.5}
+  .err{background:rgba(255,92,108,.12);border:1px solid rgba(255,92,108,.35);color:#ffb3ba;
+    padding:10px 12px;border-radius:10px;font-size:13px;margin-bottom:12px}
+
+  /* ---------- Bottom nav ---------- */
+  .nav{position:fixed;left:0;right:0;bottom:0;z-index:50;
+    padding:8px 12px calc(8px + var(--safe-b));
+    background:linear-gradient(0deg,var(--bg-2) 70%,transparent);
+  }
+  .nav-inner{max-width:760px;margin:0 auto;display:flex;gap:6px;
+    background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:6px;
+    box-shadow:var(--shadow)}
+  .nav-inner button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+    padding:8px 4px;border-radius:11px;color:var(--muted);font-size:10.5px;font-weight:700}
+  .nav-inner button svg{width:21px;height:21px}
+  .nav-inner button.on{color:var(--text);background:var(--surface-2)}
+  .nav-inner button.on svg{stroke:url(#g1)}
+
+  /* ---------- Section headers ---------- */
+  .sec-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin:6px 0 14px}
+  .sec-head h2{font-size:24px}
+  .sec-head .lead{color:var(--muted);font-size:13px;margin-top:4px}
+
+  /* ---------- Filters ---------- */
+  .filters{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:14px;-webkit-overflow-scrolling:touch}
+  .filters::-webkit-scrollbar{display:none}
+  .chip{flex:none;padding:8px 13px;border-radius:999px;font-size:13px;font-weight:700;
+    background:var(--surface);border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+  .chip.on{background:var(--text);color:#16121f;border-color:var(--text)}
+  .search{width:100%;padding:12px 14px;border-radius:13px;background:var(--bg-2);
+    border:1px solid var(--line-strong);color:var(--text);outline:none;margin-bottom:12px}
+  .search:focus{border-color:var(--coral)}
+
+  /* ---------- Event item ---------- */
+  .day-label{font-family:"Unbounded";font-weight:600;font-size:13px;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.08em;margin:18px 2px 10px}
+  .ev{display:flex;gap:12px;align-items:stretch;background:var(--surface);border:1px solid var(--line);
+    border-radius:14px;padding:12px;margin-bottom:10px;position:relative;overflow:hidden}
+  .ev .time{flex:none;width:62px;text-align:center;display:flex;flex-direction:column;justify-content:center;
+    border-right:1px solid var(--line);padding-right:10px}
+  .ev .time .t{font-family:"Unbounded";font-weight:600;font-size:15px}
+  .ev .time .t2{font-size:11px;color:var(--muted);margin-top:2px}
+  .ev .body{flex:1;min-width:0}
+  .ev .body h3{font-size:16px;font-weight:800;font-family:"Figtree";letter-spacing:-.01em}
+  .ev .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;align-items:center}
+  .ev .loc{font-size:12.5px;color:var(--muted)}
+  .ev .notes{font-size:12.5px;color:var(--muted);margin-top:7px}
+  .ev .act{flex:none;display:flex;align-items:center}
+  .pick-btn{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;
+    background:var(--surface-2);border:1px solid var(--line-strong)}
+  .pick-btn svg{width:21px;height:21px;fill:none;stroke:var(--muted);stroke-width:2}
+  .pick-btn.on{background:var(--lime);border-color:var(--lime)}
+  .pick-btn.on svg{fill:#16210a;stroke:#16210a}
+  .ev.clash{border-color:rgba(255,92,108,.5)}
+  .ev.clash::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--danger)}
+  .clash-note{display:flex;align-items:center;gap:6px;font-size:11.5px;color:#ff9aa4;margin-top:7px;font-weight:700}
+
+  /* attendee chips */
+  .goers{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+  .goer{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;
+    background:var(--surface-2);border:1px solid var(--line);color:var(--text)}
+  .goer.me{background:var(--lime);color:#16210a;border-color:var(--lime)}
+  .count-badge{font-size:11px;font-weight:800;color:var(--lime)}
+
+  /* empty */
+  .empty{text-align:center;padding:48px 20px;color:var(--muted)}
+  .empty .big{font-size:40px;margin-bottom:8px}
+  .empty h3{font-family:"Figtree";font-weight:800;color:var(--text);margin-bottom:6px}
+
+  /* admin */
+  .admin-block{margin-bottom:14px}
+  .district{background:var(--surface);border:1px solid var(--line);border-radius:14px;margin-bottom:12px;overflow:hidden}
+  .district .dh{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:13px 14px;background:var(--surface-2)}
+  .district .dh .nm{font-family:"Unbounded";font-weight:600;font-size:15px}
+  .stages{padding:10px 14px;display:flex;flex-wrap:wrap;gap:8px}
+  .stage-chip{display:flex;align-items:center;gap:7px;padding:6px 6px 6px 12px;border-radius:999px;
+    background:var(--bg-2);border:1px solid var(--line);font-size:13px;font-weight:600}
+  .stage-chip button{color:var(--muted);font-weight:800;line-height:1;padding:2px 4px;border-radius:6px}
+  .stage-chip button:hover{color:var(--danger)}
+  .add-inline{display:flex;gap:8px;align-items:center;padding:0 14px 13px}
+  .add-inline input{flex:1;padding:9px 11px;border-radius:10px;background:var(--bg-2);
+    border:1px solid var(--line-strong);color:var(--text);outline:none;font-size:14px}
+
+  /* modal */
+  .modal-bg{position:fixed;inset:0;z-index:60;background:rgba(8,6,16,.7);backdrop-filter:blur(4px);
+    display:grid;place-items:end center;padding:0}
+  .modal{width:100%;max-width:760px;background:var(--surface);border:1px solid var(--line);
+    border-radius:22px 22px 0 0;padding:18px 18px calc(20px + var(--safe-b));max-height:92dvh;overflow:auto;
+    animation:slideup .25s ease}
+  @keyframes slideup{from{transform:translateY(40px);opacity:.6}to{transform:translateY(0);opacity:1}}
+  .modal h2{font-size:20px;margin-bottom:14px}
+  .modal .x{position:absolute;right:14px;top:12px}
+  .modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(96px + var(--safe-b));z-index:80;
+    background:var(--text);color:#16121f;font-weight:700;font-size:13.5px;padding:11px 18px;border-radius:999px;
+    box-shadow:var(--shadow);animation:pop .2s ease}
+  @keyframes pop{from{transform:translate(-50%,8px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
+
+  .loader{min-height:60dvh;display:grid;place-items:center;color:var(--muted)}
+  .spin{width:34px;height:34px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--coral);
+    animation:sp 1s linear infinite;margin:0 auto 14px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  .stat-row{display:flex;gap:10px;margin-bottom:14px}
+  .stat{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:13px}
+  .stat .n{font-family:"Unbounded";font-weight:800;font-size:22px}
+  .stat .l{font-size:11.5px;color:var(--muted);margin-top:2px}
+
+  .config-warn{background:rgba(255,122,69,.1);border:1px solid rgba(255,122,69,.4);
+    border-radius:14px;padding:16px;font-size:13.5px;line-height:1.6}
+  .config-warn code{background:var(--bg-2);padding:2px 6px;border-radius:6px;font-size:12.5px}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute"><defs>
+  <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#FF7A45"/><stop offset=".6" stop-color="#FF4D8D"/><stop offset="1" stop-color="#8B6CFF"/>
+  </linearGradient>
+</defs></svg>
+
+<div id="root"></div>
+
+<script type="module">
+/* ============================================================
+   FESTIVAL PLANNER
+   ------------------------------------------------------------
+   SETUP (see README.md for full steps):
+   1. Create a free Firebase project, enable Cloud Firestore.
+   2. Paste your config into FIREBASE_CONFIG below.
+   3. Set ADMIN_CODE to a secret only you know — entering it on
+      sign-up makes that account an admin.
+   ============================================================ */
+
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBTbrKrHADeshcLQb4TyD2F99HVvRRb7MQ",
+  authDomain: "boomtown-32345.firebaseapp.com",
+  projectId: "boomtown-32345",
+  storageBucket: "boomtown-32345.firebasestorage.app",
+  messagingSenderId: "138467434890",
+  appId: "1:138467434890:web:042ff480bdad8e5705a873"
+};
+
+const ADMIN_CODE = "3884";   // <-- change this before deploying
+const FESTIVAL_NAME_DEFAULT = "Boomtown 2026";
+
+/* ------------------------------------------------------------ */
+
+const DAYS = ["Wednesday","Thursday","Friday","Saturday","Sunday"];
+const TYPES = ["music","ceremony","other"];
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import {
+  getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc,
+  getDocs, query, where, addDoc, updateDoc, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const root = document.getElementById("root");
+
+/* ---- Config guard ---- */
+if (FIREBASE_CONFIG.apiKey === "PASTE_YOUR_API_KEY") {
+  root.innerHTML = `<div class="auth-wrap"><div class="auth">
+    <div class="hero"><h1>Festival Planner</h1></div>
+    <div class="config-warn">
+      <b>Almost there — Firebase isn't configured yet.</b><br><br>
+      Open <code>index.html</code> and paste your Firebase project config into the
+      <code>FIREBASE_CONFIG</code> object near the top of the script, then set your
+      secret <code>ADMIN_CODE</code>. Full step-by-step instructions are in
+      <code>README.md</code>. Reload this page once that's done.
+    </div>
+  </div></div>`;
+  throw new Error("Firebase not configured");
+}
+
+const app = initializeApp(FIREBASE_CONFIG);
+const db  = getFirestore(app);
+
+/* ---- Firestore refs ---- */
+const refStructure = doc(db, "meta", "structure");
+const colEvents    = collection(db, "events");
+const colUsers     = collection(db, "users");
+const colPicks     = collection(db, "picks");
+
+/* ---- App state ---- */
+const state = {
+  user: null,                 // {id,name,admin}
+  structure: { festivalName: FESTIVAL_NAME_DEFAULT, districts: [] },
+  events: [],                 // [{id,...}]
+  users: [],                  // [{id,name,admin}]
+  picks: [],                  // [{id,userId,eventId}]
+  view: "browse",
+  ready: { events:false, users:false, picks:false, structure:false },
+  filters: { day:"all", district:"all", type:"all", search:"" },
+  sharedFriend: "all",
+  modal: null
+};
+
+/* ---- Helpers ---- */
+const uid = () => Math.random().toString(36).slice(2,10);
+const esc = s => (s??"").toString().replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const toMin = t => { if(!t) return 0; const [h,m]=t.split(":").map(Number); return h*60+(m||0); };
+const dayIdx = d => DAYS.indexOf(d);
+function timeRangeMin(ev){ // returns [start, end] in minutes, handling past-midnight
+  let s = toMin(ev.start), e = toMin(ev.end);
+  if (e <= s) e += 24*60;
+  return [s,e];
+}
+function overlaps(a,b){
+  if (a.day !== b.day) return false;
+  const [as,ae]=timeRangeMin(a), [bs,be]=timeRangeMin(b);
+  return as < be && bs < ae;
+}
+function fmt12(t){
+  if(!t) return "";
+  let [h,m]=t.split(":").map(Number);
+  const ap = h>=12 ? "pm":"am"; let hh = h%12; if(hh===0) hh=12;
+  return m? `${hh}:${String(m).padStart(2,"0")}${ap}` : `${hh}${ap}`;
+}
+function initials(name){
+  return name.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase() || "?";
+}
+function toast(msg){
+  const t=document.createElement("div"); t.className="toast"; t.textContent=msg;
+  document.body.appendChild(t); setTimeout(()=>t.remove(),1700);
+}
+
+/* ---- Auth (lightweight, friends-only) ---- */
+async function signup(name, passcode, adminCode){
+  name = name.trim();
+  if(name.length<2) throw new Error("Please enter your name.");
+  if(passcode.length<3) throw new Error("Passcode must be at least 3 characters.");
+  const existing = await getDocs(query(colUsers, where("nameLower","==",name.toLowerCase())));
+  if(!existing.empty) throw new Error("That name is taken — try logging in instead.");
+  const isAdmin = adminCode && adminCode === ADMIN_CODE;
+  const ref = await addDoc(colUsers, {
+    name, nameLower:name.toLowerCase(), passcode, admin:!!isAdmin, createdAt:serverTimestamp()
+  });
+  localStorage.setItem("fp_uid", ref.id);
+  return { id:ref.id, name, admin:!!isAdmin };
+}
+async function login(name, passcode){
+  name = name.trim();
+  const snap = await getDocs(query(colUsers, where("nameLower","==",name.toLowerCase())));
+  if(snap.empty) throw new Error("No account with that name.");
+  const d = snap.docs[0];
+  if(d.data().passcode !== passcode) throw new Error("Wrong passcode.");
+  localStorage.setItem("fp_uid", d.id);
+  return { id:d.id, name:d.data().name, admin:!!d.data().admin };
+}
+function logout(){ localStorage.removeItem("fp_uid"); location.reload(); }
+
+/* ---- Data writes ---- */
+async function saveStructure(s){ await setDoc(refStructure, s); }
+async function togglePick(eventId){
+  const id = `${state.user.id}__${eventId}`;
+  const ref = doc(db,"picks",id);
+  const has = state.picks.some(p=>p.id===id);
+  if(has) await deleteDoc(ref);
+  else await setDoc(ref, { userId:state.user.id, eventId, createdAt:serverTimestamp() });
+}
+async function saveEvent(ev){
+  const data = {
+    districtId:ev.districtId, districtName:ev.districtName,
+    stageId:ev.stageId, stageName:ev.stageName,
+    day:ev.day, start:ev.start, end:ev.end,
+    title:ev.title.trim(), type:ev.type, notes:(ev.notes||"").trim()
+  };
+  if(ev.id) await updateDoc(doc(db,"events",ev.id), data);
+  else await addDoc(colEvents, {...data, createdAt:serverTimestamp()});
+}
+async function deleteEvent(id){
+  await deleteDoc(doc(db,"events",id));
+  // clean up picks for this event
+  const mine = state.picks.filter(p=>p.eventId===id);
+  await Promise.all(mine.map(p=>deleteDoc(doc(db,"picks",p.id))));
+}
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+const savedUid = localStorage.getItem("fp_uid");
+subscribeAll();
+if(savedUid){ root.innerHTML = loaderHTML(); }
+else { renderAuth(); }
+
+function subscribeAll(){
+  onSnapshot(refStructure, snap=>{
+    if(snap.exists()){
+      const d = snap.data();
+      state.structure = { festivalName:d.festivalName||FESTIVAL_NAME_DEFAULT, districts:d.districts||[] };
+    }
+    state.ready.structure=true; afterData();
+  }, ()=>{ state.ready.structure=true; afterData(); });
+
+  onSnapshot(colEvents, snap=>{
+    state.events = snap.docs.map(d=>({id:d.id,...d.data()}));
+    state.ready.events=true; afterData();
+  });
+  onSnapshot(colUsers, snap=>{
+    state.users = snap.docs.map(d=>({id:d.id,name:d.data().name,admin:!!d.data().admin}));
+    state.ready.users=true;
+    // refresh current user (admin status / name) from live data
+    if(state.user){
+      const me = state.users.find(u=>u.id===state.user.id);
+      if(me) state.user = {...state.user, name:me.name, admin:me.admin};
+    }
+    afterData();
+  });
+  onSnapshot(colPicks, snap=>{
+    state.picks = snap.docs.map(d=>({id:d.id,...d.data()}));
+    state.ready.picks=true; afterData();
+  });
+}
+
+function allReady(){ return Object.values(state.ready).every(Boolean); }
+function afterData(){
+  const savedUid = localStorage.getItem("fp_uid");
+  if(savedUid && !state.user){
+    if(!state.ready.users) return;       // wait for users to resolve identity
+    const me = state.users.find(u=>u.id===savedUid);
+    if(me){ state.user = {...me}; }
+    else { localStorage.removeItem("fp_uid"); renderAuth(); return; }
+  }
+  if(!state.user){ return; }              // auth screen handles its own render
+  if(!allReady()){ root.innerHTML = loaderHTML(); return; }
+  renderApp();
+}
+
+/* ============================================================
+   AUTH SCREEN
+   ============================================================ */
+let authMode = "login";
+function renderAuth(){
+  root.innerHTML = `
+  <div class="auth-wrap"><div class="auth">
+    <div class="hero">
+      <h1>Festival<br>Planner</h1>
+      <p>Pick your acts. See who's going where. Build the perfect weekend.</p>
+    </div>
+    <div class="seg">
+      <button data-am="login" class="${authMode==='login'?'on':''}">Log in</button>
+      <button data-am="signup" class="${authMode==='signup'?'on':''}">Create account</button>
+    </div>
+    <div id="auth-err"></div>
+    <label class="field"><span>Your name</span><input id="au-name" autocomplete="off" placeholder="e.g. Sam"></label>
+    <label class="field"><span>Passcode</span><input id="au-pass" type="password" autocomplete="off" placeholder="a word only you know"></label>
+    ${authMode==='signup' ? `<label class="field"><span>Admin code <span class="tag">(organisers only — leave blank otherwise)</span></span><input id="au-admin" type="password" autocomplete="off" placeholder="optional"></label>`:""}
+    <button class="btn primary block" id="au-go">${authMode==='login'?'Log in':'Create account'}</button>
+    <p class="note">This is a lightweight login for a friend group — please don't reuse an important password. Anyone with the link can join.</p>
+  </div></div>`;
+
+  root.querySelectorAll("[data-am]").forEach(b=>b.onclick=()=>{ authMode=b.dataset.am; renderAuth(); });
+  const go = root.querySelector("#au-go");
+  const errBox = root.querySelector("#auth-err");
+  const showErr = m => errBox.innerHTML = `<div class="err">${esc(m)}</div>`;
+  go.onclick = async ()=>{
+    const name = root.querySelector("#au-name").value;
+    const pass = root.querySelector("#au-pass").value;
+    const adm  = authMode==='signup' ? root.querySelector("#au-admin").value : "";
+    errBox.innerHTML=""; go.disabled=true; go.textContent="…";
+    try{
+      const u = authMode==='login' ? await login(name,pass) : await signup(name,pass,adm);
+      state.user = u;
+      root.innerHTML = loaderHTML();
+      afterData();
+    }catch(e){ showErr(e.message||"Something went wrong."); go.disabled=false; go.textContent = authMode==='login'?'Log in':'Create account'; }
+  };
+  root.querySelector("#au-pass").addEventListener("keydown",e=>{ if(e.key==="Enter" && authMode==='login') go.click(); });
+}
+
+/* ============================================================
+   MAIN APP
+   ============================================================ */
+function loaderHTML(){ return `<div class="loader"><div><div class="spin"></div>Loading the lineup…</div></div>`; }
+
+function renderApp(){
+  const u = state.user;
+  root.innerHTML = `
+    <div class="app">
+      <div class="topbar">
+        <div class="brand">
+          <div class="mark"></div>
+          <div style="min-width:0">
+            <div class="name">${esc(state.structure.festivalName)}</div>
+            <div class="sub">${state.events.length} events · ${state.users.length} going</div>
+          </div>
+        </div>
+        <div class="who">
+          <div class="avatar ${u.admin?'adm':''}" title="${esc(u.name)}">${esc(initials(u.name))}</div>
+          <button class="btn ghost sm" id="logout">Exit</button>
+        </div>
+      </div>
+      <div id="view"></div>
+    </div>
+    ${navHTML()}
+  `;
+  root.querySelector("#logout").onclick = logout;
+  root.querySelectorAll(".nav-inner button").forEach(b=>b.onclick=()=>{ state.view=b.dataset.v; renderApp(); });
+  renderView();
+  if(state.modal) renderModal();
+}
+
+function navHTML(){
+  const items = [
+    ["browse","Browse",`<path d="M4 6h16M4 12h16M4 18h16"/>`],
+    ["mine","My plan",`<path d="M5 4h11l4 4v12H5z"/><path d="M9 12l2 2 4-4"/>`],
+    ["shared","Group",`<circle cx="9" cy="8" r="3"/><circle cx="17" cy="10" r="2.4"/><path d="M3.5 19c.6-3 3-4.5 5.5-4.5S14 16 14.6 19"/>`],
+  ];
+  if(state.user.admin) items.push(["admin","Manage",`<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2 2M16.4 16.4l2 2M18.4 5.6l-2 2M7.6 16.4l-2 2"/>`]);
+  return `<nav class="nav"><div class="nav-inner">${items.map(([v,l,svg])=>`
+    <button data-v="${v}" class="${state.view===v?'on':''}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${svg}</svg>
+      <span>${l}</span>
+    </button>`).join("")}</div></nav>`;
+}
+
+function renderView(){
+  const v = document.getElementById("view");
+  if(state.view==="browse") v.innerHTML = viewBrowse();
+  else if(state.view==="mine") v.innerHTML = viewMine();
+  else if(state.view==="shared") v.innerHTML = viewShared();
+  else if(state.view==="admin") v.innerHTML = viewAdmin();
+  wireView();
+}
+
+/* ---------- shared rendering bits ---------- */
+function myPickIds(){ return new Set(state.picks.filter(p=>p.userId===state.user.id).map(p=>p.eventId)); }
+function sortEvents(list){
+  return [...list].sort((a,b)=> dayIdx(a.day)-dayIdx(b.day) || toMin(a.start)-toMin(b.start) || (a.title||"").localeCompare(b.title||""));
+}
+function eventCard(ev, {picked, clash}={}){
+  const goers = state.picks.filter(p=>p.eventId===ev.id);
+  const count = goers.length;
+  return `
+  <div class="ev ${clash?'clash':''}" data-ev="${ev.id}">
+    <div class="time">
+      <div class="t">${esc(fmt12(ev.start))}</div>
+      <div class="t2">${ev.end?('→ '+esc(fmt12(ev.end))):''}</div>
+    </div>
+    <div class="body">
+      <h3>${esc(ev.title)}</h3>
+      <div class="meta">
+        <span class="pill ${ev.type}">${esc(ev.type)}</span>
+        <span class="loc">${esc(ev.districtName)} · ${esc(ev.stageName)}</span>
+      </div>
+      ${ev.notes?`<div class="notes">${esc(ev.notes)}</div>`:""}
+      ${clash?`<div class="clash-note">⚠ Overlaps with another pick</div>`:""}
+      ${count?`<div class="goers">${attendeeChips(goers)}</div>`:""}
+    </div>
+    <div class="act">
+      <button class="pick-btn ${picked?'on':''}" data-pick="${ev.id}" aria-label="add to my plan">
+        <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+      </button>
+    </div>
+  </div>`;
+}
+function attendeeChips(goers){
+  const names = goers.map(g=>{
+    const u = state.users.find(x=>x.id===g.userId);
+    return { id:g.userId, name:u?u.name:"?" };
+  });
+  return names.map(n=>`<span class="goer ${n.id===state.user.id?'me':''}">${esc(n.name)}</span>`).join("");
+}
+function groupByDay(list){
+  const m = {}; DAYS.forEach(d=>m[d]=[]);
+  list.forEach(e=>{ if(!m[e.day]) m[e.day]=[]; m[e.day].push(e); });
+  return m;
+}
+
+/* ---------- BROWSE ---------- */
+function viewBrowse(){
+  const f = state.filters;
+  const picks = myPickIds();
+  let list = state.events.slice();
+  if(f.day!=="all") list = list.filter(e=>e.day===f.day);
+  if(f.district!=="all") list = list.filter(e=>e.districtId===f.district);
+  if(f.type!=="all") list = list.filter(e=>e.type===f.type);
+  if(f.search) list = list.filter(e=>(e.title||"").toLowerCase().includes(f.search.toLowerCase()) || (e.districtName||"").toLowerCase().includes(f.search.toLowerCase()) || (e.stageName||"").toLowerCase().includes(f.search.toLowerCase()));
+  list = sortEvents(list);
+
+  const dayChips = ["all",...DAYS].map(d=>`<button class="chip ${f.day===d?'on':''}" data-fday="${d}">${d==="all"?"All days":d.slice(0,3)}</button>`).join("");
+  const distChips = ["all",...state.structure.districts.map(d=>d.id)].map(id=>{
+    const d = state.structure.districts.find(x=>x.id===id);
+    return `<button class="chip ${f.district===id?'on':''}" data-fdist="${id}">${id==="all"?"All areas":esc(d?d.name:"")}</button>`;
+  }).join("");
+  const typeChips = ["all",...TYPES].map(t=>`<button class="chip ${f.type===t?'on':''}" data-ftype="${t}">${t==="all"?"All types":t[0].toUpperCase()+t.slice(1)}</button>`).join("");
+
+  let body;
+  if(state.events.length===0){
+    body = emptyState("🎪","No events yet", state.user.admin? "Head to Manage to add your districts, stages and the lineup." : "The organiser hasn't added the lineup yet — check back soon.");
+  } else if(list.length===0){
+    body = emptyState("🔍","Nothing matches","Try clearing a filter or your search.");
+  } else {
+    const g = groupByDay(list);
+    body = DAYS.filter(d=>g[d] && g[d].length).map(d=>`
+      <div class="day-label">${d}</div>
+      ${g[d].map(e=>eventCard(e,{picked:picks.has(e.id)})).join("")}
+    `).join("");
+  }
+
+  return `
+    <div class="sec-head"><div><h2>Browse the lineup</h2><div class="lead">Tap the ✓ to add an act to your plan.</div></div></div>
+    <input class="search" id="search" placeholder="Search acts, stages, areas…" value="${esc(f.search)}">
+    <div class="filters">${dayChips}</div>
+    <div class="filters">${distChips}</div>
+    <div class="filters">${typeChips}</div>
+    ${body}
+  `;
+}
+
+/* ---------- MY PLAN ---------- */
+function viewMine(){
+  const ids = myPickIds();
+  let list = sortEvents(state.events.filter(e=>ids.has(e.id)));
+  // clash detection
+  const clashSet = new Set();
+  for(let i=0;i<list.length;i++) for(let j=i+1;j<list.length;j++){
+    if(overlaps(list[i],list[j])){ clashSet.add(list[i].id); clashSet.add(list[j].id); }
+  }
+  const byType = t => list.filter(e=>e.type===t).length;
+
+  if(list.length===0){
+    return `
+      <div class="sec-head"><div><h2>My plan</h2><div class="lead">Your personal weekend schedule.</div></div></div>
+      ${emptyState("🎟️","Nothing picked yet","Go to Browse and tap the ✓ on acts you want to catch.")}`;
+  }
+  const g = groupByDay(list);
+  return `
+    <div class="sec-head"><div><h2>My plan</h2><div class="lead">${list.length} pick${list.length>1?'s':''}${clashSet.size?` · ⚠ ${clashSet.size/2|0} clash${clashSet.size>2?'es':''}`:''}</div></div></div>
+    <div class="stat-row">
+      <div class="stat"><div class="n">${byType('music')}</div><div class="l">Music</div></div>
+      <div class="stat"><div class="n">${byType('ceremony')}</div><div class="l">Ceremonies</div></div>
+      <div class="stat"><div class="n">${byType('other')}</div><div class="l">Other</div></div>
+    </div>
+    ${DAYS.filter(d=>g[d]&&g[d].length).map(d=>`
+      <div class="day-label">${d}</div>
+      ${g[d].map(e=>eventCard(e,{picked:true,clash:clashSet.has(e.id)})).join("")}
+    `).join("")}
+  `;
+}
+
+/* ---------- GROUP / SHARED ---------- */
+function viewShared(){
+  const friend = state.sharedFriend;
+  const friendChips = ["all",...state.users.map(u=>u.id)].map(id=>{
+    const u = state.users.find(x=>x.id===id);
+    const label = id==="all" ? "Everyone" : (u? (u.id===state.user.id?`${u.name} (you)`:u.name) : "");
+    return `<button class="chip ${friend===id?'on':''}" data-friend="${id}">${esc(label)}</button>`;
+  }).join("");
+
+  let list, lead, body;
+  if(friend==="all"){
+    // events with at least one pick, sorted, showing all attendees
+    const pickedEventIds = new Set(state.picks.map(p=>p.eventId));
+    list = sortEvents(state.events.filter(e=>pickedEventIds.has(e.id)));
+    lead = "Everything anyone in the group has picked.";
+    if(list.length===0){
+      body = emptyState("👥","No group picks yet","Once people start choosing acts, the shared schedule fills up here.");
+    } else {
+      const g = groupByDay(list);
+      body = DAYS.filter(d=>g[d]&&g[d].length).map(d=>`
+        <div class="day-label">${d}</div>
+        ${g[d].map(e=>sharedCard(e)).join("")}
+      `).join("");
+    }
+  } else {
+    const fids = new Set(state.picks.filter(p=>p.userId===friend).map(p=>p.eventId));
+    list = sortEvents(state.events.filter(e=>fids.has(e.id)));
+    const fu = state.users.find(u=>u.id===friend);
+    lead = `${fu?esc(fu.name):"This person"}'s schedule.`;
+    // clash detection for that friend
+    const clashSet=new Set();
+    for(let i=0;i<list.length;i++)for(let j=i+1;j<list.length;j++) if(overlaps(list[i],list[j])){clashSet.add(list[i].id);clashSet.add(list[j].id);}
+    if(list.length===0){
+      body = emptyState("🤷","No picks yet",`${fu?esc(fu.name):"They"} hasn't chosen anything yet.`);
+    }else{
+      const g=groupByDay(list);
+      body = DAYS.filter(d=>g[d]&&g[d].length).map(d=>`
+        <div class="day-label">${d}</div>
+        ${g[d].map(e=>eventCard(e,{picked:myPickIds().has(e.id),clash:clashSet.has(e.id)})).join("")}
+      `).join("");
+    }
+  }
+
+  return `
+    <div class="sec-head"><div><h2>The group</h2><div class="lead">${lead}</div></div></div>
+    <div class="filters">${friendChips}</div>
+    ${body}
+  `;
+}
+function sharedCard(ev){
+  const goers = state.picks.filter(p=>p.eventId===ev.id);
+  const mine = myPickIds().has(ev.id);
+  return `
+  <div class="ev" data-ev="${ev.id}">
+    <div class="time"><div class="t">${esc(fmt12(ev.start))}</div><div class="t2">${ev.end?('→ '+esc(fmt12(ev.end))):''}</div></div>
+    <div class="body">
+      <h3>${esc(ev.title)} <span class="count-badge">· ${goers.length} going</span></h3>
+      <div class="meta"><span class="pill ${ev.type}">${esc(ev.type)}</span><span class="loc">${esc(ev.districtName)} · ${esc(ev.stageName)}</span></div>
+      <div class="goers">${attendeeChips(goers)}</div>
+    </div>
+    <div class="act">
+      <button class="pick-btn ${mine?'on':''}" data-pick="${ev.id}" aria-label="add to my plan">
+        <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+      </button>
+    </div>
+  </div>`;
+}
+
+/* ---------- ADMIN ---------- */
+function viewAdmin(){
+  const s = state.structure;
+  const districtsHTML = s.districts.length ? s.districts.map(d=>`
+    <div class="district" data-d="${d.id}">
+      <div class="dh">
+        <div class="nm">${esc(d.name)}</div>
+        <div style="display:flex;gap:6px">
+          <button class="btn ghost sm" data-rename-d="${d.id}">Rename</button>
+          <button class="btn danger sm" data-del-d="${d.id}">Delete</button>
+        </div>
+      </div>
+      <div class="stages">
+        ${(d.stages||[]).map(st=>`<span class="stage-chip">${esc(st.name)} <button data-del-s="${d.id}:${st.id}" title="remove stage">✕</button></span>`).join("") || '<span class="tag">No stages yet</span>'}
+      </div>
+      <div class="add-inline">
+        <input placeholder="Add a stage…" data-stage-input="${d.id}">
+        <button class="btn lime sm" data-add-s="${d.id}">Add</button>
+      </div>
+    </div>`).join("") : emptyState("🏗️","No districts yet","Add your first district below (e.g. Main Field, The Glade).");
+
+  return `
+    <div class="sec-head"><div><h2>Manage festival</h2><div class="lead">Districts, stages and the full lineup.</div></div></div>
+
+    <div class="card admin-block">
+      <label class="field" style="margin:0"><span>Festival name</span>
+        <div class="row" style="gap:8px">
+          <input id="fest-name" value="${esc(s.festivalName)}">
+          <button class="btn primary" id="save-name" style="flex:none">Save</button>
+        </div>
+      </label>
+    </div>
+
+    <div class="sec-head" style="margin-top:24px"><div><h2 style="font-size:18px">Districts &amp; stages</h2></div></div>
+    ${districtsHTML}
+    <div class="card admin-block" style="margin-top:4px">
+      <label class="field" style="margin:0"><span>Add a district</span>
+        <div class="row" style="gap:8px">
+          <input id="new-dist" placeholder="e.g. Main Field">
+          <button class="btn lime" id="add-dist" style="flex:none">Add</button>
+        </div>
+      </label>
+    </div>
+
+    <div class="sec-head" style="margin-top:24px">
+      <div><h2 style="font-size:18px">Lineup</h2><div class="lead">${state.events.length} event${state.events.length!==1?'s':''}</div></div>
+      <button class="btn primary sm" id="add-event" ${s.districts.length?'':'disabled'}>+ Add event</button>
+    </div>
+    ${s.districts.length? "" : `<div class="config-warn">Add at least one district and stage before creating events.</div>`}
+    ${adminEventList()}
+  `;
+}
+function adminEventList(){
+  const list = sortEvents(state.events);
+  if(!list.length) return state.structure.districts.length? emptyState("🎵","No events yet","Tap “Add event” to start building the lineup.") : "";
+  const g = groupByDay(list);
+  return DAYS.filter(d=>g[d]&&g[d].length).map(d=>`
+    <div class="day-label">${d}</div>
+    ${g[d].map(e=>`
+      <div class="ev" data-ev="${e.id}">
+        <div class="time"><div class="t">${esc(fmt12(e.start))}</div><div class="t2">${e.end?('→ '+esc(fmt12(e.end))):''}</div></div>
+        <div class="body">
+          <h3>${esc(e.title)}</h3>
+          <div class="meta"><span class="pill ${e.type}">${esc(e.type)}</span><span class="loc">${esc(e.districtName)} · ${esc(e.stageName)}</span></div>
+        </div>
+        <div class="act" style="flex-direction:column;gap:6px">
+          <button class="btn ghost sm" data-edit-ev="${e.id}">Edit</button>
+          <button class="btn danger sm" data-del-ev="${e.id}">Del</button>
+        </div>
+      </div>`).join("")}
+  `).join("");
+}
+
+/* ---------- empty state ---------- */
+function emptyState(big,title,text){
+  return `<div class="empty"><div class="big">${big}</div><h3>${esc(title)}</h3><div>${esc(text)}</div></div>`;
+}
+
+/* ============================================================
+   WIRING (event delegation per view)
+   ============================================================ */
+function wireView(){
+  const v = document.getElementById("view");
+  if(!v) return;
+
+  // pick toggles (browse / mine / shared)
+  v.querySelectorAll("[data-pick]").forEach(b=>b.onclick=async()=>{
+    b.classList.toggle("on");
+    try{ await togglePick(b.dataset.pick); }catch(e){ toast("Couldn't save — try again"); }
+  });
+
+  // ---- browse filters ----
+  const search = v.querySelector("#search");
+  if(search) search.oninput = e=>{ state.filters.search=e.target.value; const pos=e.target.selectionStart; renderView(); const s2=document.querySelector("#search"); if(s2){s2.focus(); s2.setSelectionRange(pos,pos);} };
+  v.querySelectorAll("[data-fday]").forEach(b=>b.onclick=()=>{ state.filters.day=b.dataset.fday; renderView(); });
+  v.querySelectorAll("[data-fdist]").forEach(b=>b.onclick=()=>{ state.filters.district=b.dataset.fdist; renderView(); });
+  v.querySelectorAll("[data-ftype]").forEach(b=>b.onclick=()=>{ state.filters.type=b.dataset.ftype; renderView(); });
+
+  // ---- shared friend selector ----
+  v.querySelectorAll("[data-friend]").forEach(b=>b.onclick=()=>{ state.sharedFriend=b.dataset.friend; renderView(); });
+
+  // ---- admin ----
+  const saveName = v.querySelector("#save-name");
+  if(saveName) saveName.onclick = async()=>{
+    const name = v.querySelector("#fest-name").value.trim() || FESTIVAL_NAME_DEFAULT;
+    await saveStructure({...state.structure, festivalName:name}); toast("Saved");
+  };
+  const addDist = v.querySelector("#add-dist");
+  if(addDist) addDist.onclick = async()=>{
+    const inp = v.querySelector("#new-dist"); const name=inp.value.trim();
+    if(!name) return;
+    const districts=[...state.structure.districts, {id:uid(),name,stages:[]}];
+    await saveStructure({...state.structure,districts}); inp.value="";
+  };
+  v.querySelectorAll("[data-del-d]").forEach(b=>b.onclick=async()=>{
+    const id=b.dataset.delD;
+    const d = state.structure.districts.find(x=>x.id===id);
+    const used = state.events.some(e=>e.districtId===id);
+    if(used){ if(!confirm(`"${d.name}" has events scheduled. Delete the district anyway? (Events stay but lose their area link.)`)) return; }
+    else if(!confirm(`Delete district "${d.name}"?`)) return;
+    const districts=state.structure.districts.filter(x=>x.id!==id);
+    await saveStructure({...state.structure,districts});
+  });
+  v.querySelectorAll("[data-rename-d]").forEach(b=>b.onclick=async()=>{
+    const id=b.dataset.renameD; const d=state.structure.districts.find(x=>x.id===id);
+    const name=prompt("Rename district:",d.name); if(!name||!name.trim()) return;
+    const districts=state.structure.districts.map(x=>x.id===id?{...x,name:name.trim()}:x);
+    await saveStructure({...state.structure,districts});
+  });
+  v.querySelectorAll("[data-add-s]").forEach(b=>b.onclick=async()=>{
+    const did=b.dataset.addS; const inp=v.querySelector(`[data-stage-input="${did}"]`);
+    const name=inp.value.trim(); if(!name) return;
+    const districts=state.structure.districts.map(d=>d.id===did?{...d,stages:[...(d.stages||[]),{id:uid(),name}]}:d);
+    await saveStructure({...state.structure,districts}); inp.value="";
+  });
+  v.querySelectorAll("[data-del-s]").forEach(b=>b.onclick=async()=>{
+    const [did,sid]=b.dataset.delS.split(":");
+    const districts=state.structure.districts.map(d=>d.id===did?{...d,stages:(d.stages||[]).filter(s=>s.id!==sid)}:d);
+    await saveStructure({...state.structure,districts});
+  });
+  const addEv = v.querySelector("#add-event");
+  if(addEv) addEv.onclick = ()=>{ state.modal={type:"event",data:null}; renderModal(); };
+  v.querySelectorAll("[data-edit-ev]").forEach(b=>b.onclick=()=>{ const ev=state.events.find(e=>e.id===b.dataset.editEv); state.modal={type:"event",data:ev}; renderModal(); });
+  v.querySelectorAll("[data-del-ev]").forEach(b=>b.onclick=async()=>{
+    const ev=state.events.find(e=>e.id===b.dataset.delEv);
+    if(confirm(`Delete "${ev.title}"? This removes it from everyone's plans.`)) { await deleteEvent(ev.id); toast("Deleted"); }
+  });
+}
+
+/* ============================================================
+   EVENT MODAL (admin add / edit)
+   ============================================================ */
+function renderModal(){
+  if(!state.modal) return;
+  const existing = document.querySelector(".modal-bg");
+  if(existing) existing.remove();
+  if(state.modal.type!=="event") return;
+
+  const ev = state.modal.data || {};
+  const districts = state.structure.districts;
+  const selDist = ev.districtId || (districts[0]&&districts[0].id) || "";
+  const distObj = districts.find(d=>d.id===selDist);
+  const stages = distObj? (distObj.stages||[]) : [];
+  const selStage = ev.stageId || (stages[0]&&stages[0].id) || "";
+
+  const wrap=document.createElement("div"); wrap.className="modal-bg";
+  wrap.innerHTML=`
+    <div class="modal">
+      <div class="modal-head">
+        <h2>${ev.id?"Edit event":"Add event"}</h2>
+        <button class="btn ghost sm" id="m-close">Close</button>
+      </div>
+      <div id="m-err"></div>
+      <label class="field"><span>Title</span><input id="m-title" value="${esc(ev.title||"")}" placeholder="e.g. Sunset DJ set"></label>
+      <div class="row">
+        <label class="field"><span>District</span>
+          <select id="m-dist">${districts.map(d=>`<option value="${d.id}" ${d.id===selDist?'selected':''}>${esc(d.name)}</option>`).join("")}</select>
+        </label>
+        <label class="field"><span>Stage</span>
+          <select id="m-stage">${stages.map(s=>`<option value="${s.id}" ${s.id===selStage?'selected':''}>${esc(s.name)}</option>`).join("") || `<option value="">— add a stage first —</option>`}</select>
+        </label>
+      </div>
+      <div class="row">
+        <label class="field"><span>Day</span>
+          <select id="m-day">${DAYS.map(d=>`<option ${ev.day===d?'selected':''}>${d}</option>`).join("")}</select>
+        </label>
+        <label class="field"><span>Type</span>
+          <select id="m-type">${TYPES.map(t=>`<option value="${t}" ${ev.type===t?'selected':''}>${t[0].toUpperCase()+t.slice(1)}</option>`).join("")}</select>
+        </label>
+      </div>
+      <div class="row">
+        <label class="field"><span>Start</span><input id="m-start" type="time" value="${esc(ev.start||"")}"></label>
+        <label class="field"><span>End</span><input id="m-end" type="time" value="${esc(ev.end||"")}"></label>
+      </div>
+      <label class="field"><span>Notes <span class="tag">(optional)</span></span><textarea id="m-notes" rows="2" placeholder="anything worth remembering">${esc(ev.notes||"")}</textarea></label>
+      <button class="btn primary block" id="m-save">${ev.id?"Save changes":"Add to lineup"}</button>
+    </div>`;
+  document.body.appendChild(wrap);
+
+  const close=()=>{ state.modal=null; wrap.remove(); };
+  wrap.querySelector("#m-close").onclick=close;
+  wrap.onclick=e=>{ if(e.target===wrap) close(); };
+
+  const distSel=wrap.querySelector("#m-dist");
+  const stageSel=wrap.querySelector("#m-stage");
+  distSel.onchange=()=>{
+    const d=districts.find(x=>x.id===distSel.value); const sts=d?(d.stages||[]):[];
+    stageSel.innerHTML = sts.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("") || `<option value="">— add a stage first —</option>`;
+  };
+
+  const errBox=wrap.querySelector("#m-err");
+  wrap.querySelector("#m-save").onclick=async()=>{
+    const title=wrap.querySelector("#m-title").value.trim();
+    const did=distSel.value, sid=stageSel.value;
+    const d=districts.find(x=>x.id===did); const s=d&&(d.stages||[]).find(x=>x.id===sid);
+    const start=wrap.querySelector("#m-start").value;
+    const end=wrap.querySelector("#m-end").value;
+    const day=wrap.querySelector("#m-day").value;
+    const type=wrap.querySelector("#m-type").value;
+    const notes=wrap.querySelector("#m-notes").value;
+    const fail=m=>errBox.innerHTML=`<div class="err">${esc(m)}</div>`;
+    if(!title) return fail("Give the event a title.");
+    if(!d||!s) return fail("Pick a district and stage.");
+    if(!start) return fail("Set a start time.");
+    try{
+      await saveEvent({ id:ev.id, districtId:did, districtName:d.name, stageId:sid, stageName:s.name, day, start, end, title, type, notes });
+      close(); toast(ev.id?"Saved":"Added to lineup");
+    }catch(e){ fail("Couldn't save — try again."); }
+  };
+}
+</script>
+</body>
+</html>
