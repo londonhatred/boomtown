@@ -307,6 +307,64 @@
   .tchip.lost{border-color:var(--accent);color:var(--accent)}
   #radar .lost-ring{fill:none;stroke:#D6371C;stroke-width:3;animation:lostpulse 1.1s infinite}
   @keyframes lostpulse{0%,100%{opacity:.2}50%{opacity:.9}}
+
+  /* menu */
+  .menu-list{display:flex;flex-direction:column;gap:7px}
+  .menu-item{display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:var(--radius-sm);
+    background:var(--card);border:2px solid var(--ink);font-weight:700;font-size:14.5px;text-align:left}
+  .menu-item.on{background:var(--ink);color:var(--paper)}
+  .menu-item .mi-e{font-size:18px;line-height:1}
+
+  /* chat */
+  .chat-scroll{display:flex;flex-direction:column;gap:10px;min-height:50dvh;padding:4px 2px 10px}
+  .msg{max-width:82%;align-self:flex-start;display:flex;flex-direction:column;gap:2px}
+  .msg.mine{align-self:flex-end;align-items:flex-end}
+  .msg-who{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-left:4px}
+  .bubble{background:var(--card);border:2px solid var(--ink);border-radius:14px;padding:9px 13px;font-size:14.5px;line-height:1.35;word-break:break-word}
+  .msg.mine .bubble{background:var(--ink);color:var(--paper)}
+  .msg.mine .bubble a{color:#ffd9c9}
+  .msg-time{font-size:10px;color:var(--muted);margin:0 4px}
+  .chat-input{position:sticky;bottom:calc(96px + var(--safe-b));display:flex;gap:8px;padding:8px 0;background:var(--paper)}
+  .chat-input input{flex:1;padding:12px 14px;border-radius:var(--radius-sm);background:var(--paper);border:2px solid var(--ink);color:var(--ink);outline:none}
+  .chat-input input:focus{border-color:var(--accent)}
+
+  /* info */
+  .info-item{background:var(--card);border:2px solid var(--ink);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px}
+  .info-item h3{font-family:"Archivo";font-weight:800;font-size:16px;text-transform:none;margin-bottom:5px}
+  .info-body{font-size:14px;color:var(--ink-2);white-space:pre-wrap;line-height:1.5;word-break:break-word}
+
+  /* packing */
+  .pack-bar{height:8px;background:var(--panel);border:1.5px solid var(--ink);border-radius:999px;overflow:hidden;margin-bottom:14px}
+  .pack-fill{height:100%;background:var(--teal);transition:width .2s}
+  .pack-list{display:flex;flex-direction:column;gap:7px}
+  .pack-row{display:flex;align-items:center;gap:6px;background:var(--card);border:2px solid var(--ink);border-radius:var(--radius-sm);overflow:hidden}
+  .pack-row.on{background:var(--panel)}
+  .pack-tap{flex:1;display:flex;align-items:center;gap:11px;padding:11px 13px;text-align:left}
+  .pack-box{width:22px;height:22px;flex:none;border:2px solid var(--ink);border-radius:4px;display:grid;place-items:center;font-weight:900;font-size:14px;background:var(--paper)}
+  .pack-row.on .pack-box{background:var(--teal);color:#fff}
+  .pack-row.on .pack-label{text-decoration:line-through;color:var(--muted)}
+  .pack-label{font-size:14.5px;font-weight:600}
+  .pack-del{flex:none;padding:0 13px;align-self:stretch;color:var(--muted);font-weight:800}
+  .pack-del:hover{color:var(--accent)}
+
+  /* free-time */
+  .free-card{background:var(--card);border:2px solid var(--ink);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px}
+  .free-head{font-family:"Anton";font-size:16px;text-transform:uppercase;letter-spacing:.02em;margin-bottom:4px}
+  .free-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--line);font-size:14px}
+  .free-row .free-day{font-weight:800;font-size:11px;text-transform:uppercase;color:var(--muted);width:32px}
+  .free-row .free-len{margin-left:auto;font-size:12px;color:var(--teal);font-weight:700}
+
+  .changed-badge{font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--accent-ink);
+    background:var(--accent);border:1.5px solid var(--ink);border-radius:2px;padding:2px 7px}
+
+  @media print{
+    .nav,.topbar,.no-print,.next-card .btn,.stat-row,.filters,.pick-btn,.act,.find-actions{display:none !important}
+    body{background:#fff;color:#000}
+    .app{padding:0}
+    .ev{box-shadow:none !important;border:1px solid #999;break-inside:avoid}
+    .day-label::after{background:#000}
+    .area-tag{color:#000 !important;background:#fff !important}
+  }
 </style>
 </head>
 <body>
@@ -384,6 +442,8 @@ const colUsers     = collection(db, "users");
 const colPicks     = collection(db, "picks");
 const colLocations = collection(db, "locations");
 const colPins      = collection(db, "pins");
+const colMessages  = collection(db, "messages");
+const colPacking   = collection(db, "packing");
 
 /* ---- App state ---- */
 const state = {
@@ -392,6 +452,9 @@ const state = {
   events: [],                 // [{id,...}]
   users: [],                  // [{id,name,admin}]
   picks: [],                  // [{id,userId,eventId}]
+  messages: [],               // [{id,userId,name,text,createdAt}]
+  myPacking: { checked:[], mine:[] },
+  menuOpen: false,
   locations: [],              // [{id(userId),name,lat,lng,acc,updatedAt}]
   pins: [],                   // [{id,ownerId,ownerName,label,type,lat,lng,shared,updatedAt}]
   view: "browse",
@@ -497,7 +560,11 @@ async function saveEvent(ev){
     day:ev.day, start:ev.start, end:ev.end,
     title:ev.title.trim(), notes:(ev.notes||"").trim()
   };
-  if(ev.id) await updateDoc(doc(db,"events",ev.id), data);
+  if(ev.id){
+    const prev = state.events.find(e=>e.id===ev.id);
+    if(prev && (prev.day!==data.day || prev.start!==data.start || prev.end!==data.end)) data.changedAt = serverTimestamp();
+    await updateDoc(doc(db,"events",ev.id), data);
+  }
   else await addDoc(colEvents, {...data, createdAt:serverTimestamp()});
 }
 async function deleteEvent(id){
@@ -551,6 +618,18 @@ function subscribeAll(){
     state.pins = snap.docs.map(d=>({id:d.id,...d.data()}));
     if(state.user && state.view==="find" && !document.querySelector(".modal-bg")) renderView();
   });
+  onSnapshot(colMessages, snap=>{
+    state.messages = snap.docs.map(d=>({id:d.id,...d.data()}))
+      .sort((a,b)=>((a.createdAt&&a.createdAt.toMillis?a.createdAt.toMillis():0)-(b.createdAt&&b.createdAt.toMillis?b.createdAt.toMillis():0)));
+    if(state.user && state.view==="chat" && !document.querySelector(".modal-bg")) renderView();
+  });
+}
+function subscribeMyPacking(){
+  if(!state.user) return;
+  onSnapshot(doc(db,"packing",state.user.id), snap=>{
+    state.myPacking = snap.exists() ? { checked:snap.data().checked||[], mine:snap.data().mine||[] } : { checked:[], mine:[] };
+    if(state.view==="packing" && !document.querySelector(".modal-bg")) renderView();
+  });
 }
 
 function allReady(){ return Object.values(state.ready).every(Boolean); }
@@ -563,8 +642,10 @@ function afterData(){
     else { localStorage.removeItem("fp_uid"); renderAuth(); return; }
   }
   if(!state.user){ return; }              // auth screen handles its own render
+  if(!find.packingSubbed){ find.packingSubbed=true; subscribeMyPacking(); }
   if(!allReady()){ root.innerHTML = loaderHTML(); return; }
   renderApp();
+  maybeNotifyChanges(); scheduleNotifications();
 }
 
 /* ============================================================
@@ -633,16 +714,16 @@ function renderApp(){
         <div class="who">
           ${find.lost?`<button class="live-pill lost" id="stop-share"><span class="dot"></span>🆘 Lost</button>`:(find.share?`<button class="live-pill" id="stop-share" title="Stop sharing your location"><span class="dot"></span>Live</button>`:"")}
           <div class="avatar ${u.admin?'adm':''}" title="${esc(u.name)}">${esc(initials(u.name))}</div>
-          <button class="btn ghost sm" id="logout">Exit</button>
+          <button class="btn ghost icon" id="menu-btn" aria-label="menu"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
         </div>
       </div>
       <div id="view"></div>
     </div>
     ${navHTML()}
   `;
-  root.querySelector("#logout").onclick = logout;
   const stopShareBtn = root.querySelector("#stop-share");
   if(stopShareBtn) stopShareBtn.onclick = ()=>{ stopShare(); renderApp(); };
+  root.querySelector("#menu-btn").onclick = openMenu;
   root.querySelectorAll(".nav-inner button").forEach(b=>b.onclick=()=>{ state.view=b.dataset.v; renderApp(); });
   renderView();
   if(state.modal) renderModal();
@@ -655,12 +736,41 @@ function navHTML(){
     ["shared","Group",`<circle cx="9" cy="8" r="3"/><circle cx="17" cy="10" r="2.4"/><path d="M3.5 19c.6-3 3-4.5 5.5-4.5S14 16 14.6 19"/>`],
   ];
   if(locationEnabled()) items.push(["find","Find",`<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>`]);
-  if(state.user.admin) items.push(["admin","Manage",`<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2 2M16.4 16.4l2 2M18.4 5.6l-2 2M7.6 16.4l-2 2"/>`]);
+  if(feat("chat")) items.push(["chat","Chat",`<path d="M4 5h16v10H9l-4 4V5z"/>`]);
   return `<nav class="nav"><div class="nav-inner">${items.map(([v,l,svg])=>`
     <button data-v="${v}" class="${state.view===v?'on':''}">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${svg}</svg>
       <span>${l}</span>
     </button>`).join("")}</div></nav>`;
+}
+
+function openMenu(){
+  const items=[];
+  items.push(["browse","Browse the lineup","🎫"]);
+  items.push(["mine","My plan","🎟️"]);
+  items.push(["shared","The group","👥"]);
+  if(locationEnabled()) items.push(["find","Find your way","🧭"]);
+  if(feat("chat")) items.push(["chat","Group chat","💬"]);
+  if(feat("info")) items.push(["info","Festival info","ℹ️"]);
+  if(feat("packing")) items.push(["packing","Packing list","🎒"]);
+  if(state.user.admin) items.push(["admin","Manage festival","⚙️"]);
+  const wrap=document.createElement("div"); wrap.className="modal-bg";
+  wrap.innerHTML=`<div class="modal">
+    <div class="modal-head"><h2>Menu</h2><button class="btn ghost sm" id="mn-close">Close</button></div>
+    <div class="menu-list">
+      ${items.map(([v,l,e])=>`<button class="menu-item ${state.view===v?'on':''}" data-go="${v}"><span class="mi-e">${e}</span>${l}</button>`).join("")}
+    </div>
+    ${feat("notify")?`<div class="share-row" style="margin-top:14px"><div style="min-width:0"><b>Reminders</b><div class="find-note">${notifyState()}</div></div>
+      <button class="switch ${find.notify?'on':''}" id="mn-notify" role="switch"><span></span></button></div>`:""}
+    <button class="btn ghost block" id="mn-exit" style="margin-top:14px">Log out</button>
+  </div>`;
+  document.body.appendChild(wrap);
+  const close=()=>wrap.remove();
+  wrap.querySelector("#mn-close").onclick=close;
+  wrap.onclick=e=>{ if(e.target===wrap) close(); };
+  wrap.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{ state.view=b.dataset.go; close(); renderApp(); });
+  wrap.querySelector("#mn-exit").onclick=logout;
+  const nt=wrap.querySelector("#mn-notify"); if(nt) nt.onclick=async()=>{ await toggleNotify(); close(); openMenu(); };
 }
 
 function renderView(){
@@ -670,6 +780,9 @@ function renderView(){
   else if(state.view==="mine") v.innerHTML = viewMine();
   else if(state.view==="shared") v.innerHTML = viewShared();
   else if(state.view==="find") v.innerHTML = viewFind();
+  else if(state.view==="chat") v.innerHTML = viewChat();
+  else if(state.view==="info") v.innerHTML = viewInfo();
+  else if(state.view==="packing") v.innerHTML = viewPacking();
   else if(state.view==="admin") v.innerHTML = viewAdmin();
   wireView();
 }
@@ -679,7 +792,7 @@ function myPickIds(){ return new Set(state.picks.filter(p=>p.userId===state.user
 function sortEvents(list){
   return [...list].sort((a,b)=> dayIdx(a.day)-dayIdx(b.day) || toMin(a.start)-toMin(b.start) || (a.title||"").localeCompare(b.title||""));
 }
-function eventCard(ev, {picked, clash}={}){
+function eventCard(ev, {picked, clash, changed}={}){
   const goers = state.picks.filter(p=>p.eventId===ev.id);
   const count = goers.length;
   const c = districtColor(ev.districtId);
@@ -694,6 +807,7 @@ function eventCard(ev, {picked, clash}={}){
       <div class="meta">
         <span class="area-tag" style="--c:${c}">${esc(ev.districtName)}</span>
         <span class="loc">${esc(ev.stageName)}</span>
+        ${changed?'<span class="changed-badge">⚠ time changed</span>':''}
       </div>
       ${ev.notes?`<div class="notes">${esc(ev.notes)}</div>`:""}
       ${clash?`<div class="clash-note">⚠ Overlaps with another pick</div>`:""}
@@ -790,7 +904,8 @@ function viewMine(){
     }
   }
   return `
-    <div class="sec-head"><div><h2>My plan</h2><div class="lead">${list.length} pick${list.length>1?'s':''}${clashSet.size?` · ⚠ ${clashSet.size/2|0} clash${clashSet.size>2?'es':''}`:''}</div></div></div>
+    <div class="sec-head"><div><h2>My plan</h2><div class="lead">${list.length} pick${list.length>1?'s':''}${clashSet.size?` · ⚠ ${clashSet.size/2|0} clash${clashSet.size>2?'es':''}`:''}</div></div>
+      <button class="btn ghost sm no-print" id="print-plan" style="flex:none">Print</button></div>
     ${nextCard}
     <div class="stat-row">
       <div class="stat"><div class="n">${list.length}</div><div class="l">Picks</div></div>
@@ -799,7 +914,7 @@ function viewMine(){
     </div>
     ${DAYS.filter(d=>g[d]&&g[d].length).map(d=>`
       <div class="day-label">${d}</div>
-      ${g[d].map(e=>eventCard(e,{picked:true,clash:clashSet.has(e.id)})).join("")}
+      ${g[d].map(e=>eventCard(e,{picked:true,clash:clashSet.has(e.id),changed:eventChanged(e)})).join("")}
     `).join("")}
   `;
 }
@@ -851,6 +966,7 @@ function viewShared(){
   return `
     <div class="sec-head"><div><h2>The group</h2><div class="lead">${lead}</div></div></div>
     <div class="filters">${friendChips}</div>
+    ${friend==="all"?freeTimeCard():""}
     ${body}
   `;
 }
@@ -952,6 +1068,20 @@ function viewAdmin(){
         <div class="row" style="gap:8px"><input id="autostop-hrs" type="number" min="1" max="24" value="${esc(String(s.autoStopHours||4))}"><button class="btn primary" id="save-autostop" style="flex:none">Save</button></div></label>`:""}
     </div>`:""}
 
+    <div class="card admin-block">
+      <div style="font-family:Anton;font-size:15px;text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px">App features</div>
+      ${[["chat","Group chat","Shared message board for the crew"],
+         ["info","Festival info board","Post essentials: links, water, medical, emergency"],
+         ["packing","Packing list","Shared checklist everyone ticks off"],
+         ["overlaps","Free-time finder","Suggests gaps to meet up / eat in the Group tab"],
+         ["alerts","Set-time change alerts","Flags picks on people’s plans when a time changes"],
+         ["notify","Reminders / notifications","Lets people opt in to “starting soon” nudges"]].map(([k,t,d])=>`
+        <div class="share-row" style="border:none;padding:8px 0;margin:0;background:none;border-top:1px solid var(--line)">
+          <div style="min-width:0"><b style="font-size:13.5px">${t}</b><div class="find-note">${d}</div></div>
+          <button class="switch ${feat(k)?'on':''}" data-feat="${k}" role="switch" aria-checked="${feat(k)}"><span></span></button>
+        </div>`).join("")}
+    </div>
+
     <div class="sec-head" style="margin-top:24px"><div><h2 style="font-size:18px">Districts &amp; stages</h2></div></div>
     ${districtsHTML}
     <div class="card admin-block" style="margin-top:4px">
@@ -1046,6 +1176,31 @@ function wireView(){
     v.querySelectorAll("[data-fmode]").forEach(b=>b.onclick=()=>{ find.headingMode=b.dataset.fmode; renderView(); });
     if(find.started && find.pos) updateFindDynamic();
   }
+
+  // ---- my plan: print + mark changes seen ----
+  const printBtn=v.querySelector("#print-plan"); if(printBtn) printBtn.onclick=()=>window.print();
+  if(state.view==="mine") setTimeout(markChangesSeen, 4000);
+
+  // ---- chat ----
+  if(state.view==="chat"){
+    const sc=v.querySelector("#chat-scroll"); if(sc) sc.scrollTop=sc.scrollHeight;
+    const send=v.querySelector("#chat-send"), txt=v.querySelector("#chat-text");
+    const doSend=async()=>{ const t=txt.value; if(!t.trim())return; txt.value=""; try{ await sendMessage(t); }catch(e){ toast("Couldn’t send — check connection"); } };
+    if(send) send.onclick=doSend;
+    if(txt) txt.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); doSend(); } });
+  }
+
+  // ---- info ----
+  const infoAdd=v.querySelector("#info-add"); if(infoAdd) infoAdd.onclick=()=>{ state.modal={type:"info",data:null}; renderInfoModal(); };
+  v.querySelectorAll("[data-edit-info]").forEach(b=>b.onclick=()=>{ const it=(state.structure.infoItems||[]).find(x=>x.id===b.dataset.editInfo); state.modal={type:"info",data:it}; renderInfoModal(); });
+  v.querySelectorAll("[data-del-info]").forEach(b=>b.onclick=async()=>{ if(confirm("Delete this info?")){ await deleteInfoItem(b.dataset.delInfo); toast("Deleted"); } });
+
+  // ---- packing ----
+  v.querySelectorAll("[data-pack]").forEach(b=>b.onclick=()=>togglePack(b.dataset.pack));
+  v.querySelectorAll("[data-delmine]").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); removeMyPack(b.dataset.delmine); });
+  const packAdd=v.querySelector("#pack-add"); if(packAdd) packAdd.onclick=()=>{ const inp=v.querySelector("#pack-add-input"); addMyPack(inp.value); };
+  const packAddInp=v.querySelector("#pack-add-input"); if(packAddInp) packAddInp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ addMyPack(e.target.value); } });
+  const packShared=v.querySelector("#pack-shared"); if(packShared) packShared.onclick=()=>{ state.modal={type:"packlist"}; renderPackListModal(); };
 
   // ---- admin ----
   const saveName = v.querySelector("#save-name");
@@ -1156,6 +1311,8 @@ function renderModal(){
   if(state.modal.type==="bulk"){ renderBulkModal(); return; }
   if(state.modal.type==="pins"){ renderPinsModal(); return; }
   if(state.modal.type==="pin"){ renderPinModal(); return; }
+  if(state.modal.type==="info"){ renderInfoModal(); return; }
+  if(state.modal.type==="packlist"){ renderPackListModal(); return; }
   if(state.modal.type!=="event") return;
 
   const ev = state.modal.data || {};
@@ -1447,7 +1604,7 @@ function renderBulkModal(){
 let find = { started:false, enabledOnce:false, geoWatch:null, orientBound:false, orientHandler:null,
              pos:null, acc:null, heading:null, hasOrientation:false, headingMode:"auto", target:null, error:null,
              show:{stages:true,people:true,pins:true}, share:false, shareTimer:null, myUpdated:0, lastWrite:0,
-             lost:false, autoStopAt:0, autoStopTimer:null };
+             lost:false, autoStopAt:0, autoStopTimer:null, packingSubbed:false, notify:false, notifyTimers:[], notifiedChanges:{}, sessionStart:Date.now() };
 
 const R_EARTH = 6371000;
 const toRad = d => d*Math.PI/180, toDeg = r => r*180/Math.PI;
@@ -1461,7 +1618,7 @@ function bearing(la1,lo1,la2,lo2){
   const x=Math.cos(toRad(la1))*Math.sin(toRad(la2)) - Math.sin(toRad(la1))*Math.cos(toRad(la2))*Math.cos(toRad(lo2-lo1));
   return (toDeg(Math.atan2(y,x))+360)%360;
 }
-function fmtDist(m){ return m<1000 ? Math.round(m/5)*5+" m" : (m/1000).toFixed(m<10000?1:0)+" km"; }
+function fmtDist(m){ return m<1000 ? "~"+Math.round(m/5)*5+" m" : "~"+(m/1000).toFixed(m<10000?1:0)+" km"; }
 function cardinal(deg){ return ["N","NE","E","SE","S","SW","W","NW"][Math.round(((deg%360)/45))%8]; }
 function relDirText(rel){
   const r=((rel%360)+360)%360;
@@ -1688,10 +1845,13 @@ function startFindSensors(){
   find.started=true; find.error=null;
   if(navigator.geolocation){
     find.geoWatch=navigator.geolocation.watchPosition(
-      p=>{ find.pos={lat:p.coords.latitude,lng:p.coords.longitude}; find.acc=p.coords.accuracy; find.error=null;
+      p=>{ const a=p.coords.accuracy;
+           // skip a wildly inaccurate reading if we already have a decent recent fix
+           if(find.pos && a>120 && find.acc && find.acc<a*0.6){ return; }
+           find.pos={lat:p.coords.latitude,lng:p.coords.longitude}; find.acc=a; find.error=null;
            if(state.view==="find"){ if(!document.getElementById("radar")) renderView(); else updateFindDynamic(); } },
       e=>{ find.error = e.code===1 ? "denied" : "unavailable"; if(state.view==="find") renderView(); },
-      {enableHighAccuracy:true,maximumAge:2000,timeout:20000}
+      {enableHighAccuracy:true,maximumAge:0,timeout:20000}
     );
   } else { find.error="unsupported"; }
   bindOrientation();
@@ -1868,6 +2028,181 @@ function updateFindDynamic(){
   } else if(arrow){ arrow.style.display="none"; }
 
   const acc=document.getElementById("find-acc"); if(acc && find.acc) acc.textContent="GPS ±"+Math.round(find.acc)+" m";
+}
+
+/* ============================================================
+   EXTRAS — chat, info, packing, free-time, reminders, alerts
+   ============================================================ */
+function linkify(s){ return esc(s).replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>'); }
+function clockMs(ms){ const d=new Date(ms); return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }
+function minToHM(m){ m=((m%1440)+1440)%1440; return fmt12(String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0")); }
+
+/* ---- change alerts ---- */
+function seenChanges(){ try{ return JSON.parse(localStorage.getItem("fp_seen")||"{}"); }catch(e){ return {}; } }
+function markChangesSeen(){ const m={}; state.events.forEach(e=>{ if(e.changedAt&&e.changedAt.toMillis) m[e.id]=e.changedAt.toMillis(); }); localStorage.setItem("fp_seen", JSON.stringify(m)); }
+function eventChanged(ev){ if(!feat("alerts")||!ev.changedAt||!ev.changedAt.toMillis) return false; return ev.changedAt.toMillis() > (seenChanges()[ev.id]||0); }
+
+/* ---- reminders / notifications ---- */
+function notifyState(){
+  if(typeof Notification==="undefined") return "Not supported on this browser.";
+  if(find.notify) return "On — a nudge ~15 min before your picks"+(festivalStart()?" (while the app is open).":", once the organiser sets the festival date.");
+  return "Get a nudge ~15 min before your picks, and if a set time changes. Works while the app is open.";
+}
+async function toggleNotify(){
+  if(find.notify){ find.notify=false; find.notifyTimers.forEach(clearTimeout); find.notifyTimers=[]; toast("Reminders off"); return; }
+  if(typeof Notification==="undefined"){ toast("Notifications not supported"); return; }
+  try{ const p = Notification.permission==="granted" ? "granted" : await Notification.requestPermission(); if(p!=="granted"){ toast("Notifications blocked"); return; } }
+  catch(e){ toast("Notifications unavailable"); return; }
+  find.notify=true; scheduleNotifications(); toast("Reminders on");
+}
+function scheduleNotifications(){
+  find.notifyTimers.forEach(clearTimeout); find.notifyTimers=[];
+  if(!feat("notify")||!find.notify||!festivalStart()) return;
+  if(typeof Notification==="undefined"||Notification.permission!=="granted") return;
+  const ids=myPickIds(), now=Date.now();
+  state.events.filter(e=>ids.has(e.id)).forEach(e=>{
+    const s=eventStart(e); if(!s) return;
+    const lead=s.getTime()-15*60000;
+    if(lead>now && lead-now < 12*3600000)
+      find.notifyTimers.push(setTimeout(()=>{ try{ new Notification("Starting soon", {body:`${e.title} at ${e.stageName} in ~15 min`}); }catch(_){} }, lead-now));
+  });
+}
+function maybeNotifyChanges(){
+  if(!feat("alerts")||!feat("notify")||!find.notify) return;
+  if(typeof Notification==="undefined"||Notification.permission!=="granted") return;
+  const ids=myPickIds();
+  state.events.forEach(e=>{
+    if(!ids.has(e.id)||!e.changedAt||!e.changedAt.toMillis) return;
+    const t=e.changedAt.toMillis();
+    if(t>find.sessionStart && find.notifiedChanges[e.id]!==t){
+      find.notifiedChanges[e.id]=t;
+      try{ new Notification("Set time changed", {body:`${e.title} → ${e.day} ${fmt12(e.start)} at ${e.stageName}`}); }catch(_){}
+    }
+  });
+}
+
+/* ---- group chat ---- */
+function viewChat(){
+  const msgs=state.messages;
+  const body = msgs.length ? msgs.map(m=>{
+    const mine=m.userId===state.user.id;
+    return `<div class="msg ${mine?'mine':''}">
+      ${mine?'':`<div class="msg-who">${esc(m.name||'?')}</div>`}
+      <div class="bubble">${linkify(m.text||"")}</div>
+      <div class="msg-time">${m.createdAt&&m.createdAt.toMillis?clockMs(m.createdAt.toMillis()):''}</div>
+    </div>`;
+  }).join("") : `<div class="empty"><div class="big">💬</div><h3>No messages yet</h3><div>Say hello — works whenever the app loads, even when other apps get flaky in the crowd.</div></div>`;
+  return `<div class="sec-head"><div><h2>Group chat</h2><div class="lead">Everyone in the group can see this.</div></div></div>
+    <div class="chat-scroll" id="chat-scroll">${body}</div>
+    <div class="chat-input"><input id="chat-text" placeholder="Message the group…" autocomplete="off" maxlength="500"><button class="btn primary" id="chat-send">Send</button></div>`;
+}
+async function sendMessage(text){
+  text=(text||"").trim(); if(!text) return;
+  await addDoc(colMessages, { userId:state.user.id, name:state.user.name, text:text.slice(0,500), createdAt:serverTimestamp() });
+}
+
+/* ---- festival info ---- */
+function viewInfo(){
+  const items=state.structure.infoItems||[];
+  const isAdmin=state.user.admin;
+  const list = items.length ? items.map(it=>`<div class="info-item">
+      <h3>${esc(it.title)}</h3><div class="info-body">${linkify(it.body||"")}</div>
+      ${isAdmin?`<div class="srow-act" style="margin-top:10px"><button class="btn ghost xs" data-edit-info="${it.id}">Edit</button><button class="btn ghost xs del" data-del-info="${it.id}">✕</button></div>`:''}
+    </div>`).join("") : `<div class="empty"><div class="big">ℹ️</div><h3>No info yet</h3><div>${isAdmin?'Add the essentials below — set-time link, lost &amp; found, water points, medical, emergency number…':'Your organiser hasn’t added festival info yet.'}</div></div>`;
+  return `<div class="sec-head"><div><h2>Festival info</h2><div class="lead">The essentials in one place.</div></div></div>
+    ${list}
+    ${isAdmin?`<button class="btn primary block" id="info-add" style="margin-top:14px">＋ Add info</button>`:''}`;
+}
+async function saveInfoItem(it){
+  let items=[...(state.structure.infoItems||[])];
+  if(it.id) items=items.map(x=>x.id===it.id?{...x,title:it.title,body:it.body}:x);
+  else items.push({id:uid(),title:it.title,body:it.body});
+  await saveStructure({...state.structure, infoItems:items});
+}
+async function deleteInfoItem(id){ await saveStructure({...state.structure, infoItems:(state.structure.infoItems||[]).filter(x=>x.id!==id)}); }
+function renderInfoModal(){
+  const existing=document.querySelector(".modal-bg"); if(existing) existing.remove();
+  const it=state.modal.data||{};
+  const wrap=document.createElement("div"); wrap.className="modal-bg";
+  wrap.innerHTML=`<div class="modal">
+    <div class="modal-head"><h2>${it.id?"Edit info":"Add info"}</h2><button class="btn ghost sm" id="i-close">Close</button></div>
+    <div id="i-err"></div>
+    <label class="field"><span>Title</span><input id="i-title" value="${esc(it.title||"")}" placeholder="e.g. Medical tent"></label>
+    <label class="field"><span>Details <span class="tag">(links work)</span></span><textarea id="i-body" rows="4" placeholder="e.g. Behind the Main Stage, open 24h. Emergency: 0800 000 000">${esc(it.body||"")}</textarea></label>
+    <button class="btn primary block" id="i-save">${it.id?"Save":"Add"}</button>
+  </div>`;
+  document.body.appendChild(wrap);
+  const close=()=>{ state.modal=null; wrap.remove(); };
+  wrap.querySelector("#i-close").onclick=close; wrap.onclick=e=>{ if(e.target===wrap) close(); };
+  wrap.querySelector("#i-save").onclick=async()=>{
+    const title=wrap.querySelector("#i-title").value.trim(), body=wrap.querySelector("#i-body").value.trim();
+    if(!title) return wrap.querySelector("#i-err").innerHTML=`<div class="err">Give it a title.</div>`;
+    try{ await saveInfoItem({id:it.id,title,body}); close(); toast("Saved"); }catch(e){ wrap.querySelector("#i-err").innerHTML=`<div class="err">Couldn’t save.</div>`; }
+  };
+}
+
+/* ---- packing list ---- */
+function viewPacking(){
+  const shared=state.structure.packingItems||[];
+  const mine=state.myPacking.mine||[];
+  const checked=new Set(state.myPacking.checked||[]);
+  const all=[...shared.map(i=>({...i,shared:true})), ...mine.map(i=>({...i,shared:false}))];
+  const done=all.filter(i=>checked.has(i.id)).length;
+  const isAdmin=state.user.admin;
+  const rows = all.length ? all.map(i=>`<div class="pack-row ${checked.has(i.id)?'on':''}">
+      <button class="pack-tap" data-pack="${i.id}"><span class="pack-box">${checked.has(i.id)?'✓':''}</span><span class="pack-label">${esc(i.label)}</span></button>
+      ${!i.shared?`<button class="pack-del" data-delmine="${i.id}">✕</button>`:''}
+    </div>`).join("") : `<div class="empty"><div class="big">🎒</div><h3>Nothing on the list</h3><div>${isAdmin?'Add the shared list below — you can paste your friend’s whole list at once.':'Add your own items below, or wait for the shared list.'}</div></div>`;
+  const pct = all.length? Math.round(done/all.length*100):0;
+  return `<div class="sec-head"><div><h2>Packing list</h2><div class="lead">${all.length?`${done}/${all.length} packed`:'Tick things off as you pack.'}</div></div></div>
+    ${all.length?`<div class="pack-bar"><div class="pack-fill" style="width:${pct}%"></div></div>`:''}
+    <div class="pack-list">${rows}</div>
+    <div class="add-inline" style="padding:14px 0 0"><input id="pack-add-input" placeholder="Add your own item…"><button class="btn lime sm" id="pack-add">Add</button></div>
+    ${isAdmin?`<button class="btn ghost block" id="pack-shared" style="margin-top:12px">Edit shared list (paste your friend’s)</button>`:''}`;
+}
+async function savePacking(){ await setDoc(doc(db,"packing",state.user.id), { checked:state.myPacking.checked||[], mine:state.myPacking.mine||[] }); }
+function togglePack(id){ const c=new Set(state.myPacking.checked); c.has(id)?c.delete(id):c.add(id); state.myPacking.checked=[...c]; savePacking().catch(()=>{}); renderView(); }
+function addMyPack(label){ label=(label||"").trim(); if(!label) return; state.myPacking.mine=[...(state.myPacking.mine||[]),{id:uid(),label:label.slice(0,80)}]; savePacking().catch(()=>{}); renderView(); }
+function removeMyPack(id){ state.myPacking.mine=(state.myPacking.mine||[]).filter(x=>x.id!==id); const c=new Set(state.myPacking.checked); c.delete(id); state.myPacking.checked=[...c]; savePacking().catch(()=>{}); renderView(); }
+async function saveSharedPacking(text){
+  const prev=state.structure.packingItems||[];
+  const items=text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean).map(l=>{ const ex=prev.find(p=>p.label.toLowerCase()===l.toLowerCase()); return {id:ex?ex.id:uid(), label:l.slice(0,80)}; });
+  await saveStructure({...state.structure, packingItems:items});
+}
+function renderPackListModal(){
+  const existing=document.querySelector(".modal-bg"); if(existing) existing.remove();
+  const text=(state.structure.packingItems||[]).map(i=>i.label).join("\n");
+  const wrap=document.createElement("div"); wrap.className="modal-bg";
+  wrap.innerHTML=`<div class="modal">
+    <div class="modal-head"><h2>Shared packing list</h2><button class="btn ghost sm" id="pl-close">Close</button></div>
+    <div class="fmt">One item per line. Paste your friend’s list straight in — existing ticks are kept for items you don’t change.</div>
+    <textarea class="bulk-ta" id="pl-text" placeholder="Tent\nSleeping bag\nWellies\nSun cream\nReusable bottle">${esc(text)}</textarea>
+    <button class="btn primary block" id="pl-save" style="margin-top:12px">Save list</button>
+  </div>`;
+  document.body.appendChild(wrap);
+  const close=()=>{ state.modal=null; wrap.remove(); };
+  wrap.querySelector("#pl-close").onclick=close; wrap.onclick=e=>{ if(e.target===wrap) close(); };
+  wrap.querySelector("#pl-save").onclick=async()=>{ try{ await saveSharedPacking(wrap.querySelector("#pl-text").value); close(); toast("List saved"); }catch(e){ toast("Couldn’t save"); } };
+}
+
+/* ---- free-time finder ---- */
+function freeWindows(){
+  const out=[]; const ids=new Set(state.picks.map(p=>p.eventId));
+  DAYS.forEach(day=>{
+    const evs=state.events.filter(e=>ids.has(e.id)&&e.day===day);
+    if(evs.length<2) return;
+    const iv=evs.map(e=>{ let s=toMin(e.start), en=e.end?toMin(e.end):s+60; if(en<=s) en+=1440; return [s,en]; }).sort((a,b)=>a[0]-b[0]);
+    const merged=[]; iv.forEach(x=>{ const last=merged[merged.length-1]; if(last && x[0]<=last[1]) last[1]=Math.max(last[1],x[1]); else merged.push([...x]); });
+    for(let i=0;i<merged.length-1;i++){ const gap=merged[i+1][0]-merged[i][1]; if(gap>=45) out.push({day, start:merged[i][1], end:merged[i+1][0], mins:gap}); }
+  });
+  return out;
+}
+function freeTimeCard(){
+  if(!feat("overlaps")) return "";
+  const w=freeWindows();
+  if(!w.length) return "";
+  const top=w.slice(0,5).map(g=>`<div class="free-row"><span class="free-day">${g.day.slice(0,3)}</span><b>${minToHM(g.start)} – ${minToHM(g.end)}</b><span class="free-len">${Math.floor(g.mins/60)?Math.floor(g.mins/60)+'h ':''}${g.mins%60?g.mins%60+'m':''} free</span></div>`).join("");
+  return `<div class="free-card"><div class="free-head">🍔 Good times to meet up / eat</div><div class="find-note" style="margin-bottom:8px">Gaps where nobody in the group has anything booked.</div>${top}</div>`;
 }
 </script>
 </body>
