@@ -498,6 +498,7 @@
   .clash-advice .ca-lead{font-weight:800;color:var(--ink);text-transform:uppercase;font-size:11px;letter-spacing:.04em}
   .clash-advice .ca-miss{display:block;margin-top:4px;color:var(--muted);font-style:italic}
   .clash-advice .ca-conflict{display:block;margin-bottom:5px;color:var(--accent);font-weight:700}
+  .clash-advice .ca-opt{margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)}
   .clash-advice .ca-dur{color:var(--muted);font-size:11px;font-weight:600;white-space:nowrap}
   .must-star{color:var(--gold)}
   .fmust{font-size:10px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;color:var(--gold);border:1.5px solid var(--gold);border-radius:2px;padding:1px 6px}
@@ -1533,27 +1534,36 @@ function crewGoing(eventId){
 // routes the rest into the gaps around them. Returns {route, missed, mustConflict}.
 const MIN_WORTH=10;     // minutes — ignore slivers smaller than this
 const SOLID_CHUNK=20;   // minutes — below this counts as a "sliver" worth flagging
+// find a set of must-sees that all mutually overlap (the contested headliner pile-up)
+function clashingMustSet(items){
+  const must=myMustSee();
+  const ms=items.filter(x=>must.has(x.e.id));
+  if(ms.length<2) return [];
+  // greedily collect must-sees that overlap the others' shared window
+  const overlap=(a,b)=>a.r[0]<b.r[1]&&b.r[0]<a.r[1];
+  // build clusters of mutually-overlapping must-sees; return the largest such group of size>=2
+  let best=[];
+  for(let i=0;i<ms.length;i++){
+    const group=[ms[i]];
+    for(let j=0;j<ms.length;j++){ if(j!==i && group.every(g=>overlap(g,ms[j]))) group.push(ms[j]); }
+    if(group.length>best.length) best=group;
+  }
+  return best.length>=2?best.sort((a,b)=>a.r[1]-b.r[1]):[];
+}
 function planCluster(items){
   const must = myMustSee();
   const sorted=[...items].sort((a,b)=> a.r[0]-b.r[0] || a.r[1]-b.r[1]);
   const musts = sorted.filter(x=>must.has(x.e.id));
-  // unavoidable must-see vs must-see clash?
-  let mustConflict=null;
-  for(let i=0;i<musts.length;i++)for(let j=i+1;j<musts.length;j++){
-    const [as,ae]=musts[i].r, [bs,be]=musts[j].r;
-    if(as<be && bs<ae) mustConflict=[musts[i],musts[j]];
-  }
+  const conflictMusts = clashingMustSet(sorted);   // 2+ must-sees that mutually clash
   // protected = non-overlapping subset of must-sees (earliest-ending wins on conflict)
   const protectedSet=new Set();
-  const protectedBlocks=[]; // [start,end] reserved
+  const protectedBlocks=[];
   if(musts.length){
     [...musts].sort((a,b)=>a.r[1]-b.r[1]).forEach(m=>{
       const [s,e]=m.r;
-      const clashesProtected = protectedBlocks.some(([ps,pe])=> s<pe && ps<e);
-      if(!clashesProtected){ protectedSet.add(m.e.id); protectedBlocks.push([s,e]); }
+      if(!protectedBlocks.some(([ps,pe])=> s<pe && ps<e)){ protectedSet.add(m.e.id); protectedBlocks.push([s,e]); }
     });
   }
-  const isFree=(s,e)=> !protectedBlocks.some(([ps,pe])=> s<pe && ps<e);  // does [s,e] avoid all protected blocks?
   const route=[]; const missed=[];
   let freeAt=null, atStage=null;
   for(let i=0;i<sorted.length;i++){
@@ -1563,17 +1573,14 @@ function planCluster(items){
       route.push({item:it, seeFrom:s, seeTo:e, seeMin:e-s, partialStart:false, partialEnd:false, must:true});
       freeAt=e; atStage=it.e.stageName; continue;
     }
-    // routed act: arrive after being free + walk, but also can't use time inside a protected block
     let arrive = freeAt===null ? s : Math.max(s, freeAt + (walkMinBetween(atStage,it.e.stageName)||0));
-    // push arrival past any protected block we'd be inside
     protectedBlocks.forEach(([ps,pe])=>{ if(arrive<pe && ps<=arrive) arrive=pe; });
-    // the latest we could stay: until our own end, or until a protected block starts (must leave to be there)
     let cap=e;
-    protectedBlocks.forEach(([ps,pe])=>{ if(ps>=arrive && ps<cap) cap=ps; });   // a protected act starts → must go
+    protectedBlocks.forEach(([ps,pe])=>{ if(ps>=arrive && ps<cap) cap=ps; });
     if(cap-arrive < MIN_WORTH){ missed.push(it); continue; }
     let leaveBy=cap;
     const nxt=sorted[i+1];
-    if(nxt && cap===e){  // only trim for next if we weren't already cut off by a protected block
+    if(nxt && cap===e){
       const wm=walkMinBetween(it.e.stageName, nxt.e.stageName)||0;
       const nxtProtected=protectedSet.has(nxt.e.id);
       const beThereBy = nxtProtected ? nxt.r[0] : (nxt.r[1]-MIN_WORTH);
@@ -1584,20 +1591,67 @@ function planCluster(items){
     freeAt=leaveBy; atStage=it.e.stageName;
   }
   route.sort((a,b)=>a.seeFrom-b.seeFrom);
-  return {route, missed, mustConflict};
+  // drop a trailing sliver (last segment, non-must, under SOLID_CHUNK) → suggest skipping it
+  let skipTail=null;
+  if(route.length>=2){
+    const last=route[route.length-1];
+    if(!last.must && last.seeMin<SOLID_CHUNK){ skipTail=last.item; route.pop(); }
+  }
+  return {route, missed, conflictMusts, skipTail};
+}
+// build an even-split route across a set of mutually-clashing must-sees (earliest-ending first)
+function splitMustRoute(group){
+  // contested window = latest start → earliest end isn't right; use overall span they share.
+  const spanStart=Math.max(...group.map(g=>g.r[0]));   // when all are running
+  const spanEnd=Math.min(...group.map(g=>g.r[1]));
+  // but really you can use each act's own time; simplest fair model: divide [earliest start, latest end] evenly
+  const start=Math.min(...group.map(g=>g.r[0]));
+  const end=Math.max(...group.map(g=>g.r[1]));
+  const n=group.length;
+  const ordered=[...group].sort((a,b)=>a.r[1]-b.r[1]);   // earliest-ending first
+  const slice=(end-start)/n;
+  const segs=[]; let t=start;
+  ordered.forEach((g,i)=>{
+    let segStart=Math.max(t, g.r[0]);
+    let segEnd= i===n-1 ? Math.min(end,g.r[1]) : t+slice;
+    segEnd=Math.min(segEnd, g.r[1]);
+    if(i>0){ const wm=walkMinBetween(ordered[i-1].e.stageName,g.e.stageName)||0; segStart=Math.max(segStart,t+wm); }
+    segs.push({item:g, from:Math.round(segStart), to:Math.round(segEnd), min:Math.max(0,Math.round(segEnd-segStart))});
+    t=segEnd;
+  });
+  return segs;
 }
 function clusterAdvice(items){
-  const {route, missed, mustConflict}=planCluster(items);
-  // hard must-see vs must-see clash → say it loudly
-  let conflictNote="";
-  if(mustConflict){
-    conflictNote=`<span class="ca-conflict">★ ${esc(mustConflict[0].e.title)} &amp; ★ ${esc(mustConflict[1].e.title)} are both must-see but overlap — you can't catch both in full.</span> `;
+  const {route, missed, conflictMusts, skipTail}=planCluster(items);
+
+  // ----- multiple clashing must-sees: offer split + pick-one, warn honestly -----
+  let header="";
+  if(conflictMusts.length>=2){
+    const n=conflictMusts.length;
+    const names=conflictMusts.map(m=>`★ ${esc(m.e.title)}`).join(", ");
+    const splitSegs=splitMustRoute(conflictMusts);
+    const splitTxt=splitSegs.map((s,i)=>{
+      const wm=i>0?walkMinBetween(splitSegs[i-1].item.e.stageName,s.item.e.stageName):null;
+      return `<b>${esc(s.item.e.title)}</b> ${minToHM(s.from)}–${minToHM(s.to)} <span class="ca-dur">~${s.min} min</span>${wm?` <span class="ca-dur">(+~${wm} min walk)</span>`:''}`;
+    }).join(" → ");
+    const fraction = n===2?"halves each":n===3?"thirds":`1/${n} each`;
+    const strong = n>=3 ? `<span class="ca-conflict">⚠ ${n} must-sees at once — splitting means only ~${Math.round(splitSegs.reduce((a,s)=>a+s.min,0)/n)} min of each. Strongly consider dropping one.</span>`
+                        : `<span class="ca-conflict">⚠ ${names} all clash — you can't see each in full.</span>`;
+    header = `${strong}
+      <div class="ca-opt"><span class="ca-lead">Split (${fraction}):</span> ${splitTxt}. <span class="ca-miss">You'd see none in full — usually better to pick one.</span></div>
+      <div class="ca-opt"><span class="ca-lead">Or commit:</span> ${conflictMusts.map(m=>`<b>${esc(m.e.title)}</b>`).join(" / ")} — choose your favourite and see it properly.</div>`;
+    // when there's a hard must-see conflict, the header IS the advice
+    return header;
   }
+
+  // ----- normal single-or-no must-see routing -----
   if(route.length<=1){
     const stages=[...new Set(items.map(x=>x.e.stageName))];
     let maxWm=null;
     for(let i=0;i<stages.length;i++)for(let j=i+1;j<stages.length;j++){ const wm=walkMinBetween(stages[i],stages[j]); if(wm!=null&&(maxWm==null||wm>maxWm)) maxWm=wm; }
-    return conflictNote+`<span class="ca-lead">Pick one</span> — these run at the same time${maxWm!=null?`, stages ~${maxWm} min apart`:''}.`;
+    let line=`<span class="ca-lead">Pick one</span> — these run at the same time${maxWm!=null?`, stages ~${maxWm} min apart`:''}.`;
+    if(skipTail) line+=` <span class="ca-miss">${esc(skipTail.e.title)} barely overlaps — probably skip.</span>`;
+    return line;
   }
   const parts=route.map((r,i)=>{
     const t=esc(r.item.e.title);
@@ -1608,12 +1662,11 @@ function clusterAdvice(items){
     const verb = r.partialStart ? `catch ${star}<b>${t}</b> from ${minToHM(r.seeFrom)}` : `${star}<b>${t}</b>`;
     return `${verb}${wm!=null?` (~${wm} min walk)`:''}${r.partialEnd?` till ${minToHM(r.seeTo)}`:''} ${dur}`;
   });
-  // sliver check: any non-must segment under SOLID_CHUNK
-  const slivers=route.filter(r=>!r.must && r.seeMin<SOLID_CHUNK);
-  let line=`${conflictNote}<span class="ca-lead">One option:</span> ${parts.join(" → ")}.`;
+  let line=`<span class="ca-lead">One option:</span> ${parts.join(" → ")}.`;
   if(missed.length) line += ` <span class="ca-miss">Can't also fit ${missed.map(m=>esc(m.e.title)).join(", ")}.</span>`;
+  if(skipTail) line += ` <span class="ca-miss">${esc(skipTail.e.title)}'s only a few min by then — probably skip.</span>`;
+  const slivers=route.filter(r=>!r.must && r.seeMin<SOLID_CHUNK);
   if(slivers.length>=Math.max(1,route.length-1) && route.length>=2 && !route.some(r=>r.must)){
-    // most of the route is slivers and nothing is locked → suggest committing
     line += ` <span class="ca-miss">That's a lot of dashing for short bits — you might enjoy committing to one or two instead.</span>`;
   }
   return line;
