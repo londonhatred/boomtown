@@ -1501,8 +1501,16 @@ async function refreshWeather(){
 // group a day's picks into clusters of mutually-overlapping events
 function clashClusters(day){
   const ids=myPickIds();
-  const list=sortEvents(state.events.filter(e=>ids.has(e.id)&&e.day===day))
+  let list=sortEvents(state.events.filter(e=>ids.has(e.id)&&e.day===day))
     .map(e=>({e, r:timeRangeMin(e)}));
+  // work shifts are immovable blocks — fold them in so overlapping picks register as clashes
+  if(feat("shifts")){
+    (state.shifts||[]).filter(sh=>sh.day===day).forEach(sh=>{
+      const ev={id:"sh:"+sh.id, title:sh.label||"Work shift", stageName:"", districtId:null, day, start:sh.start, end:sh.end||addHour(sh.start), _shift:true};
+      list.push({e:ev, r:timeRangeMin(ev), isShift:true});
+    });
+    list.sort((a,b)=> a.r[0]-b.r[0] || a.r[1]-b.r[1]);
+  }
   const clusters=[];
   let cur=null, curEnd=-1;
   list.forEach(item=>{
@@ -1515,7 +1523,8 @@ function clashClusters(day){
     }
   });
   if(cur && cur.length>1) clusters.push(cur);
-  return clusters;   // only clusters with a genuine clash (2+)
+  // only keep clusters that contain at least one real pick (not shift-only)
+  return clusters.filter(c=>c.some(x=>!x.isShift));
 }
 function walkMinBetween(aName,bName){
   const sa=stagesWithCoords().find(s=>s.name===aName), sb=stagesWithCoords().find(s=>s.name===bName);
@@ -1554,11 +1563,13 @@ function clashingMustSet(items){
 function planCluster(items){
   const must = myMustSee();
   const sorted=[...items].sort((a,b)=> a.r[0]-b.r[0] || a.r[1]-b.r[1]);
-  const musts = sorted.filter(x=>must.has(x.e.id));
-  const conflictMusts = clashingMustSet(sorted);   // 2+ must-sees that mutually clash
-  // protected = non-overlapping subset of must-sees (earliest-ending wins on conflict)
+  const musts = sorted.filter(x=>must.has(x.e.id) && !x.isShift);
+  const conflictMusts = clashingMustSet(sorted.filter(x=>!x.isShift));   // 2+ must-sees that mutually clash
+  // protected = work shifts (always) + non-overlapping subset of must-sees (earliest-ending wins)
   const protectedSet=new Set();
   const protectedBlocks=[];
+  // shifts are hard, immovable blocks — reserve first
+  sorted.filter(x=>x.isShift).forEach(sh=>{ protectedBlocks.push([sh.r[0], sh.r[1]]); protectedSet.add(sh.e.id); });
   if(musts.length){
     [...musts].sort((a,b)=>a.r[1]-b.r[1]).forEach(m=>{
       const [s,e]=m.r;
@@ -1571,7 +1582,7 @@ function planCluster(items){
     const it=sorted[i]; const [s,e]=it.r;
     const isProtected=protectedSet.has(it.e.id);
     if(isProtected){
-      route.push({item:it, seeFrom:s, seeTo:e, seeMin:e-s, partialStart:false, partialEnd:false, must:true});
+      route.push({item:it, seeFrom:s, seeTo:e, seeMin:e-s, partialStart:false, partialEnd:false, must:!it.isShift, shift:!!it.isShift});
       freeAt=e; atStage=it.e.stageName; continue;
     }
     let arrive = freeAt===null ? s : Math.max(s, freeAt + (walkMinBetween(atStage,it.e.stageName)||0));
@@ -1671,7 +1682,10 @@ function clusterAdvice(items){
   }
   const parts=route.map((r,i)=>{
     const t=esc(r.item.e.title);
-    const star=r.must?'★ ':'';
+    const star=r.shift?'🔒 ':(r.must?'★ ':'');
+    if(r.shift){ // shift is a fixed block — phrase as "working"
+      return `${star}<b>${t}</b> ${minToHM(r.seeFrom)}–${minToHM(r.seeTo)} <span class="ca-dur">working</span>`;
+    }
     const sliver = !r.must && r.seeMin<SOLID_CHUNK;
     const dur=`<span class="ca-dur">~${r.seeMin} min${sliver?' · could skip':''}</span>`;
     if(i===0) return `${star}<b>${t}</b> till ${minToHM(r.seeTo)} ${dur}`;
@@ -1680,7 +1694,8 @@ function clusterAdvice(items){
     return `${verb}${wm!=null?` (~${wm} min walk)`:''}${r.partialEnd?` till ${minToHM(r.seeTo)}`:''} ${dur}`;
   });
   let line=`<span class="ca-lead">One option:</span> ${parts.join(" → ")}.`;
-  if(missed.length) line += ` <span class="ca-miss">Can't also fit ${missed.map(m=>esc(m.e.title)).join(", ")}.</span>`;
+  const hasShift=route.some(r=>r.shift);
+  if(missed.length) line += ` <span class="ca-miss">${hasShift?"You're working then — you'll miss":"Can't also fit"} ${missed.map(m=>esc(m.e.title)).join(", ")}.</span>`;
   if(skipTail) line += ` <span class="ca-miss">${esc(skipTail.e.title)}'s only a few min by then — probably skip.</span>`;
   const slivers=route.filter(r=>!r.must && r.seeMin<SOLID_CHUNK);
   if(slivers.length>=Math.max(1,route.length-1) && route.length>=2 && !route.some(r=>r.must)){
@@ -1697,6 +1712,9 @@ function clashCard(){
   const rows=clusters.slice(0,6).map(c=>{
     const start=c.items.map(x=>x.r[0]).reduce((a,b)=>Math.min(a,b));
     const acts=c.items.map(x=>{
+      if(x.isShift){
+        return `<div class="ci-act"><span class="ci-title">🔒 ${esc(x.e.title)}</span><span class="ci-stage">${esc(fmt12(x.e.start))}${x.e.end?'–'+esc(fmt12(x.e.end)):''} · working</span></div>`;
+      }
       const n=crewGoing(x.e.id);
       const crewWord=(state.crew&&state.crew.length)?"crew":"going";
       return `<div class="ci-act"><span class="ci-title">${esc(x.e.title)}</span><span class="ci-stage">${esc(fmt12(x.e.start))}${x.e.end?'–'+esc(fmt12(x.e.end)):''}${n?` · ${n} ${crewWord}`:''}</span></div>`;
