@@ -499,6 +499,7 @@
   .clash-advice .ca-miss{display:block;margin-top:4px;color:var(--muted);font-style:italic}
   .clash-advice .ca-conflict{display:block;margin-bottom:5px;color:var(--accent);font-weight:700}
   .clash-advice .ca-opt{margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)}
+  .clash-advice .ca-extra{color:var(--teal);font-weight:600}
   .clash-advice .ca-dur{color:var(--muted);font-size:11px;font-weight:600;white-space:nowrap}
   .must-star{color:var(--gold)}
   .fmust{font-size:10px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;color:var(--gold);border:1.5px solid var(--gold);border-radius:2px;padding:1px 6px}
@@ -1637,10 +1638,25 @@ function clusterAdvice(items){
     const fraction = n===2?"halves each":n===3?"thirds":`1/${n} each`;
     const strong = n>=3 ? `<span class="ca-conflict">⚠ ${n} must-sees at once — splitting means only ~${Math.round(splitSegs.reduce((a,s)=>a+s.min,0)/n)} min of each. Strongly consider dropping one.</span>`
                         : `<span class="ca-conflict">⚠ ${names} all clash — you can't see each in full.</span>`;
+    // route any NON-must acts into time left after the split ends
+    const splitEnd = Math.max(...splitSegs.map(s=>s.to));
+    const lastStage = splitSegs[splitSegs.length-1].item.e.stageName;
+    const conflictIds = new Set(conflictMusts.map(m=>m.e.id));
+    const leftovers=[];
+    let freeAt=splitEnd, atStage=lastStage;
+    [...items].filter(x=>!conflictIds.has(x.e.id)).sort((a,b)=>a.r[1]-b.r[1]).forEach(x=>{
+      const [s,e]=x.r;
+      const arrive=Math.max(s, freeAt + (walkMinBetween(atStage,x.e.stageName)||0));
+      const seeMin=e-arrive;
+      if(seeMin>=MIN_WORTH){ leftovers.push({item:x, from:arrive, to:e, min:seeMin}); freeAt=e; atStage=x.e.stageName; }
+    });
+    let leftoverTxt="";
+    if(leftovers.length){
+      leftoverTxt=` <span class="ca-extra">Then still catch ${leftovers.map(l=>`<b>${esc(l.item.e.title)}</b> from ${minToHM(l.from)} (~${l.min} min)`).join(", ")}.</span>`;
+    }
     header = `${strong}
-      <div class="ca-opt"><span class="ca-lead">Split (${fraction}):</span> ${splitTxt}. <span class="ca-miss">You'd see none in full — usually better to pick one.</span></div>
+      <div class="ca-opt"><span class="ca-lead">Split (${fraction}):</span> ${splitTxt}.${leftoverTxt} <span class="ca-miss">You'd see none of the must-sees in full — usually better to pick one.</span></div>
       <div class="ca-opt"><span class="ca-lead">Or commit:</span> ${conflictMusts.map(m=>`<b>${esc(m.e.title)}</b>`).join(" / ")} — choose your favourite and see it properly.</div>`;
-    // when there's a hard must-see conflict, the header IS the advice
     return header;
   }
 
@@ -1656,7 +1672,8 @@ function clusterAdvice(items){
   const parts=route.map((r,i)=>{
     const t=esc(r.item.e.title);
     const star=r.must?'★ ':'';
-    const dur=`<span class="ca-dur">~${r.seeMin} min</span>`;
+    const sliver = !r.must && r.seeMin<SOLID_CHUNK;
+    const dur=`<span class="ca-dur">~${r.seeMin} min${sliver?' · could skip':''}</span>`;
     if(i===0) return `${star}<b>${t}</b> till ${minToHM(r.seeTo)} ${dur}`;
     const wm=walkMinBetween(route[i-1].item.e.stageName, r.item.e.stageName);
     const verb = r.partialStart ? `catch ${star}<b>${t}</b> from ${minToHM(r.seeFrom)}` : `${star}<b>${t}</b>`;
