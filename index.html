@@ -265,6 +265,7 @@
   .mode-toggle button{padding:7px 12px;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);background:var(--card)}
   .mode-toggle button.on{background:var(--ink);color:var(--paper)}
   .target-chips{display:flex;gap:7px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px}
+  .find-prompt{background:var(--panel);border:2px dashed var(--line);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px;font-size:13.5px;font-weight:600;color:var(--ink-2);text-align:center;line-height:1.4}
   .target-chips::-webkit-scrollbar{display:none}
   .tchip{flex:none;display:flex;align-items:center;gap:7px;padding:7px 12px;border-radius:2px;font-size:12px;font-weight:700;
     background:transparent;border:1.5px solid var(--ink);color:var(--ink-2);white-space:nowrap}
@@ -3327,7 +3328,9 @@ function viewFind(){
       : `<div class="card find-enable"><div class="big">🙈</div><h3>Everything's hidden</h3><p>Turn a category back on in the legend above to see it on the map.</p></div>`;
     return head + shareRow + lostBanner + legend + empty;
   }
-  if(!find.target || !targets.find(t=>t.id===find.target)) find.target = targets[0].id;
+  // No auto-default: the readout only appears once the user picks a target.
+  if(find.target && !targets.find(t=>t.id===find.target)) find.target = null;
+  const hasTarget = !!find.target;
 
   const compassAvail = find.hasOrientation;
   const headingUp = find.headingMode!=="north" && compassAvail;
@@ -3349,15 +3352,20 @@ function viewFind(){
     return `<g class="rdot ${t.id===find.target?'sel':''}" id="dot-${t.id}" data-target="${t.id}" transform="translate(140,140)">${inner}</g>`;
   }).join("");
 
-  const tgt = targets.find(t=>t.id===find.target);
-  const mapsLink = `https://www.google.com/maps/dir/?api=1&destination=${tgt.lat},${tgt.lng}`;
-  const mapsLabel = tgt.kind==="person" ? `Open ${esc(tgt.name)}'s spot in Maps ↗` : `Open “${esc(tgt.name)}” in Maps ↗`;
+  const tgt = hasTarget ? targets.find(t=>t.id===find.target) : null;
+  const mapsLink = tgt ? `https://www.google.com/maps/dir/?api=1&destination=${tgt.lat},${tgt.lng}` : "#";
+  const mapsLabel = tgt ? (tgt.kind==="person" ? `Open ${esc(tgt.name)}'s spot in Maps ↗` : `Open “${esc(tgt.name)}” in Maps ↗`) : "";
 
-  return head + shareRow + lostBanner + legend + `
+  // readout: a selected-target bar, OR a prompt + walk-times list when nothing's chosen
+  const topBlock = tgt ? `
     <div class="readout" id="find-readout">
       <div style="min-width:0"><div class="r-name">${esc(tgt.name)}</div><div class="r-dir">—</div></div>
       <div class="r-dist">…<small>away</small></div>
-    </div>
+    </div>` : `
+    <div class="find-prompt">👇 Tap a stage, person or pin to get a compass &amp; distance to it.</div>
+    ${walkTimesCard(null, "Walk times from here")}`;
+
+  return head + shareRow + lostBanner + legend + topBlock + `
     <div class="find-bar">
       <span class="find-acc" id="find-acc">${find.acc?('GPS ±'+Math.round(find.acc)+' m'):'locating…'}</span>
       ${modeToggle}
@@ -3378,10 +3386,9 @@ function viewFind(){
       </svg>
     </div>
     <div class="target-chips">${tchips}</div>
-    <a class="btn ghost block" href="${mapsLink}" target="_blank" rel="noopener">${mapsLabel}</a>
-    ${tgt.kind==="rally"?`<div class="row" style="gap:8px;margin-top:10px"><button class="btn ghost sm" id="rally-move" style="flex:1">Move meet-up here</button><button class="btn danger sm" id="rally-clear" style="flex:1">Clear meet-up</button></div>`:""}
-    <div style="margin-top:14px">${walkTimesCard(null, "Walk times from here")}</div>
-    <p class="find-note" style="margin-top:12px">Hold the phone flat for the compass. If the arrow drifts, wave it in a figure-8, or switch to North-up. People &amp; pins update roughly every 1½ minutes.</p>
+    ${tgt ? `<a class="btn ghost block" href="${mapsLink}" target="_blank" rel="noopener">${mapsLabel}</a>` : ""}
+    ${tgt && tgt.kind==="rally"?`<div class="row" style="gap:8px;margin-top:10px"><button class="btn ghost sm" id="rally-move" style="flex:1">Move meet-up here</button><button class="btn danger sm" id="rally-clear" style="flex:1">Clear meet-up</button></div>`:""}
+    ${tgt ? `<p class="find-note" style="margin-top:12px">Hold the phone flat for the compass. If the arrow drifts, wave it in a figure-8, or switch to North-up. People &amp; pins update roughly every 1½ minutes.</p>` : ""}
   `;
 }
 
