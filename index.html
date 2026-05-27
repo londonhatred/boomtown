@@ -133,6 +133,29 @@
   .clash-warn .cw-sub{font-size:12px;opacity:.92}
   .clash-warn .cw-arrow{flex:none;font-size:22px;line-height:1;opacity:.85;margin-left:2px}
   .clash-warn:active{transform:translateY(1px)}
+  .panic-banner{background:var(--accent);color:#fff;border:2px solid var(--ink);border-radius:var(--radius);padding:14px 16px;margin-bottom:14px;box-shadow:var(--hard-sm)}
+  .panic-banner .panic-hd{display:flex;align-items:center;gap:9px;font-size:16px}
+  .panic-banner .panic-ico{font-size:22px;line-height:1}
+  .panic-banner .panic-sub{font-size:12.5px;opacity:.92;margin-top:4px;line-height:1.4}
+  .panic-banner .btn.ghost{background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.4)}
+  .safe-card{border:2px solid var(--teal)!important;background:var(--card)}
+  .safe-card.done{border-style:dashed!important}
+  .weather-nudge{border-left:4px solid var(--gold)!important;background:var(--card)}
+  .surv-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-2);margin-top:14px;text-align:left}
+  .surv-row{display:flex;flex-wrap:wrap;gap:7px;margin-top:7px;justify-content:center}
+  .surv-chip{border:2px solid var(--ink);background:var(--paper);font:inherit;font-size:12.5px;font-weight:700;padding:5px 12px;border-radius:999px;cursor:pointer;text-transform:capitalize}
+  .surv-chip.on{background:var(--teal);color:#fff;border-color:var(--teal)}
+  .diary-day{background:var(--card);border:2px solid var(--ink);border-radius:var(--radius);padding:14px 16px;margin-bottom:14px}
+  .diary-day h3{font-family:"Anton";font-size:22px;text-transform:uppercase;letter-spacing:.02em;margin:0 0 6px}
+  .diary-sum{display:flex;flex-wrap:wrap;gap:10px 16px;font-size:12px;color:var(--ink-2);padding-bottom:10px;margin-bottom:8px;border-bottom:1px solid var(--line)}
+  .diary-sum b{font-family:"Anton";color:var(--ink);font-size:14px}
+  .diary-lines{display:flex;flex-direction:column;gap:6px}
+  .diary-line{display:grid;grid-template-columns:54px 22px 1fr;gap:8px;align-items:start;font-size:13.5px;line-height:1.45;padding:3px 0}
+  .diary-line .dl-t{font-family:"Anton";color:var(--ink-2);font-size:12px;padding-top:1px;letter-spacing:.02em}
+  .diary-line .dl-i{font-size:14px;line-height:1.3}
+  .diary-line .dl-txt{min-width:0}
+  .diary-line.top .dl-txt{font-weight:700}
+  .diary-line.top .dl-t{color:var(--accent)}
   .tri-toggle{display:flex;flex:none;border:2px solid var(--ink);border-radius:999px;overflow:hidden;background:var(--paper)}
   .tri-toggle .tri-opt{appearance:none;border:none;background:transparent;font:inherit;font-size:11px;font-weight:700;padding:5px 10px;cursor:pointer;color:var(--ink-2);border-right:2px solid var(--ink);text-transform:uppercase;letter-spacing:.04em}
   .tri-toggle .tri-opt:last-child{border-right:none}
@@ -725,12 +748,38 @@ try {
 const TEST_MODE = localStorage.getItem("fp_testmode")==="1";
 // Battery saver: throttles GPS frequency, pauses live location sharing, slows live updates.
 let BATTERY_SAVER = localStorage.getItem("fp_battsaver")==="1";
+// Panic mode: lower-tier emergency state when battery is critically low. Auto-enables saver, strips Home to essentials.
+let BATTERY_PANIC = false;        // session-only; auto-managed by monitor, dismissable
+let _batteryMonitorStarted=false;
 function setBatterySaver(on){
   BATTERY_SAVER = on;
   if(on) localStorage.setItem("fp_battsaver","1"); else localStorage.removeItem("fp_battsaver");
   if(on && find.share) stopShare(true);          // pause live sharing to save power
   else if(find.started){ stopFindSensors(); if(state.view==="find") startFindSensors(); }  // restart GPS at new cadence
   renderApp();
+}
+function setBatteryPanic(on, opts){
+  const wasPanic=BATTERY_PANIC;
+  BATTERY_PANIC = !!on;
+  if(BATTERY_PANIC && !BATTERY_SAVER) setBatterySaver(true);  // panic implies saver
+  if(BATTERY_PANIC && !wasPanic && opts && opts.toast!==false) toast("⚠ Low battery — panic mode on");
+  if(!BATTERY_PANIC && wasPanic) toast("Battery panic off");
+  renderApp();
+}
+// Monitor battery (where the browser exposes it). Auto-trigger at <=15%, auto-clear at >=25% (hysteresis stops bouncing).
+function startBatteryMonitor(){
+  if(_batteryMonitorStarted || !navigator.getBattery) return;
+  _batteryMonitorStarted=true;
+  navigator.getBattery().then(b=>{
+    const check=()=>{
+      const pct = Math.round((b.level||0)*100);
+      if(!BATTERY_PANIC && !b.charging && pct<=15)      setBatteryPanic(true);
+      else if(BATTERY_PANIC && (b.charging || pct>=25)) setBatteryPanic(false);
+    };
+    check();
+    b.addEventListener("levelchange", check);
+    b.addEventListener("chargingchange", check);
+  }).catch(()=>{});
 }
 const PFX = TEST_MODE ? "test_" : "";
 function setTestMode(on){
@@ -753,6 +802,7 @@ const colPacking   = pcol("packing");
 const colShifts    = pcol("shifts");
 const colLegs      = pcol("legs");   // crowdsourced walk-time samples between stage pairs
 const colRatings   = pcol("ratings"); // set ratings: doc id `userId__eventId`, {userId,eventId,score 0-10,createdAt}
+const colSafety    = pcol("safety");  // I'm-safe check-ins: doc id `userId__day`, {userId,day,checkedAt}
 
 /* ---- App state ---- */
 const state = {
@@ -766,6 +816,7 @@ const state = {
   shifts: [],                 // private, owner-only: [{id,ownerId,label,day,start,end,note}]
   legs: [],                   // walk-time samples: [{id,pair,sec,dist,seed}]
   ratings: [],                // set ratings: [{id,userId,eventId,score}]
+  safety: [],                 // I'm-safe check-ins: [{id,userId,day,checkedAt}]
   menuOpen: false,
   locations: [],              // [{id(userId),name,lat,lng,acc,updatedAt}]
   pins: [],                   // [{id,ownerId,ownerName,label,type,lat,lng,shared,updatedAt}]
@@ -828,6 +879,10 @@ const ADMIN_FEATURES = [
   ["energy",   "Energy tracking",         "Notices your peak/taper patterns; gentle nudges when you're running long"],
   ["stagepers","Stage personality",       "Aggregates crew ratings per stage so you can see where the gold is"],
   ["heatmap",  "Where you spent time",    "A heatmap built from your trail showing where you actually clustered"],
+  ["sleep",    "Sleep tracking",          "Infers sleep windows from gaps in your trail and ratings — no accelerometer needed"],
+  ["weatherx", "Weather-aware nudges",    "Rain / cold / UV warnings tailored to what's happening soon"],
+  ["surveys",  "Set surveys",             "After rating, tap quick tags (vibe, sound, crowd) for a richer recap"],
+  ["diary",    "Festival diary",          "A timeline of your weekend written from your real data — no fluff, just truth"],
 ];
 function festivalStart(){ const s=state.structure.festivalStartDate; return s ? new Date(s+"T00:00:00") : null; }
 function dateForDay(day){ const base=festivalStart(); if(!base) return null; const d=new Date(base); d.setDate(d.getDate()+Math.max(0,DAYS.indexOf(day))); return d; }
@@ -898,8 +953,8 @@ async function saveProfile(newName, color){
 }
 // ---- set ratings ----
 function myRating(eventId){ const r=state.ratings.find(x=>x.id===state.user.id+"__"+eventId); return r?r.score:null; }
-async function saveRating(eventId, score){
-  await setDoc(dref("ratings", state.user.id+"__"+eventId), { userId:state.user.id, eventId, score, createdAt:serverTimestamp() }, {merge:true});
+async function saveRating(eventId, score, tags){
+  await setDoc(dref("ratings", state.user.id+"__"+eventId), { userId:state.user.id, eventId, score, tags:Array.isArray(tags)?tags:[], createdAt:serverTimestamp() }, {merge:true});
 }
 async function clearRating(eventId){ try{ await deleteDoc(dref("ratings", state.user.id+"__"+eventId)); }catch(e){} }
 function eventRatingAgg(eventId){
@@ -908,6 +963,53 @@ function eventRatingAgg(eventId){
   return { avg: rs.reduce((a,b)=>a+b.score,0)/rs.length, count: rs.length };
 }
 // top-rated events across the crew (min 1 rating), for the faves board
+// ---- Sleep tracking by absence ----
+// Honest method: find long quiet periods in the private trail (no significant movement, no ratings).
+// Returns per-day { bed:Date, up:Date, hours:number } where detected.
+function sleepNights(){
+  if(!adminFeat("sleep")) return [];
+  const trail=loadTrail(); if(trail.length<3) return [];
+  const minQuiet=4*3600000;    // need at least 4h gap to call it sleep (festival reality)
+  const tentRadius=50;         // metres — being within this counts as "still here"
+  const nights=[];
+  // Walk through trail finding gaps where successive points are close + far apart in time
+  let gapStart=null, gapLastPt=null;
+  for(let i=1;i<trail.length;i++){
+    const prev=trail[i-1], p=trail[i];
+    const dt=p.t-prev.t;
+    const dist=haversine(prev.lat,prev.lng,p.lat,p.lng);
+    // A "still" interval: small movement OR a very long gap (phone went idle)
+    if(dist<=tentRadius || dt>30*60000){
+      if(!gapStart){ gapStart=prev; gapLastPt=p; }
+      else gapLastPt=p;
+    } else {
+      if(gapStart && (gapLastPt.t-gapStart.t)>=minQuiet){
+        nights.push({ bed:new Date(gapStart.t), up:new Date(gapLastPt.t), hours:(gapLastPt.t-gapStart.t)/3600000 });
+      }
+      gapStart=null; gapLastPt=null;
+    }
+  }
+  // If a gap is still open at the end of trail, it might be ongoing — only report if it's already long enough
+  if(gapStart && gapLastPt && (gapLastPt.t-gapStart.t)>=minQuiet){
+    nights.push({ bed:new Date(gapStart.t), up:new Date(gapLastPt.t), hours:(gapLastPt.t-gapStart.t)/3600000 });
+  }
+  return nights;
+}
+function sleepCard(){
+  if(!adminFeat("sleep")) return "";
+  const nights=sleepNights();
+  if(!nights.length) return "";
+  const fmt=d=>{ let h=d.getHours(); const ap=h>=12?'pm':'am'; h=h%12||12; const m=d.getMinutes(); return `${h}${m?':'+String(m).padStart(2,"0"):""}${ap}`; };
+  const dayName=d=>DAYS[(d.getDay()+4)%7]||"";   // best effort; actual day-name needed but ok
+  const rows=nights.slice(-5).map(n=>{
+    return `<div class="rh-stat"><span>${dayName(n.bed)} night</span><b>${fmt(n.bed)} → ${fmt(n.up)}</b><span style="color:var(--ink-2);font-size:11px;margin-left:6px">~${n.hours.toFixed(1)}h</span></div>`;
+  }).join("");
+  return `<div class="rhythm-card">
+    <div class="hc-title" style="display:flex;justify-content:space-between;align-items:baseline"><span>Sleep</span><span class="find-note" style="font-weight:400">by absence</span></div>
+    ${rows}
+    <div class="find-note" style="margin-top:8px">Inferred from when your trail and ratings went quiet for 4+ hours. Best with location on, no judgement implied.</div>
+  </div>`;
+}
 function topRatedEvents(limit){
   const byEvent={};
   state.ratings.forEach(r=>{ (byEvent[r.eventId]=byEvent[r.eventId]||[]).push(r.score); });
@@ -916,6 +1018,53 @@ function topRatedEvents(limit){
     return ev ? { ev, avg:scores.reduce((a,b)=>a+b,0)/scores.length, count:scores.length } : null;
   }).filter(Boolean).sort((a,b)=> b.avg-a.avg || b.count-a.count);
   return limit?rows.slice(0,limit):rows;
+}
+// ---- I'm safe check-in ----
+function safetyDayKey(){ return currentFestivalDay() || ""; }
+function mySafetyToday(){
+  const day=safetyDayKey(); if(!day || !state.user) return null;
+  return state.safety.find(s=>s.userId===state.user.id && s.day===day) || null;
+}
+async function checkInSafe(){
+  const day=safetyDayKey(); if(!day) return;
+  await setDoc(dref("safety", state.user.id+"__"+day), { userId:state.user.id, day, checkedAt:serverTimestamp() }, {merge:true});
+  toast("💛 Safe & sound");
+}
+async function uncheckInSafe(){
+  const day=safetyDayKey(); if(!day) return;
+  await deleteDoc(dref("safety", state.user.id+"__"+day)).catch(()=>{});
+}
+function safeCheckInCard(){
+  // Show only late at night so it doesn't nag mid-day. After 22:00 OR if it's 00:00–05:59 (still "tonight" in festival logic).
+  const now=new Date(); const h=now.getHours();
+  if(h<22 && h>=DAY_ROLLOVER_HOUR) return "";
+  if(!safetyDayKey()) return "";
+  const mine=mySafetyToday();
+  if(mine){
+    return `<div class="home-card safe-card done">
+      <div class="hc-title">💛 Checked in safe</div>
+      <div class="find-note" style="margin-top:2px">The crew knows you're home for the night. Sleep well.</div>
+    </div>`;
+  }
+  return `<button class="home-card safe-card tappable" id="home-safein">
+    <div class="hc-title">💛 I'm safe</div>
+    <div class="find-note" style="margin-top:2px">One tap to let the crew know you're back at your tent.</div>
+  </button>`;
+}
+function safetyCrewCard(){
+  const day=safetyDayKey(); if(!day) return "";
+  const checked=state.safety.filter(s=>s.day===day);
+  if(!checked.length) return "";
+  const rows=checked.map(s=>{
+    const u=state.users.find(u=>u.id===s.userId);
+    const name=u?u.name:(s.userId.slice(0,4));
+    const time = s.checkedAt && s.checkedAt.toMillis ? new Date(s.checkedAt.toMillis()) : null;
+    const tlbl = time ? (()=>{ let h=time.getHours(); const ap=h>=12?'pm':'am'; h=h%12||12; return `${h}${time.getMinutes()?":"+String(time.getMinutes()).padStart(2,"0"):""}${ap}`; })() : "";
+    return `<div class="wt-row"><span class="av" style="background:${personColor(s.userId)}">${esc(initials(name))}</span><span class="wt-name">${esc(name)}</span><span class="wt-time">${tlbl}</span></div>`;
+  }).join("");
+  return `<div class="free-card"><div class="free-head">💛 Safe & sound tonight</div>
+    <div class="find-note" style="margin-bottom:6px">${checked.length} of ${state.users.length} checked in.</div>
+    ${rows}</div>`;
 }
 async function login(name, passcode){
   name = name.trim();
@@ -1035,6 +1184,7 @@ function setupOfflineBanner(){
   sync();
 }
 setupOfflineBanner();
+startBatteryMonitor();
 
 /* ---- time awareness: keep time-sensitive views current as minutes pass ---- */
 // Views whose content depends on the current time (on-now, countdowns, leave-now, today's remaining).
@@ -1160,6 +1310,10 @@ function subscribeAll(){
   onSnapshot(colRatings, snap=>{
     state.ratings = snap.docs.map(d=>({id:d.id,...d.data()}));
     if(state.view==="shared" && !document.querySelector(".modal-bg")) renderView();
+  });
+  onSnapshot(colSafety, snap=>{
+    state.safety = snap.docs.map(d=>({id:d.id,...d.data()}));
+    if((state.view==="home"||state.view==="shared") && !document.querySelector(".modal-bg")) renderView();
   });
 }
 function activeCalls(){
@@ -1431,6 +1585,7 @@ function openMenu(){
   items.push(["profile","Your profile",""]);
   if(locationEnabled()) items.push(["trail","Where were you?",""]);
   if(festivalStart() && festivalPhase()!=="before") items.push(["recap","Festival recap",""]);
+  if(festivalStart() && festivalPhase()!=="before" && adminFeat("diary")) items.push(["diary","Festival diary",""]);
   if(feat("info")) items.push(["info","Festival info","ℹ️"]);
   if(feat("packing")) items.push(["packing","Packing list",""]);
   if(state.user.admin) items.push(["admin","Manage festival",""]);
@@ -1444,6 +1599,8 @@ function openMenu(){
       <button class="switch ${find.notify?'on':''}" id="mn-notify" role="switch"><span></span></button></div>`:""}
     <div class="share-row" style="margin-top:10px"><div style="min-width:0"><b>Battery saver</b><div class="find-note">${BATTERY_SAVER?"On · GPS eased, live sharing paused":"Eases GPS &amp; pauses sharing to save power"}</div></div>
       <button class="switch ${BATTERY_SAVER?'on':''}" id="mn-batt" role="switch"><span></span></button></div>
+    <div class="share-row" style="margin-top:10px"><div style="min-width:0"><b>Battery panic</b><div class="find-note">${BATTERY_PANIC?"On · only essentials visible":"Manual trigger if battery is low (auto on Android &lt;15%)"}</div></div>
+      <button class="switch ${BATTERY_PANIC?'on':''}" id="mn-panic" role="switch"><span></span></button></div>
     <button class="btn ghost block" id="mn-intro" style="margin-top:14px">Replay tutorial</button>
     <button class="btn ghost block" id="mn-exit" style="margin-top:8px">Log out</button>
   </div>`;
@@ -1456,31 +1613,39 @@ function openMenu(){
   const introBtn=wrap.querySelector("#mn-intro"); if(introBtn) introBtn.onclick=()=>{ close(); localStorage.removeItem("fp_seenintro"); showIntro(); };
   const nt=wrap.querySelector("#mn-notify"); if(nt) nt.onclick=async()=>{ await toggleNotify(); close(); openMenu(); };
   const bt=wrap.querySelector("#mn-batt"); if(bt) bt.onclick=()=>{ setBatterySaver(!BATTERY_SAVER); close(); openMenu(); };
+  const pn=wrap.querySelector("#mn-panic"); if(pn) pn.onclick=()=>{ setBatteryPanic(!BATTERY_PANIC); close(); openMenu(); };
 }
 
 function openRatingModal(eventId){
   const ev=state.events.find(e=>e.id===eventId); if(!ev) return;
-  let val = myRating(eventId); if(val==null) val=7;   // sensible default
+  const existing = state.ratings.find(r=>r.id===state.user.id+"__"+eventId);
+  let val = existing ? existing.score : 7;
+  let tags = new Set((existing && existing.tags) ? existing.tags : []);
+  const TAGS = ["vibe","sound","crowd","surprise","dancing"];
+  const showSurveys = adminFeat("surveys");
   const wrap=document.createElement("div"); wrap.className="modal-bg";
   document.body.appendChild(wrap);
   const draw=()=>{
+    const tagButtons = showSurveys ? TAGS.map(t=>`<button class="surv-chip ${tags.has(t)?'on':''}" data-surv="${t}">${t}</button>`).join("") : "";
     wrap.innerHTML=`<div class="modal rate-modal">
       <div class="modal-head"><h2>Rate it</h2><button class="btn ghost sm" id="rt-close">Close</button></div>
       <div class="rate-act">${esc(ev.title)}</div>
       <div class="rate-big" id="rt-val">${val.toFixed(1)}</div>
       <input type="range" id="rt-slider" min="0" max="10" step="0.5" value="${val}" class="rate-slider">
       <div class="rate-scale"><span>0</span><span>5</span><span>10</span></div>
+      ${showSurveys?`<div class="surv-label">What was it?</div><div class="surv-row">${tagButtons}</div>`:""}
       <div style="display:flex;gap:8px;margin-top:16px">
-        ${myRating(eventId)!=null?`<button class="btn ghost" id="rt-clear" style="flex:none">Remove</button>`:""}
+        ${existing?`<button class="btn ghost" id="rt-clear" style="flex:none">Remove</button>`:""}
         <button class="btn primary" id="rt-save" style="flex:1">Save rating</button>
       </div>
     </div>`;
     const slider=wrap.querySelector("#rt-slider");
     const out=wrap.querySelector("#rt-val");
     slider.oninput=()=>{ val=parseFloat(slider.value); out.textContent=val.toFixed(1); };
+    wrap.querySelectorAll("[data-surv]").forEach(b=>b.onclick=()=>{ const t=b.dataset.surv; if(tags.has(t)) tags.delete(t); else tags.add(t); b.classList.toggle("on"); });
     wrap.querySelector("#rt-close").onclick=()=>wrap.remove();
     wrap.onclick=e=>{ if(e.target===wrap) wrap.remove(); };
-    wrap.querySelector("#rt-save").onclick=async()=>{ await saveRating(eventId, val); wrap.remove(); toast("Rated "+val.toFixed(1)); renderView(); };
+    wrap.querySelector("#rt-save").onclick=async()=>{ await saveRating(eventId, val, [...tags]); wrap.remove(); toast("Rated "+val.toFixed(1)); renderView(); };
     const clr=wrap.querySelector("#rt-clear"); if(clr) clr.onclick=async()=>{ await clearRating(eventId); wrap.remove(); toast("Rating removed"); renderView(); };
   };
   draw();
@@ -1515,6 +1680,7 @@ function renderView(){
   else if(state.view==="profile") v.innerHTML = viewProfile();
   else if(state.view==="trail") v.innerHTML = viewTrail();
   else if(state.view==="recap") v.innerHTML = viewRecap();
+  else if(state.view==="diary") v.innerHTML = viewDiary();
   wireView();
 }
 
@@ -1667,7 +1833,45 @@ function homeBefore(phase){
     ${homeQuickActions()}`;
 }
 
+function homePanic(){
+  const np = nextPickInfo();
+  const ids = myPickIds();
+  const cards=[];
+  cards.push(`<div class="panic-banner">
+    <div class="panic-hd"><span class="panic-ico" aria-hidden="true">⚠</span><b>Low battery — panic mode</b></div>
+    <div class="panic-sub">Live sharing paused, GPS eased. Only the essentials below.</div>
+    <button class="btn ghost sm" id="panic-off" style="margin-top:8px">I'm OK, turn it off</button>
+  </div>`);
+  // up next (minimal)
+  if(np){
+    const walk = (locationEnabled()&&find.pos) ? walkLineFor(np.ev) : "";
+    if(np.status==="now"){
+      cards.push(`<div class="home-card accent"><div class="hc-tag">Happening now</div><div class="hc-big">${esc(np.ev.title)}</div><div class="hc-meta">${esc(np.ev.stageName||"")} · until ${esc(fmt12(toHM(np.until)))}${walk?` · ${walk}`:""}</div></div>`);
+    } else if(np.status==="soon"){
+      const h=Math.floor(np.mins/60), m=np.mins%60;
+      const big = np.mins<60 ? `${np.mins}<small>min</small>` : `${h}<small>h</small> ${String(m).padStart(2,"0")}<small>m</small>`;
+      cards.push(`<div class="depart-card">
+        <div class="depart-head"><span class="depart-lbl">Starts in</span><span class="depart-at">${esc(fmt12(np.ev.start))}</span></div>
+        <div class="depart-time">${big}</div>
+        <div class="depart-act">${esc(np.ev.title)}</div>
+        <div class="depart-meta">${esc(np.ev.stageName||"")}${walk?` · ${walk}`:""}</div>
+      </div>`);
+    }
+  }
+  // last-known crew positions (no live polling, just whatever was cached)
+  if(locationEnabled()){
+    const ppl=peopleWithCoords();
+    if(ppl.length && find.pos){
+      const rows=ppl.map(p=>({...p, d:haversine(find.pos.lat,find.pos.lng,p.lat,p.lng)})).sort((a,b)=>a.d-b.d).slice(0,4)
+        .map(p=>`<div class="wt-row"><span class="av" style="background:${p.color}">${esc(initials(p.name))}</span><span class="wt-name">${esc(p.name)}</span><span class="wt-time">${fmtDist(p.d)}</span></div>`).join("");
+      cards.push(`<div class="home-card"><div class="hc-title">Last known crew positions</div><div class="wt-list">${rows}</div></div>`);
+    }
+  }
+  cards.push(`<div class="find-note" style="text-align:center;margin-top:6px">${ids.size} picks · keep the app off when not needed</div>`);
+  return cards.join("");
+}
 function homeDuring(){
+  if(BATTERY_PANIC) return homePanic();
   const cards=[];
 
   // 1) NOW / NEXT (personal up-next + what's on now across stages)
@@ -1703,9 +1907,11 @@ function homeDuring(){
   }
   cards.push(nextCard);
   cards.push(energyNudgeCard());
+  cards.push(safeCheckInCard());
 
   // weather strip + clash resolver (both auto-hide when empty)
   cards.push(weatherCard());
+  cards.push(weatherNudgeCard());
   cards.push(clashWarnCard());
 
   // 2) ON NOW across the festival (your areas/picks first feel: just show a few)
@@ -1950,6 +2156,46 @@ function weatherCard(){
     ${fcMissing?`<div class="wc-hint">Forecast loads when online — pull up again in a moment.</div>`:""}
   </div>`;
 }
+function weatherNudgeCard(){
+  if(!adminFeat("weatherx")) return "";
+  const w=state.structure.weatherCache; if(!w) return "";
+  const nudges=[];
+  // Rain nudge: next 3h, >=60% precip probability anywhere
+  if(w.hourly && w.hourly.time && w.hourly.precipitation_probability){
+    const now=new Date();
+    const nowH=now.toISOString().slice(0,13);
+    const idx=w.hourly.time.findIndex(t=>t.slice(0,13)>=nowH);
+    if(idx>=0){
+      let maxP=0, atHour=null;
+      for(let i=idx;i<Math.min(idx+3, w.hourly.time.length);i++){
+        const p=w.hourly.precipitation_probability[i]||0;
+        if(p>maxP){ maxP=p; atHour=w.hourly.time[i]; }
+      }
+      if(maxP>=60){
+        const t=atHour ? new Date(atHour) : null;
+        const tlbl=t ? (()=>{ let h=t.getHours(); const ap=h>=12?'pm':'am'; h=h%12||12; return `${h}${ap}`; })() : "soon";
+        nudges.push({kind:"rain", emoji:"☔", text:`Rain likely around ${tlbl} (${maxP}%) — grab a layer.`});
+      }
+    }
+  }
+  // Today's low temp + UV
+  if(w.daily && w.daily.time){
+    const today=new Date().toISOString().slice(0,10);
+    const i=w.daily.time.indexOf(today);
+    if(i>=0){
+      const lo=w.daily.temperature_2m_min ? w.daily.temperature_2m_min[i] : null;
+      const uv=w.daily.uv_index_max ? w.daily.uv_index_max[i] : null;
+      if(lo!=null && lo<=8) nudges.push({kind:"cold", emoji:"🧥", text:`Cold tonight — low of ${Math.round(lo)}°. Bring a layer for the small hours.`});
+      const isDay = (()=>{ const h=new Date().getHours(); return h>=9 && h<=17; })();
+      if(uv!=null && uv>=7 && isDay) nudges.push({kind:"uv", emoji:"☀", text:`High UV today (index ${Math.round(uv)}) — sunscreen + water.`});
+    }
+  }
+  if(!nudges.length) return "";
+  return `<div class="home-card weather-nudge">
+    <div class="hc-title">${nudges[0].emoji} Heads up</div>
+    ${nudges.map(n=>`<div style="font-size:13.5px;line-height:1.45;margin-top:4px">${esc(n.text)}</div>`).join("")}
+  </div>`;
+}
 async function refreshWeather(){
   if(!feat("weather")) return;
   if(!navigator.onLine) return;
@@ -1958,12 +2204,12 @@ async function refreshWeather(){
   const w=state.structure.weatherCache;
   if(w && w.daily && (w.daily.time||[]).length && w.fetchedAt && Date.now()-w.fetchedAt < 3*3600000) return;
   try{
-    const url=`https://api.open-meteo.com/v1/forecast?latitude=${co.lat.toFixed(3)}&longitude=${co.lng.toFixed(3)}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=10`;
+    const url=`https://api.open-meteo.com/v1/forecast?latitude=${co.lat.toFixed(3)}&longitude=${co.lng.toFixed(3)}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max&hourly=temperature_2m,precipitation_probability&timezone=auto&forecast_days=3`;
     const res=await fetch(url); if(!res.ok) return;
     const data=await res.json();
     if(!data || !data.daily || !(data.daily.time||[]).length) return;   // don't cache an empty response
-    if(state.user && state.user.admin) await saveStructure({...state.structure, weatherCache:{ daily:data.daily, fetchedAt:Date.now() }});
-    else state.structure.weatherCache={ daily:data.daily, fetchedAt:Date.now() };  // local only for non-admins
+    if(state.user && state.user.admin) await saveStructure({...state.structure, weatherCache:{ daily:data.daily, hourly:data.hourly||null, fetchedAt:Date.now() }});
+    else state.structure.weatherCache={ daily:data.daily, hourly:data.hourly||null, fetchedAt:Date.now() };  // local only for non-admins
   }catch(e){}
 }
 
@@ -2420,6 +2666,7 @@ function viewShared(){
     <div class="filters">${friendChips}</div>
     ${friend==="all"?favesCard():""}
     ${friend==="all"?stagePersonalityCard():""}
+    ${friend==="all"?safetyCrewCard():""}
     ${friend==="all"?meetupCard():""}
     ${friend==="all"?callsCard():""}
     ${body}
@@ -2551,7 +2798,10 @@ function recapStats(dayName){
   let latest=null;
   seen.forEach(e=>{ const en=eventEnd(e); if(en && (!latest || en>latest)) latest=en; });
   // my ratings + top set
-  const myRated=seen.map(e=>({e, r:myRating(e.id)})).filter(x=>x.r!=null).sort((a,b)=>b.r-a.r);
+  const myRated=seen.map(e=>{
+    const rd=state.ratings.find(x=>x.id===state.user.id+"__"+e.id);
+    return rd ? {e, r:rd.score, tags:rd.tags||[]} : null;
+  }).filter(Boolean).sort((a,b)=>b.r-a.r);
   const topSet=myRated[0]||null;
   return { seenCount:seen.length, miles, clashes, latest, ratedCount:myRated.length, topSet };
 }
@@ -2579,9 +2829,10 @@ function viewRecap(){
         ${stat(s.clashes, "clashes survived")}
         ${stat(fmtLate(s.latest), "latest night")}
       </div>
-      ${s.topSet?`<div class="recap-foot">Your top set: <b>${esc(s.topSet.e.title)}</b> · you rated it ${s.topSet.r.toFixed(1)}</div>`:(s.ratedCount===0?`<div class="recap-foot">Rate sets as they finish to crown your top one.</div>`:"")}
+      ${s.topSet?`<div class="recap-foot">Your top set: <b>${esc(s.topSet.e.title)}</b> · you rated it ${s.topSet.r.toFixed(1)}${(s.topSet.tags&&s.topSet.tags.length)?` · <span style="opacity:.85">${s.topSet.tags.join(" · ")}</span>`:""}</div>`:(s.ratedCount===0?`<div class="recap-foot">Rate sets as they finish to crown your top one.</div>`:"")}
     </div>
     ${rhythmCard()}
+    ${sleepCard()}
     <div class="find-note" style="margin-top:12px">Miles walked come from your private trail — only counts time the app's location was on. Updates as the festival goes.</div>
   `;
 }
@@ -2641,6 +2892,127 @@ function rhythmCard(){
     <div class="rh-chart">${bars}</div>
     <div class="find-note" style="margin-top:8px">Built from when you rated sets — the more you rate, the truer this gets.</div>
   </div>`;
+}
+// ---- Festival diary: a timeline of your weekend written from real data only ----
+// Every line is grounded in a data point. No invented flavour, no embellishment.
+// Returns chronological array of { t:Date, kind, text, score? } for one festival day.
+function diaryEntriesForDay(day){
+  const out=[];
+  const ids=myPickIds();
+  const dayStart=dateForDay(day); if(!dayStart) return [];
+  // "Day" window: noon → noon+24h (matches festivalPhase/currentFestivalDay logic)
+  const startMs = (()=>{ const d=new Date(dayStart); d.setHours(DAY_ROLLOVER_HOUR,0,0,0); return d.getTime(); })();
+  const endMs   = startMs + 24*3600000;
+  const inDay = ts => ts>=startMs && ts<endMs;
+  // 1) Acts you picked (and saw — i.e. ended already), in order
+  state.events.filter(e=>ids.has(e.id) && e.day===day).forEach(e=>{
+    const start=eventStart(e), end=eventEnd(e); if(!start||!end) return;
+    if(end.getTime()>Date.now()) return;                       // not happened yet
+    const rd = state.ratings.find(r=>r.id===state.user.id+"__"+e.id);
+    const scoreTxt = rd ? ` · Rated ${rd.score.toFixed(1)}` : "";
+    const tagTxt   = (rd && rd.tags && rd.tags.length) ? " · " + rd.tags.join(", ") : "";
+    out.push({ t:start, kind:"set", text:`${esc(e.title)} @ ${esc(e.stageName||"")}${scoreTxt}${tagTxt}`, score: rd?rd.score:null });
+  });
+  // 2) Acts you stumbled into (rated, not picked, end-time within the day)
+  state.ratings.filter(r=>r.userId===state.user.id).forEach(r=>{
+    if(ids.has(r.eventId)) return;                              // already covered above
+    const e=state.events.find(x=>x.id===r.eventId); if(!e) return;
+    const start=eventStart(e), end=eventEnd(e); if(!start||!end) return;
+    if(!inDay(start.getTime())) return;
+    const tagTxt = (r.tags && r.tags.length) ? " · " + r.tags.join(", ") : "";
+    out.push({ t:start, kind:"stumble", text:`Caught ${esc(e.title)} @ ${esc(e.stageName||"")} · Rated ${r.score.toFixed(1)}${tagTxt}`, score:r.score });
+  });
+  // 3) Safe check-in
+  const safe=state.safety.find(s=>s.userId===state.user.id && s.day===day);
+  if(safe && safe.checkedAt && safe.checkedAt.toMillis){
+    out.push({ t:new Date(safe.checkedAt.toMillis()), kind:"safe", text:"Checked in safe — home for the night." });
+  }
+  // 4) Sleep window (start = bed)
+  if(adminFeat("sleep")){
+    sleepNights().forEach(n=>{
+      if(!inDay(n.bed.getTime())) return;
+      out.push({ t:n.bed, kind:"bed", text:`Slept ~${n.hours.toFixed(1)}h (woke ${formatTime12(n.up)})` });
+    });
+  }
+  // 5) First trail point in day (arrival / first move)
+  const trail=loadTrail();
+  const firstInDay = trail.find(p=>inDay(p.t));
+  if(firstInDay){
+    const near = nearestStageTo(firstInDay.lat, firstInDay.lng);
+    out.push({ t:new Date(firstInDay.t), kind:"arrive", text: near ? `First moved near ${esc(near.name)}.` : "First moved around the site." });
+  }
+  out.sort((a,b)=>a.t-b.t);
+  return out;
+}
+function formatTime12(d){ let h=d.getHours(); const ap=h>=12?'pm':'am'; h=h%12||12; const m=d.getMinutes(); return `${h}${m?':'+String(m).padStart(2,"0"):""}${ap}`; }
+function nearestStageTo(lat,lng){
+  const stages=stagesWithCoords(); if(!stages.length) return null;
+  let best=null, bestD=Infinity;
+  stages.forEach(s=>{ const d=haversine(lat,lng,s.lat,s.lng); if(d<bestD){ bestD=d; best=s; } });
+  return (best && bestD<=300) ? best : null;
+}
+function diaryDaySummary(day){
+  const ids=myPickIds();
+  // Ratings for the day (picked + stumbled)
+  const dayEvents = new Set(state.events.filter(e=>e.day===day).map(e=>e.id));
+  const myR = state.ratings.filter(r=>r.userId===state.user.id && dayEvents.has(r.eventId));
+  let top=null;
+  myR.forEach(r=>{ if(!top||r.score>top.score) top={...r, ev:state.events.find(e=>e.id===r.eventId)}; });
+  // Walking miles for the day from the trail
+  const trail=loadTrail();
+  const dayStart=dateForDay(day); if(!dayStart) return null;
+  const startMs=(()=>{ const d=new Date(dayStart); d.setHours(DAY_ROLLOVER_HOUR,0,0,0); return d.getTime(); })();
+  const endMs=startMs+24*3600000;
+  const pts=trail.filter(p=>p.t>=startMs&&p.t<endMs);
+  let metres=0;
+  for(let i=1;i<pts.length;i++) metres+=haversine(pts[i-1].lat,pts[i-1].lng,pts[i].lat,pts[i].lng);
+  return {
+    miles: metres/1609.34,
+    setsSeen: state.events.filter(e=>ids.has(e.id) && e.day===day && eventEnd(e) && eventEnd(e).getTime()<Date.now()).length,
+    ratedCount: myR.length,
+    topSet: top
+  };
+}
+function viewDiary(){
+  if(!adminFeat("diary")) return `<div class="sec-head"><div><h2>Festival diary</h2></div></div>${emptyState("","Not enabled","Toggle Festival diary on in Manage → Just for me.")}`;
+  // Which days are "done enough" — same logic as recap
+  const now=Date.now();
+  const availDays=DAYS.filter(d=>{ const base=dateForDay(d); if(!base) return false; const ds=new Date(base); ds.setHours(DAY_ROLLOVER_HOUR,0,0,0); return now>=ds.getTime(); });
+  if(!availDays.length){
+    return `<div class="sec-head"><div><h2>Festival diary</h2><div class="lead">Your weekend, written by the data.</div></div></div>
+      ${emptyState("","Nothing yet","Your diary fills in as the festival goes — picks, ratings, sleep windows and the rest. Come back later.")}`;
+  }
+  const dayBlocks = availDays.map(day=>{
+    const entries = diaryEntriesForDay(day);
+    const sum = diaryDaySummary(day);
+    if(!entries.length && (!sum || sum.setsSeen===0)){
+      return `<div class="diary-day"><h3>${day}</h3><div class="find-note">A quiet one — nothing logged yet.</div></div>`;
+    }
+    const lines = entries.map(e=>{
+      const icon = ({set:"🎵", stumble:"✨", safe:"💛", bed:"🌙", arrive:"📍"})[e.kind] || "·";
+      const cls  = e.kind==="set" && e.score!=null && e.score>=8.5 ? "diary-line top" : "diary-line";
+      return `<div class="${cls}">
+        <span class="dl-t">${formatTime12(e.t)}</span>
+        <span class="dl-i" aria-hidden="true">${icon}</span>
+        <span class="dl-txt">${e.text}</span>
+      </div>`;
+    }).join("");
+    const summary = sum ? `<div class="diary-sum">
+      ${sum.setsSeen ? `<span><b>${sum.setsSeen}</b> set${sum.setsSeen!==1?'s':''} seen</span>` : ""}
+      ${sum.miles>=0.1 ? `<span><b>${sum.miles.toFixed(1)}</b> mi</span>` : ""}
+      ${sum.ratedCount ? `<span><b>${sum.ratedCount}</b> rated</span>` : ""}
+      ${sum.topSet ? `<span>Top: <b>${esc(sum.topSet.ev?sum.topSet.ev.title:"?")}</b> · ${sum.topSet.score.toFixed(1)}</span>` : ""}
+    </div>` : "";
+    return `<div class="diary-day">
+      <h3>${day}</h3>
+      ${summary}
+      <div class="diary-lines">${lines||`<div class="find-note">Nothing logged for this day yet.</div>`}</div>
+    </div>`;
+  }).join("");
+  return `
+    <div class="sec-head"><div><h2>Festival diary</h2><div class="lead">Every line below is grounded in real data — no embellishment.</div></div></div>
+    ${dayBlocks}
+    <div class="find-note" style="margin-top:14px">Built from your picks, ratings, sleep gaps, safe check-ins and trail. Lives only in your data — nothing is generated or made up.</div>`;
 }
 function viewTrail(){
   const trail=loadTrail();
@@ -3051,6 +3423,8 @@ function wireView(){
   const printBtn=v.querySelector("#print-plan"); if(printBtn) printBtn.onclick=()=>window.print();
   const openClash=v.querySelector("#open-clashes"); if(openClash) openClash.onclick=openClashModal;
   const homeClashWarn=v.querySelector("#home-clashwarn"); if(homeClashWarn) homeClashWarn.onclick=openClashModal;
+  const panicOff=v.querySelector("#panic-off"); if(panicOff) panicOff.onclick=()=>setBatteryPanic(false);
+  const safeIn=v.querySelector("#home-safein"); if(safeIn) safeIn.onclick=async()=>{ await checkInSafe(); renderView(); };
   const energyDismiss=v.querySelector("#energy-dismiss"); if(energyDismiss) energyDismiss.onclick=()=>{ dismissEnergyNudge(energyDismiss.dataset.tag); const card=document.getElementById("energy-nudge"); if(card) card.remove(); };
   const addShift=v.querySelector("#add-shift"); if(addShift) addShift.onclick=()=>{ state.modal={type:"shift",data:null}; renderModal(); };
   v.querySelectorAll("[data-edit-shift]").forEach(b=>b.onclick=()=>{ const sh=state.shifts.find(x=>x.id===b.dataset.editShift); state.modal={type:"shift",data:sh}; renderModal(); });
