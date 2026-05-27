@@ -541,6 +541,9 @@
   .offline-bar .od{width:8px;height:8px;border-radius:50%;background:var(--gold);flex:none}
   body.is-offline .offline-bar{display:flex}
   body.is-offline .topbar{top:30px}
+  .update-bar{position:fixed;left:12px;right:12px;bottom:78px;z-index:120;display:flex;align-items:center;justify-content:space-between;gap:10px;
+    background:var(--violet);color:#fff;border-radius:12px;padding:11px 14px;font-size:13px;font-weight:700;box-shadow:0 4px 16px rgba(0,0,0,.25)}
+  .update-bar button{flex:none;background:#fff;color:var(--violet);border:none;border-radius:999px;padding:6px 14px;font-weight:800;font-size:13px;cursor:pointer}
   body.is-offline .app{padding-top:30px}
 
   @media print{
@@ -823,9 +826,43 @@ let authMode = "login";
 let adminSel = { on:false, ids:new Set() };
 try{ state.crew = JSON.parse(localStorage.getItem("fp_crew")||"[]"); }catch(e){ state.crew=[]; }
 
-// PWA: register the service worker (offline app shell + notifications)
+// PWA: register the service worker (offline app shell + notifications) and watch for updates.
+let _swReg=null, _swReloading=false;
 if("serviceWorker" in navigator){
-  window.addEventListener("load", ()=>{ navigator.serviceWorker.register("./sw.js").catch(()=>{}); });
+  window.addEventListener("load", ()=>{
+    navigator.serviceWorker.register("./sw.js").then(reg=>{
+      _swReg=reg;
+      // If there's already a worker waiting (update downloaded on a previous visit), prompt now.
+      if(reg.waiting && navigator.serviceWorker.controller) showUpdateBanner();
+      // A new worker started installing — when it finishes and one's already controlling, it's an update.
+      reg.addEventListener("updatefound", ()=>{
+        const nw=reg.installing; if(!nw) return;
+        nw.addEventListener("statechange", ()=>{
+          if(nw.state==="installed" && navigator.serviceWorker.controller) showUpdateBanner();
+        });
+      });
+    }).catch(()=>{});
+    // When the new worker takes control (after the user taps Update), reload once to get the new build.
+    navigator.serviceWorker.addEventListener("controllerchange", ()=>{
+      if(_swReloading) return; _swReloading=true; location.reload();
+    });
+  });
+  // Check for an update on launch and whenever the app regains focus (no battery-draining polling).
+  const checkForUpdate=()=>{ if(_swReg) _swReg.update().catch(()=>{}); };
+  document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) checkForUpdate(); });
+  window.addEventListener("focus", checkForUpdate);
+}
+function showUpdateBanner(){
+  if(document.getElementById("update-bar")) return;   // already showing
+  const bar=document.createElement("div");
+  bar.className="update-bar"; bar.id="update-bar";
+  bar.innerHTML=`<span>A new version is ready.</span><button id="update-btn">Update now</button>`;
+  document.body.appendChild(bar);
+  document.getElementById("update-btn").onclick=()=>{
+    const w=_swReg && _swReg.waiting;
+    if(w){ bar.querySelector("span").textContent="Updating…"; w.postMessage({type:"skipWaiting"}); }
+    else location.reload();   // fallback
+  };
 }
 // Offline indicator: a slim banner that appears when there's no connection
 function setupOfflineBanner(){

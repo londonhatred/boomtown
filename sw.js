@@ -1,6 +1,6 @@
 /* Festival Planner service worker — offline app shell + runtime cache.
    Bump CACHE version to force clients to pick up a new build. */
-const CACHE = "festival-v6";
+const CACHE = "festival-v3";
 
 // App shell — relative paths so it works under /username.github.io/<repo>/
 const SHELL = [
@@ -14,9 +14,16 @@ const SHELL = [
 ];
 
 self.addEventListener("install", (e) => {
+  // NB: no skipWaiting() here — let the new worker WAIT so the page can show an
+  // "update ready" banner and activate it on the user's tap (see message handler below).
   e.waitUntil(
-    caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())
+    caches.open(CACHE).then((c) => c.addAll(SHELL))
   );
+});
+
+// The page sends this when the user taps "Update" on the banner.
+self.addEventListener("message", (e) => {
+  if (e.data && e.data.type === "skipWaiting") self.skipWaiting();
 });
 
 self.addEventListener("activate", (e) => {
