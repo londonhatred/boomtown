@@ -435,6 +435,10 @@
   .app.testmode .topbar{border-top:2px solid var(--violet)}
   .test-step{display:flex;gap:10px;align-items:flex-start;margin-bottom:8px}
   .test-step .ts-n{flex:none;width:22px;height:22px;border-radius:50%;background:var(--violet);color:#fff;font-weight:800;font-size:12px;display:grid;place-items:center;margin-top:1px}
+  button.stat.stat-tap{cursor:pointer;border:2px solid var(--accent);font:inherit;text-align:left;-webkit-tap-highlight-color:transparent}
+  button.stat.stat-tap .l{color:var(--accent);font-weight:700}
+  .clash-modal-body{overflow-y:auto;max-height:72vh}
+  .clash-modal-body .free-card{border:none!important;margin:0;padding:0}
   /* walk-times-from-here list */
   .wt-list{display:flex;flex-direction:column;gap:2px;margin-top:8px}
   .wt-row{display:flex;align-items:center;gap:9px;padding:9px 2px;border-top:1px solid var(--line);width:100%;text-align:left;font-size:13.5px}
@@ -1191,6 +1195,20 @@ function openMenu(){
   const nt=wrap.querySelector("#mn-notify"); if(nt) nt.onclick=async()=>{ await toggleNotify(); close(); openMenu(); };
 }
 
+function openClashModal(){
+  const inner=clashCard();   // uncapped — shows every cluster
+  if(!inner) return;
+  const wrap=document.createElement("div"); wrap.className="modal-bg";
+  wrap.innerHTML=`<div class="modal">
+    <div class="modal-head"><h2>Clash advice</h2><button class="btn ghost sm" id="cl-close">Close</button></div>
+    <div class="clash-modal-body">${inner}</div>
+  </div>`;
+  document.body.appendChild(wrap);
+  const close=()=>wrap.remove();
+  wrap.querySelector("#cl-close").onclick=close;
+  wrap.onclick=e=>{ if(e.target===wrap) close(); };
+}
+
 function renderView(){
   if(state.view!=="find" && find.started) stopFindSensors();
   const v = document.getElementById("view");
@@ -1366,7 +1384,7 @@ function homeDuring(){
 
   // weather strip + clash resolver (both auto-hide when empty)
   cards.push(weatherCard());
-  cards.push(clashCard());
+  cards.push(clashCard(6));
 
   // 2) ON NOW across the festival (your areas/picks first feel: just show a few)
   const onNow=onNowEvents();
@@ -1865,13 +1883,14 @@ function clusterAdvice(items){
   }
   return line;
 }
-function clashCard(){
+function clashCard(limit){
   const ids=myPickIds();
   const days=DAYS.filter(d=> state.events.some(e=>ids.has(e.id)&&e.day===d));
   const clusters=[];
   days.forEach(d=>{ clashClusters(d).forEach(c=>clusters.push({day:d, items:c})); });
   if(!clusters.length) return "";
-  const rows=clusters.slice(0,6).map(c=>{
+  const cap = (typeof limit==="number") ? limit : clusters.length;
+  const rows=clusters.slice(0,cap).map(c=>{
     const start=c.items.map(x=>x.r[0]).reduce((a,b)=>Math.min(a,b));
     const acts=c.items.map(x=>{
       if(x.isShift){
@@ -1889,7 +1908,7 @@ function clashCard(){
   }).join("");
   return `<div class="free-card" style="border-color:var(--accent)"><div class="free-head">${clusters.length} clash${clusters.length>1?'es':''} in your plan</div>
     <div class="find-note" style="margin-bottom:8px">Overlapping picks — grouped by when they collide.</div>
-    <div class="clash-list">${rows}</div>${clusters.length>6?`<div class="find-note" style="margin-top:8px">+${clusters.length-6} more</div>`:""}</div>`;
+    <div class="clash-list">${rows}</div>${clusters.length>cap?`<div class="find-note" style="margin-top:8px">+${clusters.length-cap} more</div>`:""}</div>`;
 }
 
 /* ---------- BROWSE ---------- */
@@ -1986,9 +2005,10 @@ function viewMine(){
     <div class="stat-row">
       <div class="stat"><div class="n">${list.length}</div><div class="l">Picks</div></div>
       <div class="stat"><div class="n">${daysActive}</div><div class="l">Days out</div></div>
-      <div class="stat"><div class="n">${[...clashSet].filter(x=>typeof x==='string'&&!x.startsWith('sh:')).length||0}</div><div class="l">Clashes</div></div>
+      ${(()=>{ const nClash=[...clashSet].filter(x=>typeof x==='string'&&!x.startsWith('sh:')).length||0;
+        return nClash ? `<button class="stat stat-tap" id="open-clashes"><div class="n">${nClash}</div><div class="l">Clashes · tap for advice</div></button>`
+                      : `<div class="stat"><div class="n">0</div><div class="l">Clashes</div></div>`; })()}
     </div>
-    ${clashCard()}
     ${DAYS.filter(d=>byDay[d]&&byDay[d].length).map(d=>`
       <div class="day-label">${d}</div>
       ${byDay[d].map(item=> item.kind==="ev"
@@ -2361,6 +2381,7 @@ function wireView(){
 
   // ---- my plan: print + mark changes seen ----
   const printBtn=v.querySelector("#print-plan"); if(printBtn) printBtn.onclick=()=>window.print();
+  const openClash=v.querySelector("#open-clashes"); if(openClash) openClash.onclick=openClashModal;
   const addShift=v.querySelector("#add-shift"); if(addShift) addShift.onclick=()=>{ state.modal={type:"shift",data:null}; renderModal(); };
   v.querySelectorAll("[data-edit-shift]").forEach(b=>b.onclick=()=>{ const sh=state.shifts.find(x=>x.id===b.dataset.editShift); state.modal={type:"shift",data:sh}; renderModal(); });
   v.querySelectorAll("[data-del-shift]").forEach(b=>b.onclick=async()=>{ const sh=state.shifts.find(x=>x.id===b.dataset.delShift); if(confirm(`Delete "${sh.label||'shift'}"?`)){ await deleteShift(sh.id); toast("Shift removed"); } });
