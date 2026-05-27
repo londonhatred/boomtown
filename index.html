@@ -424,6 +424,9 @@
   .crew-opt .mo-av{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:11px;font-weight:800;flex:none;border:1.5px solid var(--ink)}
   .seed-live{background:var(--ink);color:var(--paper);border-radius:var(--radius-sm);padding:11px 13px;margin-bottom:10px;font-size:13px;line-height:1.45}
   .seed-live b{color:var(--gold)}
+  .test-banner{background:var(--violet);color:#fff;font-size:12.5px;font-weight:700;padding:7px 12px;display:flex;align-items:center;justify-content:center;gap:10px;text-align:center;line-height:1.3}
+  .test-exit{flex:none;background:#fff;color:var(--violet);border:none;border-radius:999px;padding:3px 11px;font-weight:800;font-size:12px;cursor:pointer}
+  .app.testmode .topbar{border-top:2px solid var(--violet)}
   .seed-live #seed-clock{font-family:"Anton";font-size:16px;margin-left:4px}
 
   /* ---------- HOME ---------- */
@@ -598,18 +601,32 @@ try {
   db = getFirestore(app);
 }
 
-/* ---- Firestore refs ---- */
-const refStructure = doc(db, "meta", "structure");
-const colEvents    = collection(db, "events");
-const colUsers     = collection(db, "users");
-const colPicks     = collection(db, "picks");
-const colLocations = collection(db, "locations");
-const colPins      = collection(db, "pins");
-const colMessages  = collection(db, "messages");
-const colCalls     = collection(db, "calls");
-const colPacking   = collection(db, "packing");
-const colShifts    = collection(db, "shifts");
-const colLegs      = collection(db, "legs");   // crowdsourced walk-time samples between stage pairs
+/* ---- Firestore refs ----
+   TEST MODE: a fully separate sandbox. When on, every collection is prefixed with "test_"
+   and the structure doc lives at meta/structure_test, so real festival data is untouched.
+   The mode is fixed at page load (persisted in localStorage) and toggling reloads the page,
+   so all snapshot listeners re-establish cleanly against the right world. */
+const TEST_MODE = localStorage.getItem("fp_testmode")==="1";
+const PFX = TEST_MODE ? "test_" : "";
+function setTestMode(on){
+  if(on) localStorage.setItem("fp_testmode","1"); else localStorage.removeItem("fp_testmode");
+  location.reload();
+}
+// prefixed collection + doc helpers
+const pcol = name => collection(db, PFX+name);
+const dref = (name, ...path) => doc(db, PFX+name, ...path);
+
+const refStructure = TEST_MODE ? doc(db, "meta", "structure_test") : doc(db, "meta", "structure");
+const colEvents    = pcol("events");
+const colUsers     = pcol("users");
+const colPicks     = pcol("picks");
+const colLocations = pcol("locations");
+const colPins      = pcol("pins");
+const colMessages  = pcol("messages");
+const colCalls     = pcol("calls");
+const colPacking   = pcol("packing");
+const colShifts    = pcol("shifts");
+const colLegs      = pcol("legs");   // crowdsourced walk-time samples between stage pairs
 
 /* ---- App state ---- */
 const state = {
@@ -730,7 +747,7 @@ function logout(){ localStorage.removeItem("fp_uid"); localStorage.removeItem("f
 async function saveStructure(s){ await setDoc(refStructure, s); }
 async function togglePick(eventId){
   const id = `${state.user.id}__${eventId}`;
-  const ref = doc(db,"picks",id);
+  const ref = dref("picks",id);
   const has = state.picks.some(p=>p.id===id);
   if(has) await deleteDoc(ref);
   else await setDoc(ref, { userId:state.user.id, eventId, createdAt:serverTimestamp() });
@@ -738,7 +755,7 @@ async function togglePick(eventId){
 // must-see lives on the pick doc; marking must-see implies the pick exists
 async function toggleMustSee(eventId){
   const id = `${state.user.id}__${eventId}`;
-  const ref = doc(db,"picks",id);
+  const ref = dref("picks",id);
   const p = state.picks.find(x=>x.id===id);
   const next = !(p && p.mustSee);
   await setDoc(ref, { userId:state.user.id, eventId, mustSee:next, createdAt:(p&&p.createdAt)||serverTimestamp() }, {merge:true});
@@ -761,15 +778,15 @@ async function saveEvent(ev){
   if(ev.id){
     const prev = state.events.find(e=>e.id===ev.id);
     if(prev && (prev.day!==data.day || prev.start!==data.start || prev.end!==data.end)) data.changedAt = serverTimestamp();
-    await updateDoc(doc(db,"events",ev.id), data);
+    await updateDoc(dref("events",ev.id), data);
   }
   else await addDoc(colEvents, {...data, createdAt:serverTimestamp()});
 }
 async function deleteEvent(id){
-  await deleteDoc(doc(db,"events",id));
+  await deleteDoc(dref("events",id));
   // clean up picks for this event
   const mine = state.picks.filter(p=>p.eventId===id);
-  await Promise.all(mine.map(p=>deleteDoc(doc(db,"picks",p.id))));
+  await Promise.all(mine.map(p=>deleteDoc(dref("picks",p.id))));
 }
 
 /* ============================================================
@@ -917,7 +934,7 @@ function maybeNotifyMentions(){
 }
 function subscribeMyPacking(){
   if(!state.user) return;
-  onSnapshot(doc(db,"packing",state.user.id), snap=>{
+  onSnapshot(dref("packing",state.user.id), snap=>{
     state.myPacking = snap.exists() ? { checked:snap.data().checked||[], mine:snap.data().mine||[] } : { checked:[], mine:[] };
     if(state.view==="packing" && !document.querySelector(".modal-bg")) renderView();
   });
@@ -929,10 +946,10 @@ function subscribeMyPacking(){
 }
 async function saveShift(sh){
   const data={ ownerId:state.user.id, label:(sh.label||"").trim()||"Work shift", day:sh.day, start:sh.start, end:sh.end||"", note:(sh.note||"").trim() };
-  if(sh.id) await updateDoc(doc(db,"shifts",sh.id), data);
+  if(sh.id) await updateDoc(dref("shifts",sh.id), data);
   else await addDoc(colShifts, data);
 }
-async function deleteShift(id){ await deleteDoc(doc(db,"shifts",id)); }
+async function deleteShift(id){ await deleteDoc(dref("shifts",id)); }
 
 function allReady(){ return Object.values(state.ready).every(Boolean); }
 function afterData(){
@@ -1010,7 +1027,8 @@ function renderApp(){
   }
   const u = state.user;
   root.innerHTML = `
-    <div class="app">
+    <div class="app${TEST_MODE?' testmode':''}">
+      ${TEST_MODE?`<div class="test-banner">🧪 TEST MODE — sandbox data, your real festival is untouched <button class="test-exit" id="test-exit">Exit test</button></div>`:''}
       <div class="topbar">
         <div class="brand">
           <div class="mark"></div>
@@ -1029,6 +1047,8 @@ function renderApp(){
     </div>
     ${navHTML()}
   `;
+  const exitBtn=root.querySelector("#test-exit");
+  if(exitBtn) exitBtn.onclick=()=>setTestMode(false);
   const stopShareBtn = root.querySelector("#stop-share");
   if(stopShareBtn) stopShareBtn.onclick = ()=>{ stopShare(); renderApp(); };
   root.querySelector("#menu-btn").onclick = openMenu;
@@ -2025,12 +2045,17 @@ function viewAdmin(){
     </div>`:""}
 
     <div class="card admin-block" style="border-color:var(--violet)">
-      <div style="font-family:Anton;font-size:15px;text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px;color:var(--violet)">🧪 Test day</div>
-      <div class="find-note" style="margin-bottom:12px">For trying the live, time-based features today. Sets the festival date to today and drops in a few sample acts timed around right now (one on-now, one soon, a clash) so On-now, Up-next, leave-now alarms and clash routing all come alive. Pin nearby real spots as their stages to test walk times.</div>
-      ${(()=>{ const tc=state.events.filter(e=>e.testDay).length; return tc?`<div class="find-note" style="margin-bottom:10px">${tc} test act${tc>1?'s':''} currently in your lineup.</div>`:''; })()}
-      <button class="btn primary block" id="test-setup" style="margin-bottom:8px">Set up a test day (now)</button>
-      <button class="btn danger block" id="test-clear">Remove all test data</button>
-      <div class="find-note" style="margin-top:6px">Test acts are tagged separately and removed cleanly — your real lineup is untouched. Run “Remove all test data” (and “Reset walk-time data” above) before the real festival.</div>
+      <div style="font-family:Anton;font-size:15px;text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px;color:var(--violet)">🧪 Test mode</div>
+      ${TEST_MODE?`
+        <div class="find-note" style="margin-bottom:12px">You're in the <b>test sandbox</b> — completely separate data. Build a mock festival, pin its stages, walk between them to seed walk-times, then generate a lineup. Nothing here touches your real festival.</div>
+        <button class="btn primary block" id="test-generate" style="margin-bottom:8px">Generate a test festival</button>
+        <div class="find-note" style="margin-bottom:12px">Creates ~4 stages and a believable ~8-hour lineup around now (varied set lengths, some clashes) so on-now, up-next, leave-now &amp; clash routing all come alive. Pin the stages in Find to test walk-times.</div>
+        <button class="btn ghost block" id="test-wipe" style="margin-bottom:8px">Wipe test data</button>
+        <button class="btn block" id="test-exit2" style="background:var(--ink);color:var(--paper)">Exit test mode</button>
+      `:`
+        <div class="find-note" style="margin-bottom:12px">A fully separate sandbox for trying things out — its own acts, stages, picks and walk-data. Your real festival is never touched. Great for testing the live time-based features and seeding walk-routes before the lineup's set.</div>
+        <button class="btn primary block" id="test-enter">Enter test mode</button>
+      `}
     </div>
 
     <div class="card admin-block">
@@ -2267,19 +2292,23 @@ function wireView(){
     try{ await clearWalkData(); toast("Walk-time data cleared"); renderView(); }
     catch(e){ resetWalk.disabled=false; resetWalk.textContent="Reset walk-time data"; toast("Couldn't clear — try again"); }
   };
-  const testSetup=v.querySelector("#test-setup");
-  if(testSetup) testSetup.onclick=async()=>{
-    if(!confirm("Set the festival date to TODAY and add sample test acts timed around now? This is for testing the live features. Your real lineup acts stay, but the date changes — remove test data and reset the date before the real event.")) return;
-    testSetup.disabled=true; testSetup.textContent="Setting up…";
-    try{ await setupTestDay(); toast("Test day ready — check Home & On now"); renderApp(); }
-    catch(e){ testSetup.disabled=false; testSetup.textContent="Set up a test day (now)"; toast("Couldn't set up — try again"); }
+  const tEnter=v.querySelector("#test-enter");
+  if(tEnter) tEnter.onclick=()=>{ if(confirm("Enter test mode? The app switches to a separate sandbox — your real festival data stays exactly as it is. You can exit any time.")) setTestMode(true); };
+  const tExit2=v.querySelector("#test-exit2");
+  if(tExit2) tExit2.onclick=()=>setTestMode(false);
+  const tGen=v.querySelector("#test-generate");
+  if(tGen) tGen.onclick=async()=>{
+    if(!confirm("Generate a fresh test festival? This replaces any existing test acts/stages in the sandbox (your real festival is untouched).")) return;
+    tGen.disabled=true; tGen.textContent="Generating…";
+    try{ await generateTestFestival(); toast("Test festival ready — check Home & On now"); renderApp(); }
+    catch(e){ tGen.disabled=false; tGen.textContent="Generate a test festival"; toast("Couldn't generate — try again"); }
   };
-  const testClear=v.querySelector("#test-clear");
-  if(testClear) testClear.onclick=async()=>{
-    if(!confirm("Remove all test acts and their picks? Your real lineup is untouched. (You may also want to clear the festival date if you set it to today.)")) return;
-    testClear.disabled=true; testClear.textContent="Removing…";
-    try{ await clearTestData(); toast("Test data removed"); renderView(); }
-    catch(e){ testClear.disabled=false; testClear.textContent="Remove all test data"; toast("Couldn't remove — try again"); }
+  const tWipe=v.querySelector("#test-wipe");
+  if(tWipe) tWipe.onclick=async()=>{
+    if(!confirm("Wipe all test data (acts, stages, picks, walk-data) in the sandbox? Your real festival is untouched.")) return;
+    tWipe.disabled=true; tWipe.textContent="Wiping…";
+    try{ await wipeTestData(); toast("Test data wiped"); renderApp(); }
+    catch(e){ tWipe.disabled=false; tWipe.textContent="Wipe test data"; toast("Couldn't wipe — try again"); }
   };
   v.querySelectorAll("[data-feat]").forEach(b=>b.onclick=async()=>{
     const k=b.dataset.feat; const features={...(state.structure.features||{})}; features[k]=!feat(k);
@@ -2801,62 +2830,70 @@ function fmtWalk(sec){ if(sec==null) return ""; const m=Math.max(1,Math.round(se
 async function clearWalkData(){
   const snap=await getDocs(colLegs);
   const ids=snap.docs.map(d=>d.id);
-  for(let i=0;i<ids.length;i+=20){ await Promise.all(ids.slice(i,i+20).map(id=>deleteDoc(doc(db,"legs",id)))); }
+  for(let i=0;i<ids.length;i+=20){ await Promise.all(ids.slice(i,i+20).map(id=>deleteDoc(dref("legs",id)))); }
   await saveStructure({...state.structure, walkReset:Date.now()});
 }
-// --- Test day stopgap: festival = today + sample acts timed around now ---
-async function setupTestDay(){
-  // clear any existing test EVENTS first so repeat clicks don't stack (structure handled below)
-  await clearTestEvents();
+// ============================================================
+//  TEST MODE sandbox — generate a believable festival & wipe it.
+//  In test mode all collections are already prefixed (test_), so these
+//  writes/deletes only ever touch the sandbox, never real data.
+// ============================================================
+async function generateTestFestival(){
+  if(!TEST_MODE) return;   // safety: never generate into real data
+  await wipeTestData();
   const now=new Date();
-  // The festival "day" that NOW belongs to (honouring the 6am rollover): if it's before 6am,
-  // the festival start date must be YESTERDAY so that tonight's post-midnight times read correctly.
+  // anchor festival "day" so post-midnight times read correctly (6am rollover)
   const anchor=new Date(now);
   if(now.getHours() < DAY_ROLLOVER_HOUR) anchor.setDate(anchor.getDate()-1);
   const ymd=`${anchor.getFullYear()}-${String(anchor.getMonth()+1).padStart(2,"0")}-${String(anchor.getDate()).padStart(2,"0")}`;
   const day=DAYS[0];
-  // Use a DEDICATED test district with 3 distinct stages so acts spread out and clashes have
-  // real different stages (so walk-time routing works). Append it; don't touch real districts.
-  let districts=(state.structure.districts||[]).filter(d=>d.id!=="td_area" && !d.testDay);
-  let td={id:"td_area", name:"🧪 Test Area", testDay:true, stages:[
-    {id:"td_s1",name:"Test Stage A"},
-    {id:"td_s2",name:"Test Stage B"},
-    {id:"td_s3",name:"Test Stage C"}
-  ]};
-  districts.push(td);
-  await saveStructure({...state.structure, festivalStartDate:ymd, districts});
-  const [stA,stB,stC]=td.stages;
-  const mins=d=>{ const t=new Date(Date.now()+d*60000); return toHM(t); };
-  // four sample acts across THREE distinct stages: on-now, soon, and a clash pair on different stages
-  const samples=[
-    {title:"TEST · On Now Act",    st:stA, start:mins(-20), end:mins(40)},
-    {title:"TEST · Starting Soon", st:stB, start:mins(8),  end:mins(68)},
-    {title:"TEST · Clash One",     st:stB, start:mins(25), end:mins(85)},
-    {title:"TEST · Clash Two",     st:stC, start:mins(35), end:mins(95)},
+  const districts=[
+    {id:"t_main", name:"Main Field",  stages:[{id:"t_s1",name:"Main Stage"}]},
+    {id:"t_woods",name:"The Woods",   stages:[{id:"t_s2",name:"Forest Clearing"}]},
+    {id:"t_barn", name:"The Barn",    stages:[{id:"t_s3",name:"Barn Stage"}]},
+    {id:"t_tent", name:"Big Top",     stages:[{id:"t_s4",name:"Circus Tent"}]},
   ];
-  for(const sm of samples){
-    await addDoc(colEvents, {
-      districtId:td.id, districtName:td.name, stageId:sm.st.id, stageName:sm.st.name,
-      day, start:sm.start, end:sm.end, title:sm.title, notes:"", testDay:true, createdAt:serverTimestamp()
-    });
-  }
+  await saveStructure({
+    festivalName:"🧪 Test Festival", districts, festivalStartDate:ymd,
+    features:state.structure.features||{}, autoStopHours:4,
+    infoItems:[], packingItems:[], walkReset:null, weatherCache:null
+  });
+  // 8-hour window starting ~30 min before now, varied set lengths, deliberate clashes
+  const base=Date.now()-30*60000;
+  const at=offsetMin=>toHM(new Date(base+offsetMin*60000));
+  const ACTS=["Aurora Skies","Midnight Caller","The Velvet Drop","Echo & Pulse","Glass Animals Jr","Sunbeam Collective",
+    "Bass Theory","Northern Lights","Paper Tigers","The Lowlands","Disco Volante","Neon Forest","Wild Honey",
+    "Tidal","Crooked Teeth","Mr Scruff Jr","Lunar Tide","Brass Monkey","The Haxans","Solar Flare","Cosmic Dust",
+    "Riptide","Golden Hour","Static Bloom","Moth & Moon","Deep End","The Foxgloves"];
+  let ai=0; const ev=[];
+  const stages=districts.map(d=>({d, st:d.stages[0]}));
+  // for each stage, lay a chain of sets across the 8h window with varied lengths
+  stages.forEach((s,si)=>{
+    let t = si*15;  // stagger stage start offsets a bit
+    const windowEnd=480;
+    while(t < windowEnd && ai<ACTS.length){
+      const len = [30,45,60,75,90][Math.floor(Math.random()*5)];
+      ev.push({ districtId:s.d.id, districtName:s.d.name, stageId:s.st.id, stageName:s.st.name,
+        day, start:at(t), end:at(t+len), title:ACTS[ai++], notes:"" });
+      t += len + [0,0,5,10][Math.floor(Math.random()*4)];  // mostly back-to-back, sometimes a gap
+    }
+  });
+  // guarantee a couple of clean clashes near "now" across different stages
+  ev.push({ districtId:districts[0].id, districtName:districts[0].name, stageId:"t_s1", stageName:"Main Stage", day, start:at(20), end:at(20+90), title:"Headliner A (clash)", notes:"" });
+  ev.push({ districtId:districts[1].id, districtName:districts[1].name, stageId:"t_s2", stageName:"Forest Clearing", day, start:at(35), end:at(35+60), title:"Headliner B (clash)", notes:"" });
+  ev.push({ districtId:districts[2].id, districtName:districts[2].name, stageId:"t_s3", stageName:"Barn Stage", day, start:at(40), end:at(40+75), title:"Headliner C (clash)", notes:"" });
+  // write them (batched-ish)
+  for(const e of ev){ await addDoc(colEvents, {...e, createdAt:serverTimestamp()}); }
 }
-async function clearTestEvents(){
-  const snap=await getDocs(colEvents);
-  const testIds=snap.docs.filter(d=>d.data().testDay).map(d=>d.id);
-  for(let i=0;i<testIds.length;i+=20){ await Promise.all(testIds.slice(i,i+20).map(id=>deleteDoc(doc(db,"events",id)))); }
-  const psnap=await getDocs(colPicks);
-  const tset=new Set(testIds);
-  const delPicks=psnap.docs.filter(d=>tset.has(d.data().eventId)).map(d=>d.id);
-  for(let i=0;i<delPicks.length;i+=20){ await Promise.all(delPicks.slice(i,i+20).map(id=>deleteDoc(doc(db,"picks",id)))); }
-}
-async function clearTestData(){
-  await clearTestEvents();
-  // strip the dedicated test district if present
-  const districts=(state.structure.districts||[]).filter(d=>d.id!=="td_area" && !d.testDay);
-  if(districts.length !== (state.structure.districts||[]).length){
-    await saveStructure({...state.structure, districts});
+async function wipeTestData(){
+  if(!TEST_MODE) return;   // safety: only ever wipe the sandbox
+  for(const col of [colEvents, colPicks, colShifts, colPins, colLegs, colLocations, colCalls, colMessages]){
+    const snap=await getDocs(col);
+    const ids=snap.docs.map(d=>d.id);
+    for(let i=0;i<ids.length;i+=20){ await Promise.all(ids.slice(i,i+20).map(id=>deleteDoc(doc(col, id)))); }
   }
+  // reset the sandbox structure doc
+  try{ await deleteDoc(refStructure); }catch(e){}
 }
 function walkAdminStatus(){
   const n=state.legs.length;
@@ -2933,16 +2970,16 @@ function getRally(){
   if(!feat("rally")) return null;
   const r=state.pins.find(p=>p.id==="rally") || state.pins.find(p=>p.type==="rally");
   if(!r || typeof r.lat!=="number") return null;
-  if(r.expiresAt && Date.now()>r.expiresAt){ deleteDoc(doc(db,"pins","rally")).catch(()=>{}); return null; }   // auto-clear
+  if(r.expiresAt && Date.now()>r.expiresAt){ deleteDoc(dref("pins","rally")).catch(()=>{}); return null; }   // auto-clear
   return r;
 }
 async function setRallyHere(){
   if(!find.pos) return toast("No location yet");
-  await setDoc(doc(db,"pins","rally"), { type:"rally", label:"Meet-up point", ownerId:state.user.id, ownerName:state.user.name,
+  await setDoc(dref("pins","rally"), { type:"rally", label:"Meet-up point", ownerId:state.user.id, ownerName:state.user.name,
     lat:+find.pos.lat.toFixed(6), lng:+find.pos.lng.toFixed(6), shared:true, expiresAt:next5am(Date.now()), updatedAt:serverTimestamp() });
   toast("Rally point set");
 }
-async function clearRally(){ await deleteDoc(doc(db,"pins","rally")).catch(()=>{}); toast("Rally point cleared"); }
+async function clearRally(){ await deleteDoc(dref("pins","rally")).catch(()=>{}); toast("Rally point cleared"); }
 function buildTargets(){
   const out=[];
   const rally=getRally();
@@ -2962,10 +2999,10 @@ function agoText(ts){ if(!ts) return ""; const s=Math.round((Date.now()-ts)/1000
 async function savePin(p){
   const data={ ownerId:state.user.id, ownerName:state.user.name, label:(p.label||"").trim()||pinMeta(p.type).label,
                type:p.type, lat:+p.lat.toFixed(6), lng:+p.lng.toFixed(6), shared:!!p.shared, note:(p.note||"").trim(), updatedAt:serverTimestamp() };
-  if(p.id) await updateDoc(doc(db,"pins",p.id), data);
+  if(p.id) await updateDoc(dref("pins",p.id), data);
   else await addDoc(colPins, data);
 }
-async function deletePin(id){ await deleteDoc(doc(db,"pins",id)); }
+async function deletePin(id){ await deleteDoc(dref("pins",id)); }
 
 function renderPinsModal(){
   const existing=document.querySelector(".modal-bg"); if(existing) existing.remove();
@@ -3052,7 +3089,7 @@ function writeMyLocation(){
   if(!find.share || !find.pos || !state.user) return;
   find.myUpdated=Date.now();
   trackTrip(find.pos, find.acc);   // crowdsourced walk-time learning
-  setDoc(doc(db,"locations",state.user.id),
+  setDoc(dref("locations",state.user.id),
     { name:state.user.name, lat:+find.pos.lat.toFixed(6), lng:+find.pos.lng.toFixed(6), acc:find.acc||null, lost:!!find.lost, updatedAt:serverTimestamp() }
   ).catch(()=>{});
 }
@@ -3081,9 +3118,9 @@ function stopShare(){
   if(find.autoStopTimer){ clearTimeout(find.autoStopTimer); find.autoStopTimer=null; }
   find.autoStopAt=0;
   trip = null;   // drop any in-progress trip trail
-  if(state.user) deleteDoc(doc(db,"locations",state.user.id)).catch(()=>{});
+  if(state.user) deleteDoc(dref("locations",state.user.id)).catch(()=>{});
 }
-window.addEventListener("pagehide",()=>{ if(find.share && state.user){ try{ deleteDoc(doc(db,"locations",state.user.id)); }catch(e){} } });
+window.addEventListener("pagehide",()=>{ if(find.share && state.user){ try{ deleteDoc(dref("locations",state.user.id)); }catch(e){} } });
 
 function enableFind(){
   // iOS needs an explicit gesture-triggered permission request for the compass
@@ -3520,7 +3557,7 @@ function viewPacking(){
     <div class="add-inline" style="padding:14px 0 0"><input id="pack-add-input" placeholder="Add your own item…"><button class="btn lime sm" id="pack-add">Add</button></div>
     ${isAdmin?`<button class="btn ghost block" id="pack-shared" style="margin-top:12px">Edit shared list (paste your friend’s)</button>`:''}`;
 }
-async function savePacking(){ await setDoc(doc(db,"packing",state.user.id), { checked:state.myPacking.checked||[], mine:state.myPacking.mine||[] }); }
+async function savePacking(){ await setDoc(dref("packing",state.user.id), { checked:state.myPacking.checked||[], mine:state.myPacking.mine||[] }); }
 function togglePack(id){ const c=new Set(state.myPacking.checked); c.has(id)?c.delete(id):c.add(id); state.myPacking.checked=[...c]; savePacking().catch(()=>{}); renderView(); }
 function addMyPack(label){ label=(label||"").trim(); if(!label) return; state.myPacking.mine=[...(state.myPacking.mine||[]),{id:uid(),label:label.slice(0,80)}]; savePacking().catch(()=>{}); renderView(); }
 function removeMyPack(id){ state.myPacking.mine=(state.myPacking.mine||[]).filter(x=>x.id!==id); const c=new Set(state.myPacking.checked); c.delete(id); state.myPacking.checked=[...c]; savePacking().catch(()=>{}); renderView(); }
@@ -3676,9 +3713,9 @@ async function createCall(kind,label,at){
 }
 async function joinCall(c){
   const set=new Set(c.in||[]); set.has(state.user.id)?set.delete(state.user.id):set.add(state.user.id);
-  await updateDoc(doc(db,"calls",c.id), { "in":[...set] });
+  await updateDoc(dref("calls",c.id), { "in":[...set] });
 }
-async function endCall(id){ await deleteDoc(doc(db,"calls",id)); }
+async function endCall(id){ await deleteDoc(dref("calls",id)); }
 function callsCard(){
   if(!feat("overlaps")) return "";
   const calls=activeCalls();
