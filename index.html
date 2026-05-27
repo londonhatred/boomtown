@@ -2215,7 +2215,7 @@ function wireView(){
   v.querySelectorAll("[data-goto-stage]").forEach(b=>b.onclick=()=>{
     const s=stagesWithCoords().find(x=>x.name===b.dataset.gotoStage);
     if(s) find.target="st:"+s.id;
-    find.enabledOnce=true; state.view="find"; renderApp();
+    find.enabledOnce=true; localStorage.setItem("fp_findon","1"); state.view="find"; renderApp();
   });
 
   // ---- browse filters ----
@@ -2245,7 +2245,7 @@ function wireView(){
 
   // ---- find / compass ----
   if(state.view==="find"){
-    const en=v.querySelector("#find-enable-btn"); if(en) en.onclick=()=>{ find.enabledOnce=true; enableFind(); };
+    const en=v.querySelector("#find-enable-btn"); if(en) en.onclick=()=>{ find.enabledOnce=true; localStorage.setItem("fp_findon","1"); enableFind(); };
     if(find.enabledOnce && !find.started && !find.error && locationEnabled()) startFindSensors();
     v.querySelectorAll("[data-leg]").forEach(b=>b.onclick=()=>{ find.show[b.dataset.leg]=!find.show[b.dataset.leg]; find.target=null; renderView(); });
     const shareTog=v.querySelector("#share-toggle"); if(shareTog) shareTog.onclick=()=>{ if(find.share) stopShare(true); else startShare(); renderApp(); };
@@ -2780,7 +2780,7 @@ function renderBulkModal(){
 /* ============================================================
    FIND — GPS compass + radar to stages
    ============================================================ */
-let find = { started:false, enabledOnce:false, geoWatch:null, orientBound:false, orientHandler:null,
+let find = { started:false, enabledOnce: localStorage.getItem("fp_findon")==="1", geoWatch:null, orientBound:false, orientHandler:null,
              pos:null, acc:null, heading:null, hasOrientation:false, headingMode:"auto", target:null, error:null,
              show:{stages:true,people:true,pins:true}, share:false, shareTimer:null, myUpdated:0, lastWrite:0,
              lost:false, autoStopAt:0, autoStopTimer:null, packingSubbed:false, notify:false, notifyTimers:[], notifiedChanges:{}, notifiedMentions:{}, notifiedCalls:{}, sessionStart:Date.now(),
