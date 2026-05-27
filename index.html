@@ -133,6 +133,29 @@
   .clash-warn .cw-sub{font-size:12px;opacity:.92}
   .clash-warn .cw-arrow{flex:none;font-size:22px;line-height:1;opacity:.85;margin-left:2px}
   .clash-warn:active{transform:translateY(1px)}
+  .tri-toggle{display:flex;flex:none;border:2px solid var(--ink);border-radius:999px;overflow:hidden;background:var(--paper)}
+  .tri-toggle .tri-opt{appearance:none;border:none;background:transparent;font:inherit;font-size:11px;font-weight:700;padding:5px 10px;cursor:pointer;color:var(--ink-2);border-right:2px solid var(--ink);text-transform:uppercase;letter-spacing:.04em}
+  .tri-toggle .tri-opt:last-child{border-right:none}
+  .tri-toggle .tri-opt.on{background:var(--violet);color:#fff}
+  .energy-card{background:var(--card);border:2px dashed var(--gold);border-radius:var(--radius);padding:14px 16px;margin-bottom:14px}
+  .rhythm-card{background:var(--card);border:2px solid var(--ink);border-radius:var(--radius);padding:14px 16px;margin-top:14px}
+  .rh-stat{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;font-size:13px;border-top:1px solid var(--line)}
+  .rh-stat:first-of-type{border-top:none;margin-top:6px}
+  .rh-stat b{font-family:"Anton";font-size:15px}
+  .rh-chart{margin-top:10px;display:flex;flex-direction:column;gap:4px}
+  .rh-row{display:flex;align-items:center;gap:8px;font-size:11px}
+  .rh-row .rh-h{flex:none;width:28px;color:var(--ink-2);font-weight:700}
+  .rh-row .rh-bar{flex:1;height:9px;background:var(--line);border-radius:4px;overflow:hidden}
+  .rh-row .rh-bar i{display:block;height:100%}
+  .rh-row .rh-c{flex:none;width:18px;text-align:right;color:var(--ink-2);font-weight:700}
+  .sp-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:13.5px}
+  .sp-row:first-child{border-top:none}
+  .sp-rank{font-family:"Anton";font-size:17px;color:var(--accent);width:20px;flex:none;text-align:center}
+  .sp-name{font-weight:700;display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sp-bar{height:5px;background:var(--line);border-radius:3px;margin-top:4px;overflow:hidden}
+  .sp-bar i{display:block;height:100%;background:var(--gold)}
+  .sp-score{font-family:"Anton";font-size:15px;color:var(--teal);flex:none}
+  .sp-score small{font-family:"Archivo";font-size:11px;font-weight:600;color:var(--ink-2)}
   .recap{background:var(--ink);color:var(--paper);border-radius:var(--radius);padding:20px;text-align:center}
   .recap h3{font-family:"Anton";font-weight:400;font-size:24px;margin:0 0 2px;text-transform:uppercase;letter-spacing:.01em}
   .recap .sub{font-size:11px;opacity:.65;margin-bottom:18px;text-transform:uppercase;letter-spacing:.14em}
@@ -785,6 +808,27 @@ function initials(name){
 }
 /* admin feature flags (default ON) and festival-date helpers */
 function feat(name){ const f=state.structure.features; return f ? f[name]!==false : true; }
+// adminFeat — for experimental/personal features. Default OFF.
+// State machine: "off" → "admin-only" → "shared with everyone" (promoted to feat()).
+function adminFeatState(name){
+  const shared = state.structure.features || {};
+  const adm    = state.structure.adminFeatures || {};
+  if(shared[name]===true) return "shared";   // promoted to everyone
+  if(adm[name]===true)    return "admin";    // admin-only
+  return "off";
+}
+function adminFeat(name){
+  const s=adminFeatState(name);
+  if(s==="shared") return true;
+  if(s==="admin")  return !!(state.user && state.user.admin);
+  return false;
+}
+// Catalog of experimental/admin-only features. Add new ones here as they're built.
+const ADMIN_FEATURES = [
+  ["energy",   "Energy tracking",         "Notices your peak/taper patterns; gentle nudges when you're running long"],
+  ["stagepers","Stage personality",       "Aggregates crew ratings per stage so you can see where the gold is"],
+  ["heatmap",  "Where you spent time",    "A heatmap built from your trail showing where you actually clustered"],
+];
 function festivalStart(){ const s=state.structure.festivalStartDate; return s ? new Date(s+"T00:00:00") : null; }
 function dateForDay(day){ const base=festivalStart(); if(!base) return null; const d=new Date(base); d.setDate(d.getDate()+Math.max(0,DAYS.indexOf(day))); return d; }
 // Festival "day" runs noon→noon-ish: clock times before this hour belong to the PREVIOUS day's night.
@@ -1658,6 +1702,7 @@ function homeDuring(){
     }
   }
   cards.push(nextCard);
+  cards.push(energyNudgeCard());
 
   // weather strip + clash resolver (both auto-hide when empty)
   cards.push(weatherCard());
@@ -2374,6 +2419,7 @@ function viewShared(){
     <div class="sec-head"><div><h2>The group</h2><div class="lead">${lead}</div></div></div>
     <div class="filters">${friendChips}</div>
     ${friend==="all"?favesCard():""}
+    ${friend==="all"?stagePersonalityCard():""}
     ${friend==="all"?meetupCard():""}
     ${friend==="all"?callsCard():""}
     ${body}
@@ -2414,6 +2460,60 @@ function sharedCard(ev){
 }
 
 /* ---------- ADMIN ---------- */
+// ---- Energy patterns: gentle observations from picks, ratings & trail ----
+// Uses only existing data. Honest about needing multiple days to mean anything.
+function energyData(){
+  const out={ rated:[], hours:{}, latestEnd:null, gapsAfter:[] };
+  const myR = state.ratings.filter(r=>r.userId===state.user.id);
+  myR.forEach(r=>{
+    const ev=state.events.find(e=>e.id===r.eventId); if(!ev) return;
+    const end=eventEnd(ev); if(!end) return;
+    out.rated.push({ev, score:r.score, end});
+    const h=end.getHours();
+    if(!out.hours[h]) out.hours[h]={count:0,sum:0};
+    out.hours[h].count++; out.hours[h].sum+=r.score;
+    if(!out.latestEnd || end>out.latestEnd) out.latestEnd=end;
+  });
+  return out;
+}
+function peakHour(){
+  const d=energyData();
+  let best=null;
+  Object.entries(d.hours).forEach(([h,v])=>{
+    // peak = the hour where you rated the most sets (engagement-weighted), with avg ≥ 7 as a sanity check
+    if(v.count>=2 && v.sum/v.count>=7){ if(!best || v.count>best.count) best={h:+h, count:v.count, avg:v.sum/v.count}; }
+  });
+  return best;
+}
+// Should a "you're running long" nudge fire? Honest gate: festival "during" phase, energy admin-feat on,
+// at least 3 rated sets total, we have a clear peak, today's current hour is >=3 hours past peak,
+// and it's been >2 hrs since last engagement. At most once per day (localStorage dedupe).
+function shouldEnergyNudge(){
+  if(!adminFeat("energy") || !state.user) return null;
+  if(festivalPhase()!=="during") return null;
+  const today=currentFestivalDay(); if(!today) return null;
+  const tag="fp_energy_"+today;
+  if(localStorage.getItem(tag)==="1") return null;
+  const d=energyData(); if(d.rated.length<3) return null;
+  const peak=peakHour(); if(!peak) return null;
+  const now=new Date(); const curH=now.getHours();
+  // simple "past peak by 3h" check (handles wraparound for late-night peaks)
+  const peakH=peak.h; const hoursPastPeak=((curH-peakH)+24)%24;
+  if(hoursPastPeak<3 || hoursPastPeak>10) return null;   // not "running long", or too long ago to count
+  const sinceLast=(d.latestEnd ? (now-d.latestEnd)/3600000 : 999);
+  if(sinceLast<2) return null;                            // recently engaged → not a taper
+  return { peakH, hoursPastPeak:Math.round(hoursPastPeak), tag };
+}
+function dismissEnergyNudge(tag){ try{ localStorage.setItem(tag,"1"); }catch(e){} }
+function energyNudgeCard(){
+  const n=shouldEnergyNudge(); if(!n) return "";
+  const peakFmt=`${(n.peakH%12)||12}${n.peakH>=12?'pm':'am'}`;
+  return `<div class="home-card energy-card" id="energy-nudge">
+    <div class="hc-title" style="display:flex;align-items:center;gap:6px">💛 A gentle nudge</div>
+    <p style="font-size:13.5px;line-height:1.45;margin:6px 0 10px">Your peak's usually around <b>${peakFmt}</b> and you're ${n.hoursPastPeak}h past it. If you're flagging, a sit-down + water now will pay dividends later.</p>
+    <button class="btn ghost sm" id="energy-dismiss" data-tag="${n.tag}">Got it, hush for today</button>
+  </div>`;
+}
 // ---- Festival recap: per-day + overall "in numbers" ----
 function recapStats(dayName){
   // dayName === null → whole festival; else just that day
@@ -2481,17 +2581,81 @@ function viewRecap(){
       </div>
       ${s.topSet?`<div class="recap-foot">Your top set: <b>${esc(s.topSet.e.title)}</b> · you rated it ${s.topSet.r.toFixed(1)}</div>`:(s.ratedCount===0?`<div class="recap-foot">Rate sets as they finish to crown your top one.</div>`:"")}
     </div>
+    ${rhythmCard()}
     <div class="find-note" style="margin-top:12px">Miles walked come from your private trail — only counts time the app's location was on. Updates as the festival goes.</div>
   `;
+}
+function stagePersonality(){
+  // Aggregate every rating across the crew, grouped by stage.
+  // Returns: [{stage, avg, count, districtId, districtName}] sorted by avg desc.
+  const by={};
+  state.ratings.forEach(r=>{
+    const ev=state.events.find(e=>e.id===r.eventId); if(!ev||!ev.stageName) return;
+    const key=ev.stageName;
+    if(!by[key]) by[key]={stage:ev.stageName, sum:0, count:0, districtId:ev.districtId, districtName:ev.districtName};
+    by[key].sum+=r.score; by[key].count++;
+  });
+  return Object.values(by).filter(s=>s.count>=2).map(s=>({...s, avg:s.sum/s.count})).sort((a,b)=>b.avg-a.avg);
+}
+function stagePersonalityCard(){
+  if(!adminFeat("stagepers")) return "";
+  const rows=stagePersonality();
+  if(!rows.length) return "";
+  const max=Math.max(...rows.map(r=>r.avg))||10;
+  const items=rows.slice(0,8).map((r,i)=>{
+    const pct=Math.round(r.avg/10*100);
+    const c=districtColor(r.districtId);
+    return `<div class="sp-row">
+      <span class="sp-rank">${i+1}</span>
+      <div style="flex:1;min-width:0">
+        <div class="sp-name"><span class="area-tag" style="--c:${c}">${esc(r.districtName||"")}</span> ${esc(r.stage)}</div>
+        <div class="sp-bar"><i style="width:${pct}%"></i></div>
+      </div>
+      <span class="sp-score">${r.avg.toFixed(1)}<small> · ${r.count}</small></span>
+    </div>`;
+  }).join("");
+  return `<div class="free-card"><div class="free-head">Stage personality</div>
+    <div class="find-note" style="margin-bottom:6px">Average rating across every set at each stage (crew-wide). Score · number of ratings.</div>
+    ${items}</div>`;
+}
+function rhythmCard(){
+  if(!adminFeat("energy")) return "";
+  const d=energyData();
+  if(d.rated.length<3) return "";   // not enough data to say anything honest
+  const peak=peakHour();
+  // little ASCII-ish bar chart of ratings-by-hour
+  const hours=Object.keys(d.hours).map(Number).sort((a,b)=>a-b);
+  const maxCount=Math.max(...hours.map(h=>d.hours[h].count));
+  const bars=hours.map(h=>{
+    const v=d.hours[h]; const pct=Math.round(v.count/maxCount*100);
+    const lbl=`${(h%12)||12}${h>=12?'p':'a'}`;
+    const isPeak=peak && peak.h===h;
+    return `<div class="rh-row"><span class="rh-h">${lbl}</span><span class="rh-bar"><i style="width:${pct}%;background:${isPeak?'var(--accent)':'var(--teal)'}"></i></span><span class="rh-c">${v.count}</span></div>`;
+  }).join("");
+  const peakLbl = peak ? `${(peak.h%12)||12}${peak.h>=12?'pm':'am'}` : "—";
+  const latestLbl = d.latestEnd ? (()=>{ const x=d.latestEnd; let h=x.getHours(); const ap=h>=12?'pm':'am'; h=h%12||12; return `${h}${x.getMinutes()?":"+String(x.getMinutes()).padStart(2,"0"):""}${ap}`; })() : "—";
+  return `<div class="rhythm-card">
+    <div class="hc-title" style="display:flex;justify-content:space-between;align-items:baseline"><span>Your rhythm</span><span class="find-note" style="font-weight:400">across rated sets</span></div>
+    <div class="rh-stat"><span>Peak</span><b>${peakLbl}</b></div>
+    <div class="rh-stat"><span>Latest you stayed engaged</span><b>${latestLbl}</b></div>
+    <div class="rh-chart">${bars}</div>
+    <div class="find-note" style="margin-top:8px">Built from when you rated sets — the more you rate, the truer this gets.</div>
+  </div>`;
 }
 function viewTrail(){
   const trail=loadTrail();
   const stages=stagesWithCoords();
+  const showHeat = adminFeat("heatmap");
   const head=`<div class="sec-head"><div><h2>Where were you?</h2><div class="lead">A private trail of where you wandered. Stays on your phone only.</div></div></div>`;
   if(trail.length<2){
     return head+emptyState("","Not much yet","Keep the app's location on as you move around and your trail builds up here. Nothing is shared — it's just for you.");
   }
-  // collect all points (trail + stages) to compute bounds
+  const mode = (showHeat && state.trailMode==="heat") ? "heat" : "path";
+  const toggleBar = showHeat ? `<div class="filters" style="margin-bottom:10px">
+    <button class="chip ${mode==='path'?'on':''}" data-trail-mode="path">Path</button>
+    <button class="chip ${mode==='heat'?'on':''}" data-trail-mode="heat">Where you settled</button>
+  </div>` : "";
+  // shared coordinate maths for both modes
   const pts=trail.map(p=>({lat:p.lat,lng:p.lng})).concat(stages.map(s=>({lat:s.lat,lng:s.lng})));
   const lats=pts.map(p=>p.lat), lngs=pts.map(p=>p.lng);
   const minLat=Math.min(...lats), maxLat=Math.max(...lats), minLng=Math.min(...lngs), maxLng=Math.max(...lngs);
@@ -2499,23 +2663,58 @@ function viewTrail(){
   const spanLat=(maxLat-minLat)||0.0001, spanLng=(maxLng-minLng)||0.0001;
   const sx=v=>PAD+((v-minLng)/spanLng)*(W-2*PAD);
   const sy=v=>H-PAD-((v-minLat)/spanLat)*(H-2*PAD);   // north up
-  const path=trail.map((p,i)=>`${i?'L':'M'}${sx(p.lng).toFixed(1)},${sy(p.lat).toFixed(1)}`).join(" ");
   const stageDots=stages.map(s=>`<circle cx="${sx(s.lng).toFixed(1)}" cy="${sy(s.lat).toFixed(1)}" r="5" fill="${s.color}" stroke="var(--ink)" stroke-width="1.5"/><text x="${sx(s.lng).toFixed(1)}" y="${(sy(s.lat)-8).toFixed(1)}" font-size="8" text-anchor="middle" fill="var(--ink-2)">${esc(abbrev(s.name))}</text>`).join("");
-  const start=trail[0], end=trail[trail.length-1];
   const fmtT=ts=>{ const d=new Date(ts); return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); };
+
+  let chart;
+  if(mode==="heat"){
+    // Time-weighted heatmap: weight each point by how long until the NEXT point (time spent there).
+    const COLS=12, ROWS=12;
+    const grid=Array.from({length:ROWS},()=>Array(COLS).fill(0));
+    let totalMin=0;
+    for(let i=0;i<trail.length;i++){
+      const p=trail[i];
+      const next=trail[i+1];
+      const dwellMs = next ? Math.min(45*60000, next.t-p.t) : 5*60000;   // cap at 45min so a single big gap doesn't dominate
+      const dwellMin = dwellMs/60000;
+      totalMin += dwellMin;
+      const cx=Math.min(COLS-1, Math.max(0, Math.floor((p.lng-minLng)/spanLng*COLS)));
+      const cy=Math.min(ROWS-1, Math.max(0, Math.floor((1-(p.lat-minLat)/spanLat)*ROWS)));   // y-flip for north up
+      grid[cy][cx]+=dwellMin;
+    }
+    const max=Math.max(1,...grid.flat());
+    const cellW=(W-2*PAD)/COLS, cellH=(H-2*PAD)/ROWS;
+    const cells=[];
+    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+      const v=grid[r][c]; if(v<=0) continue;
+      const alpha=Math.min(0.85, 0.15+0.7*(v/max));
+      cells.push(`<rect x="${(PAD+c*cellW).toFixed(1)}" y="${(PAD+r*cellH).toFixed(1)}" width="${cellW.toFixed(1)}" height="${cellH.toFixed(1)}" fill="rgba(214,55,28,${alpha.toFixed(2)})"/>`);
+    }
+    chart=`<svg viewBox="0 0 ${W} ${H}" style="width:100%">
+      <text x="${W/2}" y="13" text-anchor="middle" font-family="Anton" font-size="11" fill="var(--ink-2)">N ↑</text>
+      ${cells.join("")}
+      ${stageDots}
+    </svg>
+    <div class="find-note" style="margin-top:8px">Brighter = longer dwelt. Total tracked time: ~${Math.round(totalMin)} min across ${trail.length} points.</div>`;
+  } else {
+    const path=trail.map((p,i)=>`${i?'L':'M'}${sx(p.lng).toFixed(1)},${sy(p.lat).toFixed(1)}`).join(" ");
+    const start=trail[0], end=trail[trail.length-1];
+    chart=`<svg viewBox="0 0 ${W} ${H}" style="width:100%">
+      <text x="${W/2}" y="13" text-anchor="middle" font-family="Anton" font-size="11" fill="var(--ink-2)">N ↑</text>
+      <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-dasharray="1 6" stroke-linecap="round" stroke-linejoin="round"/>
+      ${stageDots}
+      <circle cx="${sx(start.lng).toFixed(1)}" cy="${sy(start.lat).toFixed(1)}" r="5" fill="var(--ink-2)"/>
+      <circle cx="${sx(end.lng).toFixed(1)}" cy="${sy(end.lat).toFixed(1)}" r="6" fill="var(--accent)"/>
+    </svg>
+    <div class="find-note" style="display:flex;justify-content:space-between;margin-top:4px">
+      <span>● Start ${fmtT(start.t)}</span><span style="color:var(--accent)">● Latest ${fmtT(end.t)}</span>
+    </div>
+    <div class="find-note" style="margin-top:8px">${trail.length} points · straight lines between them, not exact paths. Coloured dots are pinned stages for reference.</div>`;
+  }
   return head+`
     <div class="card">
-      <svg viewBox="0 0 ${W} ${H}" style="width:100%">
-        <text x="${W/2}" y="13" text-anchor="middle" font-family="Anton" font-size="11" fill="var(--ink-2)">N ↑</text>
-        <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-dasharray="1 6" stroke-linecap="round" stroke-linejoin="round"/>
-        ${stageDots}
-        <circle cx="${sx(start.lng).toFixed(1)}" cy="${sy(start.lat).toFixed(1)}" r="5" fill="var(--ink-2)"/>
-        <circle cx="${sx(end.lng).toFixed(1)}" cy="${sy(end.lat).toFixed(1)}" r="6" fill="var(--accent)"/>
-      </svg>
-      <div class="find-note" style="display:flex;justify-content:space-between;margin-top:4px">
-        <span>● Start ${fmtT(start.t)}</span><span style="color:var(--accent)">● Latest ${fmtT(end.t)}</span>
-      </div>
-      <div class="find-note" style="margin-top:8px">${trail.length} points · straight lines between them, not exact paths. Coloured dots are pinned stages for reference.</div>
+      ${toggleBar}
+      ${chart}
       <button class="btn ghost block" id="trail-clear" style="margin-top:12px">Clear my trail</button>
     </div>`;
 }
@@ -2671,6 +2870,22 @@ function viewAdmin(){
           <div style="min-width:0"><b style="font-size:13.5px">${t}</b><div class="find-note">${d}</div></div>
           <button class="switch ${feat(k)?'on':''}" data-feat="${k}" role="switch" aria-checked="${feat(k)}"><span></span></button>
         </div>`).join("")}
+    </div>
+
+    <div class="card admin-block" style="border-color:var(--violet)">
+      <div style="font-family:Anton;font-size:15px;text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px;color:var(--violet)">Just for me</div>
+      <div class="find-note" style="margin-bottom:8px">Experimental features. <b>Off</b> = nobody sees it · <b>Just me</b> = admins only · <b>Everyone</b> = released to all users.</div>
+      ${ADMIN_FEATURES.map(([k,t,d])=>{
+        const st=adminFeatState(k);
+        return `<div class="share-row" style="border:none;padding:9px 0;margin:0;background:none;border-top:1px solid var(--line)">
+          <div style="min-width:0;flex:1"><b style="font-size:13.5px">${t}</b><div class="find-note">${d}</div></div>
+          <div class="tri-toggle" data-afeat="${k}">
+            <button class="tri-opt ${st==='off'?'on':''}"    data-tri="off">Off</button>
+            <button class="tri-opt ${st==='admin'?'on':''}"  data-tri="admin">Just me</button>
+            <button class="tri-opt ${st==='shared'?'on':''}" data-tri="shared">Everyone</button>
+          </div>
+        </div>`;
+      }).join("")}
     </div>
 
     <div class="card admin-block">
@@ -2836,11 +3051,13 @@ function wireView(){
   const printBtn=v.querySelector("#print-plan"); if(printBtn) printBtn.onclick=()=>window.print();
   const openClash=v.querySelector("#open-clashes"); if(openClash) openClash.onclick=openClashModal;
   const homeClashWarn=v.querySelector("#home-clashwarn"); if(homeClashWarn) homeClashWarn.onclick=openClashModal;
+  const energyDismiss=v.querySelector("#energy-dismiss"); if(energyDismiss) energyDismiss.onclick=()=>{ dismissEnergyNudge(energyDismiss.dataset.tag); const card=document.getElementById("energy-nudge"); if(card) card.remove(); };
   const addShift=v.querySelector("#add-shift"); if(addShift) addShift.onclick=()=>{ state.modal={type:"shift",data:null}; renderModal(); };
   v.querySelectorAll("[data-edit-shift]").forEach(b=>b.onclick=()=>{ const sh=state.shifts.find(x=>x.id===b.dataset.editShift); state.modal={type:"shift",data:sh}; renderModal(); });
   v.querySelectorAll("[data-del-shift]").forEach(b=>b.onclick=async()=>{ const sh=state.shifts.find(x=>x.id===b.dataset.delShift); if(confirm(`Delete "${sh.label||'shift'}"?`)){ await deleteShift(sh.id); toast("Shift removed"); } });
   v.querySelectorAll("[data-rate]").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openRatingModal(b.dataset.rate); });
   const trailClear=v.querySelector("#trail-clear"); if(trailClear) trailClear.onclick=()=>{ if(confirm("Clear your private location trail?")){ clearTrail(); renderView(); } };
+  v.querySelectorAll("[data-trail-mode]").forEach(b=>b.onclick=()=>{ state.trailMode=b.dataset.trailMode; renderView(); });
   v.querySelectorAll("[data-recap]").forEach(b=>b.onclick=()=>{ state.recapDay = b.dataset.recap==="__all" ? null : b.dataset.recap; renderView(); });
   if(state.view==="mine") setTimeout(markChangesSeen, 4000);
 
@@ -2970,6 +3187,18 @@ function wireView(){
   v.querySelectorAll("[data-feat]").forEach(b=>b.onclick=async()=>{
     const k=b.dataset.feat; const features={...(state.structure.features||{})}; features[k]=!feat(k);
     await saveStructure({...state.structure, features});
+  });
+  // Tri-state controls for admin-only features. Off / admin / shared.
+  v.querySelectorAll(".tri-toggle [data-tri]").forEach(b=>b.onclick=async()=>{
+    const wrap=b.closest(".tri-toggle"); if(!wrap) return;
+    const k=wrap.dataset.afeat; const target=b.dataset.tri;     // "off" | "admin" | "shared"
+    const features      = {...(state.structure.features||{})};
+    const adminFeatures = {...(state.structure.adminFeatures||{})};
+    // Clear both, then set the right one (off = neither set)
+    delete features[k]; delete adminFeatures[k];
+    if(target==="admin")  adminFeatures[k]=true;
+    if(target==="shared") features[k]=true;
+    await saveStructure({...state.structure, features, adminFeatures});
   });
   v.querySelectorAll("[data-del-user]").forEach(b=>b.onclick=async()=>{
     const u=state.users.find(x=>x.id===b.dataset.delUser); if(!u) return;
@@ -3544,7 +3773,7 @@ async function createTestStages(){
   const districts=defaults.map(d=>({...d, stages:d.stages.map(st=> existing[st.id]?{...st,...existing[st.id]}:st)}));
   await saveStructure({
     festivalName:"Test Festival", districts, festivalStartDate:ymd,
-    features:state.structure.features||{}, autoStopHours:4,
+    features:state.structure.features||{}, adminFeatures:state.structure.adminFeatures||{}, autoStopHours:4,
     infoItems:[], packingItems:[], walkReset:state.structure.walkReset||null, weatherCache:null
   });
 }
