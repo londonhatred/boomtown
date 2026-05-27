@@ -246,6 +246,9 @@
   .readout .r-dist{font-family:"Anton";font-size:30px;color:var(--paper);line-height:1;text-align:right}
   .readout .r-dist small{display:block;font-family:"Archivo";font-size:10px;letter-spacing:.06em;color:#d8cdb2;font-weight:700;margin-top:3px;text-transform:uppercase}
   .readout.r-here .r-dist{color:#9FD8C4}
+  .r-right{display:flex;align-items:center;gap:10px}
+  .r-clear{flex:none;width:30px;height:30px;border-radius:50%;border:1.5px solid #6f6a5e;background:transparent;color:#d8cdb2;font-size:14px;line-height:1;cursor:pointer;padding:0}
+  .r-clear:active{background:#6f6a5e;color:var(--ink)}
   .wt-time.here{color:var(--accent)}
   .radar-wrap{display:flex;justify-content:center;margin:4px 0 12px}
   #radar{width:100%;max-width:320px;height:auto;touch-action:manipulation}
@@ -2268,7 +2271,8 @@ function wireView(){
       else { if(!find.share) startShare(); find.lost=true; writeMyLocation(); toast("Marked lost — your group can find you"); }
       renderApp();
     };
-    v.querySelectorAll("[data-target]").forEach(b=>b.onclick=()=>{ find.target=b.dataset.target; renderView(); });
+    v.querySelectorAll("[data-target]").forEach(b=>b.onclick=()=>{ find.target = (find.target===b.dataset.target) ? null : b.dataset.target; renderView(); });
+    const fclear=v.querySelector("#find-clear"); if(fclear) fclear.onclick=()=>{ find.target=null; renderView(); };
     v.querySelectorAll("[data-fmode]").forEach(b=>b.onclick=()=>{ find.headingMode=b.dataset.fmode; renderView(); });
     if(find.started && find.pos) updateFindDynamic();
   }
@@ -2972,7 +2976,10 @@ async function generateTestLineup(){
   const ACTS=["Aurora Skies","Midnight Caller","The Velvet Drop","Echo & Pulse","Glass Animals Jr","Sunbeam Collective",
     "Bass Theory","Northern Lights","Paper Tigers","The Lowlands","Disco Volante","Neon Forest","Wild Honey",
     "Tidal","Crooked Teeth","Mr Scruff Jr","Lunar Tide","Brass Monkey","The Haxans","Solar Flare","Cosmic Dust",
-    "Riptide","Golden Hour","Static Bloom","Moth & Moon","Deep End","The Foxgloves"];
+    "Riptide","Golden Hour","Static Bloom","Moth & Moon","Deep End","The Foxgloves","Velvet Sky","Iron Bloom",
+    "Sable & Sons","The Quiet Hours","Marigold","Pulsewidth","Honeytrap","The Wandering","Cinder","Low Country",
+    "Saltwater","Ember & Oak","Night Bus","The Reverie","Wax Lyrical","Dust Devils","Slow Tide","Kingfisher",
+    "The Gloaming","Copper Wren","Fathom","Tin Soldiers","Hidden Hand","Wildflower"];
   let ai=0; const ev=[];
   stages.forEach((s,si)=>{
     let t=si*15; const windowEnd=480;
@@ -2982,10 +2989,10 @@ async function generateTestLineup(){
       t+=len+[0,0,5,10][Math.floor(Math.random()*4)];
     }
   });
-  // guarantee a 3-way clash near now across the first three distinct stages
+  // guarantee a 3-way clash near now across the first three distinct stages (real names)
   if(stages.length>=3){
     const cl=[[20,90],[35,60],[40,75]];
-    cl.forEach(([s,l],i)=>{ const sg=stages[i]; ev.push({ districtId:sg.d.id, districtName:sg.d.name, stageId:sg.st.id, stageName:sg.st.name, day, start:at(s), end:at(s+l), title:`Headliner ${["A","B","C"][i]} (clash)`, notes:"" }); });
+    cl.forEach(([s,l],i)=>{ const sg=stages[i]; const nm=ACTS[ai++]||("Late Add "+(i+1)); ev.push({ districtId:sg.d.id, districtName:sg.d.name, stageId:sg.st.id, stageName:sg.st.name, day, start:at(s), end:at(s+l), title:nm, notes:"" }); });
   }
   for(const e of ev){ await addDoc(colEvents, {...e, createdAt:serverTimestamp()}); }
 }
@@ -3397,7 +3404,7 @@ function viewFind(){
   const topBlock = tgt ? `
     <div class="readout" id="find-readout">
       <div style="min-width:0"><div class="r-name">${esc(tgt.name)}</div><div class="r-dir">—</div></div>
-      <div class="r-dist">…<small>away</small></div>
+      <div class="r-right"><div class="r-dist">…<small>away</small></div><button class="r-clear" id="find-clear" title="Stop navigating to this" aria-label="Clear target">✕</button></div>
     </div>` : `
     <div class="find-prompt">Tap a stage, person or pin to get a compass &amp; distance to it.</div>
     ${walkTimesCard(null, "Walk times from here")}`;
