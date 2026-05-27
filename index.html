@@ -1069,7 +1069,7 @@ function renderApp(){
   const u = state.user;
   root.innerHTML = `
     <div class="app${TEST_MODE?' testmode':''}">
-      ${TEST_MODE?`<div class="test-banner">🧪 TEST MODE — sandbox data, your real festival is untouched <button class="test-exit" id="test-exit">Exit test</button></div>`:''}
+      ${TEST_MODE?`<div class="test-banner">TEST MODE — sandbox data, your real festival is untouched <button class="test-exit" id="test-exit">Exit test</button></div>`:''}
       <div class="topbar">
         <div class="brand">
           <div class="mark"></div>
@@ -1079,7 +1079,7 @@ function renderApp(){
           </div>
         </div>
         <div class="who">
-          ${find.lost?`<button class="live-pill lost" id="stop-share"><span class="dot"></span>🆘 Lost</button>`:(find.share?`<button class="live-pill" id="stop-share" title="Stop sharing your location"><span class="dot"></span>Live</button>`:"")}
+          ${find.lost?`<button class="live-pill lost" id="stop-share"><span class="dot"></span>Lost</button>`:(find.share?`<button class="live-pill" id="stop-share" title="Stop sharing your location"><span class="dot"></span>Live</button>`:"")}
           <div class="avatar ${u.admin?'adm':''}" title="${esc(u.name)}">${esc(initials(u.name))}</div>
           <button class="btn ghost icon" id="menu-btn" aria-label="menu"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
         </div>
@@ -1115,16 +1115,16 @@ function navHTML(){
 
 function openMenu(){
   const items=[];
-  items.push(["home","Home","🏠"]);
-  if(feat("onnow")&&festivalStart()) items.push(["onnow","On now & soon","🎶"]);
-  items.push(["browse","Browse the lineup","🎫"]);
-  items.push(["mine","My plan","🎟️"]);
-  items.push(["shared","The group","👥"]);
-  if(locationEnabled()) items.push(["find","Find your way","🧭"]);
-  if(feat("chat")) items.push(["chat","Group chat","💬"]);
+  items.push(["home","Home",""]);
+  if(feat("onnow")&&festivalStart()) items.push(["onnow","On now & soon",""]);
+  items.push(["browse","Browse the lineup",""]);
+  items.push(["mine","My plan",""]);
+  items.push(["shared","The group",""]);
+  if(locationEnabled()) items.push(["find","Find your way",""]);
+  if(feat("chat")) items.push(["chat","Group chat",""]);
   if(feat("info")) items.push(["info","Festival info","ℹ️"]);
-  if(feat("packing")) items.push(["packing","Packing list","🎒"]);
-  if(state.user.admin) items.push(["admin","Manage festival","⚙️"]);
+  if(feat("packing")) items.push(["packing","Packing list",""]);
+  if(state.user.admin) items.push(["admin","Manage festival",""]);
   const wrap=document.createElement("div"); wrap.className="modal-bg";
   wrap.innerHTML=`<div class="modal">
     <div class="modal-head"><h2>Menu</h2><button class="btn ghost sm" id="mn-close">Close</button></div>
@@ -1183,11 +1183,11 @@ function eventCard(ev, {picked, clash, changed}={}){
       <div class="meta">
         <span class="area-tag" style="--c:${c}">${esc(ev.districtName)}</span>
         <span class="loc">${esc(ev.stageName)}</span>
-        ${changed?'<span class="changed-badge">⚠ time changed</span>':''}
+        ${changed?'<span class="changed-badge">time changed</span>':''}
         ${friendsMust?`<span class="fmust">★ ${friendsMust} must-see</span>`:''}
       </div>
       ${ev.notes?`<div class="notes">${esc(ev.notes)}</div>`:""}
-      ${clash?`<div class="clash-note">⚠ Overlaps with another pick</div>`:""}
+      ${clash?`<div class="clash-note">Overlaps with another pick</div>`:""}
       ${count?`<div class="goers">${attendeeChips(goers)}</div>`:""}
     </div>
     <div class="act">
@@ -1254,13 +1254,13 @@ function changedPickCount(){
 function viewHome(){
   const phase=festivalPhase();
   const fname=esc(state.structure.festivalName||"Festival");
-  const hi=`<div class="home-hi"><div><div class="home-hello">Hi ${esc(state.user.name.split(/\s+/)[0])} 👋</div><div class="home-fname">${fname}</div></div></div>`;
+  const hi=`<div class="home-hi"><div><div class="home-hello">Hi ${esc(state.user.name.split(/\s+/)[0])} </div><div class="home-fname">${fname}</div></div></div>`;
 
   if(phase==="before"||phase==="nodate"){
     return hi + homeBefore(phase);
   }
   if(phase==="after"){
-    return hi + `<div class="home-card"><div class="hc-title">That's a wrap 💫</div><div class="find-note">Hope it was magic. ${feat("recap")?'Your festival recap is in the menu.':'Thanks for using the planner!'}</div></div>`
+    return hi + `<div class="home-card"><div class="hc-title">That's a wrap </div><div class="find-note">Hope it was magic. ${feat("recap")?'Your festival recap is in the menu.':'Thanks for using the planner!'}</div></div>`
       + homeQuickActions();
   }
   return hi + homeDuring();
@@ -1284,13 +1284,13 @@ function homeBefore(phase){
   if(feat("packing")){
     const shared=(state.structure.packingItems||[]).length, mine=(state.myPacking.mine||[]).length;
     const total=shared+mine, done=(state.myPacking.checked||[]).length;
-    if(total) pack=`<button class="home-card tappable" data-go="packing"><div class="hc-row"><div><div class="hc-title">🎒 Packing</div><div class="find-note">${done}/${total} packed</div></div><div class="hc-pct">${Math.round(done/total*100)}%</div></div><div class="pack-bar" style="margin-top:8px"><div class="pack-fill" style="width:${Math.round(done/total*100)}%"></div></div></button>`;
+    if(total) pack=`<button class="home-card tappable" data-go="packing"><div class="hc-row"><div><div class="hc-title">Packing</div><div class="find-note">${done}/${total} packed</div></div><div class="hc-pct">${Math.round(done/total*100)}%</div></div><div class="pack-bar" style="margin-top:8px"><div class="pack-fill" style="width:${Math.round(done/total*100)}%"></div></div></button>`;
   }
   const planLine = picks.length
-    ? `${picks.length} pick${picks.length>1?'s':''}${noPlan.length?` · nothing planned ${noPlan.length>1?'for '+noPlan.length+' days':'for '+noPlan[0]}`:` · all days covered 🎉`}`
+    ? `${picks.length} pick${picks.length>1?'s':''}${noPlan.length?` · nothing planned ${noPlan.length>1?'for '+noPlan.length+' days':'for '+noPlan[0]}`:` · all days covered `}`
     : `You haven't picked any acts yet`;
   return `${countdown}
-    <button class="home-card tappable" data-go="browse"><div class="hc-row"><div><div class="hc-title">🎫 Your plan</div><div class="find-note">${planLine}</div></div><div class="hc-go">›</div></div></button>
+    <button class="home-card tappable" data-go="browse"><div class="hc-row"><div><div class="hc-title">Your plan</div><div class="find-note">${planLine}</div></div><div class="hc-go">›</div></div></button>
     ${pack}
     ${feat("info")?`<button class="home-card tappable" data-go="info"><div class="hc-title">ℹ️ Festival info</div><div class="find-note">Travel, essentials &amp; emergency info</div></button>`:""}
     ${homeQuickActions()}`;
@@ -1305,7 +1305,7 @@ function homeDuring(){
   if(np){
     if(np.shift){
       const when=np.status==="now"?`On now · until ${esc(fmt12(np.ev.end||""))}`:`${untilText(np.mins)} · ${esc(fmt12(np.ev.start))}`;
-      nextCard=`<div class="home-card accent"><div class="hc-tag">${np.status==="now"?"On shift now":"Your shift up next"}</div><div class="hc-big">🔒 ${esc(np.ev.label||"Work shift")}</div><div class="hc-meta">${when}</div></div>`;
+      nextCard=`<div class="home-card accent"><div class="hc-tag">${np.status==="now"?"On shift now":"Your shift up next"}</div><div class="hc-big">${esc(np.ev.label||"Work shift")}</div><div class="hc-meta">${when}</div></div>`;
     } else {
       const walk = (locationEnabled()&&find.pos) ? walkLineFor(np.ev) : "";
       const when=np.status==="now"?`On now · until ${esc(fmt12(toHM(np.until)))}`:`${untilText(np.mins)} · ${esc(fmt12(np.ev.start))}`;
@@ -1327,7 +1327,7 @@ function homeDuring(){
     const ids=myPickIds();
     const onnowTarget = (feat("onnow")&&festivalStart()) ? "onnow" : "browse";
     const rows=onNow.slice(0,6).map(e=>`<button class="onnow-row tappable" data-go="${onnowTarget}"><span class="area-tag" style="--c:${districtColor(e.districtId)}">${esc(e.stageName)}</span><span class="onnow-title">${esc(e.title)}${ids.has(e.id)?' <span class="onnow-mine">★</span>':''}</span><span class="onnow-end">til ${esc(fmt12(e.end||""))}</span></button>`).join("");
-    cards.push(`<div class="home-card"><div class="hc-title">🎶 On now <span class="hc-count">${onNow.length}</span></div><div class="onnow-list">${rows}</div>${onNow.length>6?`<button class="link-btn" data-go="${onnowTarget}" style="margin-top:8px">see all ${onNow.length} →</button>`:""}</div>`);
+    cards.push(`<div class="home-card"><div class="hc-title">On now <span class="hc-count">${onNow.length}</span></div><div class="onnow-list">${rows}</div>${onNow.length>6?`<button class="link-btn" data-go="${onnowTarget}" style="margin-top:8px">see all ${onNow.length} →</button>`:""}</div>`);
   }
 
   // 3) ACTIVE RALLY CALLS
@@ -1338,7 +1338,7 @@ function homeDuring(){
         const ins=(c.in||[]).length; const joined=(c.in||[]).includes(state.user.id); const mine=c.userId===state.user.id;
         return `<div class="call-row"><div class="call-main"><div class="call-title">${callText(c)}</div><div class="call-sub">${esc(c.name||'?')} · ${ins} in</div></div>${mine?'':`<button class="btn ${joined?'lime':'primary'} sm" data-joincall="${c.id}">${joined?'✓ In':'I’m in'}</button>`}</div>`;
       }).join("");
-      cards.push(`<div class="home-card"><div class="hc-title">📣 Rally calls <span class="live-mini">live</span></div><div class="call-list">${rows}</div><button class="link-btn" data-go="shared" style="margin-top:8px">go to group →</button></div>`);
+      cards.push(`<div class="home-card"><div class="hc-title">Rally calls <span class="live-mini">live</span></div><div class="call-list">${rows}</div><button class="link-btn" data-go="shared" style="margin-top:8px">go to group →</button></div>`);
     }
   }
 
@@ -1346,8 +1346,8 @@ function homeDuring(){
   const mentions=unreadMentionCount(), changed=changedPickCount();
   if(mentions||changed){
     const bits=[];
-    if(mentions) bits.push(`<button class="attn-pill" data-go="chat">💬 ${mentions} mention${mentions>1?'s':''}</button>`);
-    if(changed) bits.push(`<button class="attn-pill" data-go="mine">⚠ ${changed} set time${changed>1?'s':''} changed</button>`);
+    if(mentions) bits.push(`<button class="attn-pill" data-go="chat">${mentions} mention${mentions>1?'s':''}</button>`);
+    if(changed) bits.push(`<button class="attn-pill" data-go="mine">${changed} set time${changed>1?'s':''} changed</button>`);
     cards.push(`<div class="home-card"><div class="hc-title">Heads up</div><div class="attn-row">${bits.join("")}</div></div>`);
   }
 
@@ -1357,11 +1357,11 @@ function homeDuring(){
     if(ppl.length){
       const rows=ppl.slice(0,6).map(p=>{
         let where="sharing"; if(find.pos){ const nr=nearestStage(p.lat,p.lng); const d=haversine(find.pos.lat,find.pos.lng,p.lat,p.lng); where=(nr?("near "+nr.stage.name):fmtDist(d)+" away"); }
-        return `<button class="crew-row tappable" data-go="find"><span class="mo-av" style="background:${personColor(p.id)}">${esc(initials(p.name))}</span><span class="crew-nm">${esc(p.name)}${p.lost?' 🆘':''}</span><span class="crew-where">${esc(where)} · ${agoText(p.ts)}</span></button>`;
+        return `<button class="crew-row tappable" data-go="find"><span class="mo-av" style="background:${personColor(p.id)}">${esc(initials(p.name))}</span><span class="crew-nm">${esc(p.name)}${p.lost?' ':''}</span><span class="crew-where">${esc(where)} · ${agoText(p.ts)}</span></button>`;
       }).join("");
-      cards.push(`<div class="home-card"><div class="hc-title">👥 Your crew <span class="hc-count">${ppl.length}</span></div><div class="crew-rows">${rows}</div></div>`);
+      cards.push(`<div class="home-card"><div class="hc-title">Your crew <span class="hc-count">${ppl.length}</span></div><div class="crew-rows">${rows}</div></div>`);
     } else if(!find.share){
-      cards.push(`<div class="home-card"><div class="hc-title">👥 Find your crew</div><div class="find-note">Turn on location sharing so you can find each other.</div><button class="btn primary sm" data-go="find" style="margin-top:10px">Open Find →</button></div>`);
+      cards.push(`<div class="home-card"><div class="hc-title">Find your crew</div><div class="find-note">Turn on location sharing so you can find each other.</div><button class="btn primary sm" data-go="find" style="margin-top:10px">Open Find →</button></div>`);
     }
   }
 
@@ -1371,7 +1371,7 @@ function homeDuring(){
   const todayLeft=sortEvents(state.events.filter(e=>ids.has(e.id)&&e.day===today)).filter(e=>{ const s=eventStart(e); return s && s.getTime()>now-30*60000; });
   if(todayLeft.length){
     const rows=todayLeft.slice(0,5).map(e=>`<button class="today-row tappable" data-go="mine"><span class="today-time">${esc(fmt12(e.start))}</span><span class="today-title">${esc(e.title)}</span><span class="area-tag" style="--c:${districtColor(e.districtId)}">${esc(e.stageName)}</span></button>`).join("");
-    cards.push(`<div class="home-card"><div class="hc-title">📋 Rest of ${today}</div><div class="today-list">${rows}</div>${todayLeft.length>5?`<button class="link-btn" data-go="mine" style="margin-top:8px">full plan →</button>`:""}</div>`);
+    cards.push(`<div class="home-card"><div class="hc-title">Rest of ${today}</div><div class="today-list">${rows}</div>${todayLeft.length>5?`<button class="link-btn" data-go="mine" style="margin-top:8px">full plan →</button>`:""}</div>`);
   }
 
   // 7) WALK TIMES FROM HERE (compact, nearest 4)
@@ -1394,18 +1394,18 @@ function walkLineFor(ev){
 }
 function homeQuickActions(){
   const acts=[];
-  if(locationEnabled()) acts.push(["find","🧭","Find"]);
-  if(feat("chat")) acts.push(["chat","💬","Chat"]);
-  acts.push(["browse","🎫","Lineup"]);
-  acts.push(["mine","🎟️","My plan"]);
-  if(feat("overlaps")) acts.push(["shared","🤝","Meet up"]);
-  if(feat("packing")) acts.push(["packing","🎒","Packing"]);
+  if(locationEnabled()) acts.push(["find","","Find"]);
+  if(feat("chat")) acts.push(["chat","","Chat"]);
+  acts.push(["browse","","Lineup"]);
+  acts.push(["mine","","My plan"]);
+  if(feat("overlaps")) acts.push(["shared","","Meet up"]);
+  if(feat("packing")) acts.push(["packing","","Packing"]);
   return `<div class="home-actions">${acts.map(([v,e,l])=>`<button class="ha-tile tappable" data-go="${v}"><span class="ha-e">${e}</span><span class="ha-l">${esc(l)}</span></button>`).join("")}</div>`;
 }
 
 /* ---------- ON NOW & SOON board ---------- */
 function viewOnNow(){
-  if(!festivalStart()) return `<div class="sec-head"><div><h2>On now</h2></div></div>${emptyState("🎶","No festival date set","The organiser needs to set the start date for this to work.")}`;
+  if(!festivalStart()) return `<div class="sec-head"><div><h2>On now</h2></div></div>${emptyState("","No festival date set","The organiser needs to set the start date for this to work.")}`;
   const ids=myPickIds();
   const f=state.onnowFilter||"all";
   // build a fast set of my area ids from my picks (for "my areas" filter)
@@ -1485,7 +1485,7 @@ function recsCard(){
       <button class="pick-btn sm-add" data-pick="${r.e.id}" aria-label="add"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></button>
     </div>`;
   }).join("");
-  return `<div class="free-card"><div class="free-head">🔥 ${crewWord} are seeing</div>
+  return `<div class="free-card"><div class="free-head">${crewWord} are seeing</div>
     <div class="find-note" style="margin-bottom:8px">Acts ${crewWord} picked that you're free for. Tap ✓ to add.</div>
     <div class="rec-list">${rows}</div></div>`;
 }
@@ -1529,7 +1529,7 @@ function weatherCard(){
   let sunLine="";
   if(co){
     const st=sunTimes(date,co.lat,co.lng);
-    if(st&&st.sunrise&&st.sunset) sunLine=`🌅 ${clockMs(st.sunrise.getTime())} · 🌇 ${clockMs(st.sunset.getTime())}`;
+    if(st&&st.sunrise&&st.sunset) sunLine=`${clockMs(st.sunrise.getTime())} · ${clockMs(st.sunset.getTime())}`;
   }
   // cached forecast (fetched by refreshWeather when online)
   const w=state.structure.weatherCache;
@@ -1540,7 +1540,7 @@ function weatherCard(){
     if(i>=0){
       const hi=Math.round(w.daily.temperature_2m_max[i]), lo=Math.round(w.daily.temperature_2m_min[i]);
       const rain=w.daily.precipitation_probability_max?w.daily.precipitation_probability_max[i]:null;
-      fc=`${hi}° / ${lo}°${rain!=null?` · ☔ ${rain}%`:""}`;
+      fc=`${hi}° / ${lo}°${rain!=null?` · ${rain}%`:""}`;
     }
   }
   if(!sunLine && !fc) return "";
@@ -1711,8 +1711,8 @@ function clusterAdvice(items){
       return `<b>${esc(s.item.e.title)}</b> ${minToHM(s.from)}–${minToHM(s.to)} <span class="ca-dur">~${s.min} min</span>${wm?` <span class="ca-dur">(+~${wm} min walk)</span>`:''}`;
     }).join(" → ");
     const fraction = n===2?"halves each":n===3?"thirds":`1/${n} each`;
-    const strong = n>=3 ? `<span class="ca-conflict">⚠ ${n} must-sees at once — splitting means only ~${Math.round(splitSegs.reduce((a,s)=>a+s.min,0)/n)} min of each. Strongly consider dropping one.</span>`
-                        : `<span class="ca-conflict">⚠ ${names} all clash — you can't see each in full.</span>`;
+    const strong = n>=3 ? `<span class="ca-conflict">${n} must-sees at once — splitting means only ~${Math.round(splitSegs.reduce((a,s)=>a+s.min,0)/n)} min of each. Strongly consider dropping one.</span>`
+                        : `<span class="ca-conflict">${names} all clash — you can't see each in full.</span>`;
     // route any NON-must acts into time left after the split ends
     const splitEnd = Math.max(...splitSegs.map(s=>s.to));
     const lastStage = splitSegs[splitSegs.length-1].item.e.stageName;
@@ -1739,14 +1739,14 @@ function clusterAdvice(items){
   const shiftItem = items.find(x=>x.isShift);
   if(shiftItem && missed.length && route.every(r=>r.shift)){
     const missedActs = missed.filter(m=>!m.isShift).map(m=>esc(m.e.title));
-    return `<span class="ca-conflict">🔒 You're working ${esc(fmt12(shiftItem.e.start))}–${esc(fmt12(shiftItem.e.end))}</span> — you'll miss ${missedActs.join(", ")}.`;
+    return `<span class="ca-conflict">You're working ${esc(fmt12(shiftItem.e.start))}–${esc(fmt12(shiftItem.e.end))}</span> — you'll miss ${missedActs.join(", ")}.`;
   }
 
   // ----- normal single-or-no must-see routing -----
   if(route.length<=1){
     // if the one surviving item is a shift, there's nothing to "pick"
     if(route.length===1 && route[0].shift){
-      return `<span class="ca-conflict">🔒 You're working ${esc(fmt12(route[0].item.e.start))}–${esc(fmt12(route[0].item.e.end))}</span>${missed.length?` — you'll miss ${missed.filter(m=>!m.isShift).map(m=>esc(m.e.title)).join(", ")}.`:'.'}`;
+      return `<span class="ca-conflict">You're working ${esc(fmt12(route[0].item.e.start))}–${esc(fmt12(route[0].item.e.end))}</span>${missed.length?` — you'll miss ${missed.filter(m=>!m.isShift).map(m=>esc(m.e.title)).join(", ")}.`:'.'}`;
     }
     const stages=[...new Set(items.filter(x=>!x.isShift).map(x=>x.e.stageName))];
     let maxWm=null;
@@ -1757,7 +1757,7 @@ function clusterAdvice(items){
   }
   const parts=route.map((r,i)=>{
     const t=esc(r.item.e.title);
-    const star=r.shift?'🔒 ':(r.must?'★ ':'');
+    const star=r.shift?'':(r.must?'★ ':'');
     if(r.shift){ // shift is a fixed block — phrase as "working"
       return `${star}<b>${t}</b> ${minToHM(r.seeFrom)}–${minToHM(r.seeTo)} <span class="ca-dur">working</span>`;
     }
@@ -1788,7 +1788,7 @@ function clashCard(){
     const start=c.items.map(x=>x.r[0]).reduce((a,b)=>Math.min(a,b));
     const acts=c.items.map(x=>{
       if(x.isShift){
-        return `<div class="ci-act"><span class="ci-title">🔒 ${esc(x.e.title)}</span><span class="ci-stage">${esc(fmt12(x.e.start))}${x.e.end?'–'+esc(fmt12(x.e.end)):''} · working</span></div>`;
+        return `<div class="ci-act"><span class="ci-title">${esc(x.e.title)}</span><span class="ci-stage">${esc(fmt12(x.e.start))}${x.e.end?'–'+esc(fmt12(x.e.end)):''} · working</span></div>`;
       }
       const n=crewGoing(x.e.id);
       const crewWord=(state.crew&&state.crew.length)?"crew":"going";
@@ -1800,7 +1800,7 @@ function clashCard(){
       <div class="clash-advice">${clusterAdvice(c.items)}</div>
     </div>`;
   }).join("");
-  return `<div class="free-card" style="border-color:var(--accent)"><div class="free-head">⚠ ${clusters.length} clash${clusters.length>1?'es':''} in your plan</div>
+  return `<div class="free-card" style="border-color:var(--accent)"><div class="free-head">${clusters.length} clash${clusters.length>1?'es':''} in your plan</div>
     <div class="find-note" style="margin-bottom:8px">Overlapping picks — grouped by when they collide.</div>
     <div class="clash-list">${rows}</div>${clusters.length>6?`<div class="find-note" style="margin-top:8px">+${clusters.length-6} more</div>`:""}</div>`;
 }
@@ -1824,9 +1824,9 @@ function viewBrowse(){
 
   let body;
   if(state.events.length===0){
-    body = emptyState("🎪","No events yet", state.user.admin? "Head to Manage to add your districts, stages and the lineup." : "The organiser hasn't added the lineup yet — check back soon.");
+    body = emptyState("","No events yet", state.user.admin? "Head to Manage to add your districts, stages and the lineup." : "The organiser hasn't added the lineup yet — check back soon.");
   } else if(list.length===0){
-    body = emptyState("🔍","Nothing matches","Try clearing a filter or your search.");
+    body = emptyState("","Nothing matches","Try clearing a filter or your search.");
   } else {
     const g = groupByDay(list);
     body = DAYS.filter(d=>g[d] && g[d].length).map(d=>`
@@ -1862,7 +1862,7 @@ function viewMine(){
   if(list.length===0 && shifts.length===0){
     return `
       <div class="sec-head"><div><h2>My plan</h2><div class="lead">Your personal weekend schedule.</div></div>${addShiftBtn}</div>
-      ${emptyState("🎟️","Nothing picked yet","Go to Browse and tap the ✓ on acts you want to catch."+(feat("shifts")?" Working the festival? Add a private shift with ＋ Shift.":""))}`;
+      ${emptyState("","Nothing picked yet","Go to Browse and tap the ✓ on acts you want to catch."+(feat("shifts")?" Working the festival? Add a private shift with ＋ Shift.":""))}`;
   }
 
   // group BOTH events and shifts by day
@@ -1878,7 +1878,7 @@ function viewMine(){
       const when = np.status==="now" ? `On now · until ${esc(fmt12(np.ev.end||""))}` : `${untilText(np.mins)} · ${esc(fmt12(np.ev.start))}`;
       nextCard=`<div class="next-card ${np.status==='now'?'live':''}">
         <div class="nc-tag">${np.status==="now"?"On shift now":"Shift up next"}</div>
-        <div class="nc-name">🔒 ${esc(np.ev.label||"Work shift")}</div>
+        <div class="nc-name">${esc(np.ev.label||"Work shift")}</div>
         <div class="nc-meta"><span class="secret-tag">Private</span> ${when}${np.ev.note?` · ${esc(np.ev.note)}`:''}</div>
       </div>`;
     } else if(np){
@@ -1893,7 +1893,7 @@ function viewMine(){
     }
   }
   return `
-    <div class="sec-head"><div><h2>My plan</h2><div class="lead">${list.length} pick${list.length!==1?'s':''}${shifts.length?` · ${shifts.length} shift${shifts.length>1?'s':''}`:''}${clashSet.size?` · ⚠ clash`:''}</div></div>
+    <div class="sec-head"><div><h2>My plan</h2><div class="lead">${list.length} pick${list.length!==1?'s':''}${shifts.length?` · ${shifts.length} shift${shifts.length>1?'s':''}`:''}${clashSet.size?` · clash`:''}</div></div>
       <div style="display:flex;gap:8px;flex:none">${addShiftBtn}<button class="btn ghost sm no-print" id="print-plan">Print</button></div></div>
     ${nextCard}
     <div class="stat-row">
@@ -1916,10 +1916,10 @@ function shiftCard(sh,{clash}={}){
   return `<div class="ev shift ${clash?'clash':''}" data-shift="${sh.id}" style="box-shadow:inset 5px 0 0 var(--ink)">
     <div class="time"><div class="t">${esc(fmt12(sh.start))}</div><div class="t2">${sh.end?('→ '+esc(fmt12(sh.end))):''}</div></div>
     <div class="body">
-      <h3>🔒 ${esc(sh.label||"Work shift")}</h3>
+      <h3>${esc(sh.label||"Work shift")}</h3>
       <div class="meta"><span class="secret-tag">Private · only you</span></div>
       ${sh.note?`<div class="notes">${esc(sh.note)}</div>`:""}
-      ${clash?`<div class="clash-note">⚠ Overlaps a pick</div>`:""}
+      ${clash?`<div class="clash-note">Overlaps a pick</div>`:""}
     </div>
     <div class="act" style="flex-direction:column;gap:6px">
       <button class="btn ghost sm" data-edit-shift="${sh.id}">Edit</button>
@@ -1945,7 +1945,7 @@ function viewShared(){
     list = sortEvents(state.events.filter(e=>pickedEventIds.has(e.id)));
     lead = "Everything anyone in the group has picked.";
     if(list.length===0){
-      body = emptyState("👥","No group picks yet","Once people start choosing acts, the shared schedule fills up here.");
+      body = emptyState("","No group picks yet","Once people start choosing acts, the shared schedule fills up here.");
     } else {
       const g = groupByDay(list);
       body = DAYS.filter(d=>g[d]&&g[d].length).map(d=>`
@@ -1962,7 +1962,7 @@ function viewShared(){
     const clashSet=new Set();
     for(let i=0;i<list.length;i++)for(let j=i+1;j<list.length;j++) if(overlaps(list[i],list[j])){clashSet.add(list[i].id);clashSet.add(list[j].id);}
     if(list.length===0){
-      body = emptyState("🤷","No picks yet",`${fu?esc(fu.name):"They"} hasn't chosen anything yet.`);
+      body = emptyState("","No picks yet",`${fu?esc(fu.name):"They"} hasn't chosen anything yet.`);
     }else{
       const g=groupByDay(list);
       body = DAYS.filter(d=>g[d]&&g[d].length).map(d=>`
@@ -2036,7 +2036,7 @@ function viewAdmin(){
         <button class="btn lime sm" data-add-s="${d.id}">Add</button>
       </div>
     </div>`;
-  }).join("") : emptyState("🏗️","No districts yet","Add your first district below (e.g. Main Field, The Glade).");
+  }).join("") : emptyState("","No districts yet","Add your first district below (e.g. Main Field, The Glade).");
 
   return `
     <div class="sec-head"><div><h2>Manage festival</h2><div class="lead">Districts, stages and the full lineup.</div></div></div>
@@ -2082,7 +2082,7 @@ function viewAdmin(){
       <div style="font-family:Anton;font-size:15px;text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px">Walk-time routes</div>
       <div class="find-note" style="margin-bottom:12px">Walk times start as estimates and sharpen as people move around while sharing location. You can also walk key routes yourself to seed accurate baselines.</div>
       ${walkAdminStatus()}
-      <button class="btn lime block" id="seed-walk" ${stagesWithCoords().length>=2?'':'disabled'} style="margin-bottom:8px">${find.seedActive?`⏱ Arrived — stop &amp; save`:`Walk a route to time it`}</button>
+      <button class="btn lime block" id="seed-walk" ${stagesWithCoords().length>=2?'':'disabled'} style="margin-bottom:8px">${find.seedActive?`Arrived — stop &amp; save`:`Walk a route to time it`}</button>
       ${stagesWithCoords().length<2?`<div class="find-note">Pin at least 2 stages first.</div>`:''}
       <button class="btn danger block" id="reset-walk">Reset walk-time data</button>
       <div class="find-note" style="margin-top:6px">Run this once just before the festival to wipe any test data so it relearns on-site.${s.walkReset?` Last reset: ${new Date(s.walkReset).toLocaleString()}.`:''}</div>
@@ -2090,7 +2090,7 @@ function viewAdmin(){
     </div>`:""}
 
     <div class="card admin-block" style="border-color:var(--violet)">
-      <div style="font-family:Anton;font-size:15px;text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px;color:var(--violet)">🧪 Test mode</div>
+      <div style="font-family:Anton;font-size:15px;text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px;color:var(--violet)">Test mode</div>
       ${TEST_MODE?(()=>{
         const stageCount=(state.structure.districts||[]).reduce((n,d)=>n+(d.stages||[]).length,0);
         const pinnedCount=stagesWithCoords().length;
@@ -2102,7 +2102,7 @@ function viewAdmin(){
         <div class="find-note" style="margin-bottom:12px">Then go to <b>Find</b>, pin each stage to a real spot near you, and walk between them to seed walk-times.</div>
         <div class="test-step"><span class="ts-n">2</span><div><b>Generate lineup</b><div class="find-note">~25 acts over ~8 hours around now, with clashes. Keeps your stages &amp; walk-data. ${actCount?`<span style="color:var(--teal)">✓ ${actCount} acts</span>`:''}</div></div></div>
         <button class="btn lime block" id="test-lineup" ${stageCount?'':'disabled'} style="margin-bottom:6px">${actCount?'Regenerate lineup':'Generate lineup'}</button>
-        ${stageCount?'':`<div class="find-note" style="margin-bottom:12px">Create stages first ☝️</div>`}
+        ${stageCount?'':`<div class="find-note" style="margin-bottom:12px">Create stages first </div>`}
         <div style="border-top:1px solid var(--line);margin:14px 0 12px"></div>
         <button class="btn ghost block" id="test-wipe" style="margin-bottom:8px">Wipe all test data</button>
         <button class="btn block" id="test-exit2" style="background:var(--ink);color:var(--paper)">Exit test mode</button>
@@ -2160,7 +2160,7 @@ function viewAdmin(){
 }
 function adminEventList(){
   const list = sortEvents(state.events);
-  if(!list.length) return state.structure.districts.length? emptyState("🎵","No events yet","Tap “Add event” to start building the lineup.") : "";
+  if(!list.length) return state.structure.districts.length? emptyState("","No events yet","Tap “Add event” to start building the lineup.") : "";
   const g = groupByDay(list);
   const sel = adminSel.on;
   return DAYS.filter(d=>g[d]&&g[d].length).map(d=>{
@@ -2905,7 +2905,7 @@ function walkTimesCard(limit, title){
     const here=x.sec<60;
     return `<button class="wt-row tappable" data-goto-stage="${esc(x.stage.name)}"><span class="wt-dot" style="background:${x.stage.color}"></span><span class="wt-name">${esc(x.stage.name)}</span><span class="wt-time">${here?"you're here":fmtWalk(x.sec).replace(" walk","")}</span></button>`;
   }).join("");
-  return `<div class="home-card"><div class="hc-title">🚶 ${title||"Walk times from here"}</div><div class="wt-list">${rows}</div></div>`;
+  return `<div class="home-card"><div class="hc-title">${title||"Walk times from here"}</div><div class="wt-list">${rows}</div></div>`;
 }
 async function clearWalkData(){
   const snap=await getDocs(colLegs);
@@ -2937,7 +2937,7 @@ async function createTestStages(){
   (state.structure.districts||[]).forEach(d=>(d.stages||[]).forEach(st=>{ if(typeof st.lat==="number") existing[st.id]={lat:st.lat,lng:st.lng}; }));
   const districts=defaults.map(d=>({...d, stages:d.stages.map(st=> existing[st.id]?{...st,...existing[st.id]}:st)}));
   await saveStructure({
-    festivalName:"🧪 Test Festival", districts, festivalStartDate:ymd,
+    festivalName:"Test Festival", districts, festivalStartDate:ymd,
     features:state.structure.features||{}, autoStopHours:4,
     infoItems:[], packingItems:[], walkReset:state.structure.walkReset||null, weatherCache:null
   });
@@ -2992,7 +2992,7 @@ function walkAdminStatus(){
   const pairs=new Set(state.legs.map(l=>l.pair)).size;
   if(find.seedActive){
     const from=stagesWithCoords().find(s=>s.id===find.seedFrom);
-    return `<div class="seed-live">⏱ Timing from <b>${esc(from?from.name:"start")}</b> — walk to another stage, then tap “stop &amp; save”. <span id="seed-clock">0:00</span></div>`;
+    return `<div class="seed-live">Timing from <b>${esc(from?from.name:"start")}</b> — walk to another stage, then tap “stop &amp; save”. <span id="seed-clock">0:00</span></div>`;
   }
   return `<div class="find-note" style="margin-bottom:10px">${n? `${n} walk sample${n>1?'s':''} across ${pairs} route${pairs>1?'s':''} learned so far.` : "No walk data yet — estimates in use."}</div>`;
 }
@@ -3294,12 +3294,12 @@ function viewFind(){
   const head = `<div class="sec-head"><div><h2>Find your way</h2><div class="lead">Stages, your crew &amp; your pins on one compass.</div></div></div>`;
 
   if(!locationEnabled()){
-    return head + `<div class="card find-enable"><div class="big">🛑</div><h3>Maps are turned off</h3>
+    return head + `<div class="card find-enable"><div class="big"></div><h3>Maps are turned off</h3>
       <p>${state.user.admin ? "You've turned location features off. Turn them back on from the Manage tab." : "The organiser has turned location features off for now."}</p></div>`;
   }
   if(!find.started && !find.enabledOnce){
     return head + `<div class="card find-enable">
-      <div class="big">🧭</div><h3>Point me there</h3>
+      <div class="big"></div><h3>Point me there</h3>
       <p>Uses your phone's GPS and compass to show how far away each stage, friend and pin is — and which way to walk. Needs phone signal and your permission.</p>
       <button class="btn primary" id="find-enable-btn">Turn on location</button>
       <p class="find-note" style="margin-top:16px">Seeing others doesn't share your own location — that's a separate toggle you control.</p>
@@ -3309,7 +3309,7 @@ function viewFind(){
     const msg = find.error==="denied" ? "Location permission was blocked. Enable it for this site in your browser settings, then try again."
             : find.error==="unsupported" ? "This browser doesn't support location."
             : "Couldn't get a GPS fix — make sure location is on and you have signal.";
-    return head + `<div class="card find-enable"><div class="big">📡</div><h3>Can't get your location</h3>
+    return head + `<div class="card find-enable"><div class="big"></div><h3>Can't get your location</h3>
       <p>${esc(msg)}</p><button class="btn primary" id="find-enable-btn">Try again</button></div>`;
   }
   if(!find.pos){
@@ -3326,14 +3326,14 @@ function viewFind(){
       <button class="switch ${find.share?'on':''}" id="share-toggle" role="switch" aria-checked="${find.share}"><span></span></button>
     </div>
     <div class="find-actions">
-      <button class="btn ghost" id="pins-btn">⛺ Pins</button>
-      ${feat("rally")?`<button class="btn ghost" id="rally-btn">🚩 ${getRally()?'Rally':'Set rally'}</button>`:""}
-      ${feat("lost")?`<button class="btn ${find.lost?'primary':'ghost'}" id="lost-btn">${find.lost?'🆘 I’m OK now':'🆘 I’m lost'}</button>`:""}
+      <button class="btn ghost" id="pins-btn">Pins</button>
+      ${feat("rally")?`<button class="btn ghost" id="rally-btn">${getRally()?'Rally':'Set rally'}</button>`:""}
+      ${feat("lost")?`<button class="btn ${find.lost?'primary':'ghost'}" id="lost-btn">${find.lost?'I’m OK now':'I’m lost'}</button>`:""}
     </div>`;
 
   // lost banner (someone else marked themselves lost)
   const lostFriend = feat("lost") ? peopleWithCoords().find(p=>p.lost) : null;
-  const lostBanner = (lostFriend && !find.lost) ? `<button class="lost-banner" data-target="pe:${lostFriend.id}">🆘 <b>${esc(lostFriend.name)}</b> needs help — tap to navigate</button>` : "";
+  const lostBanner = (lostFriend && !find.lost) ? `<button class="lost-banner" data-target="pe:${lostFriend.id}"><b>${esc(lostFriend.name)}</b> needs help — tap to navigate</button>` : "";
 
   const counts={ stages:stagesWithCoords().length, people:peopleWithCoords().length, pins:pinsForMe().length };
   const legend = `<div class="legend">
@@ -3347,7 +3347,7 @@ function viewFind(){
     const empty = nothing
       ? `<div class="card find-enable"><div class="big">📍</div><h3>Nothing on the map yet</h3>
           <p>${state.user.admin ? "On the day, pin the stages from Manage. You and your friends can also drop tent/meeting pins above, and turn on sharing to see each other." : "Your organiser pins the stages on the day. Meanwhile you can drop your own tent or meeting pins above, and turn on sharing to find your friends."}</p></div>`
-      : `<div class="card find-enable"><div class="big">🙈</div><h3>Everything's hidden</h3><p>Turn a category back on in the legend above to see it on the map.</p></div>`;
+      : `<div class="card find-enable"><div class="big"></div><h3>Everything's hidden</h3><p>Turn a category back on in the legend above to see it on the map.</p></div>`;
     return head + shareRow + lostBanner + legend + empty;
   }
   // No auto-default: the readout only appears once the user picks a target.
@@ -3368,7 +3368,7 @@ function viewFind(){
   const dots = targets.map(t=>{
     const label = t.name.length>12 ? t.name.slice(0,11)+'…' : t.name;
     let inner;
-    if(t.kind==="person") inner=`${t.lost?'<circle class="lost-ring" r="13"></circle>':''}<circle r="9" fill="${t.lost?'#D6371C':t.color}"></circle><text class="dot-init" x="0" y="3" text-anchor="middle">${t.lost?'🆘':esc(initials(t.name))}</text><text class="dot-name" x="13" y="3.5">${esc(label)}</text>`;
+    if(t.kind==="person") inner=`${t.lost?'<circle class="lost-ring" r="13"></circle>':''}<circle r="9" fill="${t.lost?'#D6371C':t.color}"></circle><text class="dot-init" x="0" y="3" text-anchor="middle">${t.lost?'':esc(initials(t.name))}</text><text class="dot-name" x="13" y="3.5">${esc(label)}</text>`;
     else if(t.kind==="pin"||t.kind==="rally") inner=`<circle r="9" fill="${t.color}"></circle><text class="dot-emoji" x="0" y="3.4" text-anchor="middle">${t.emoji}</text><text class="dot-name" x="13" y="3.5">${esc(label)}</text>`;
     else inner=`<circle r="7" fill="${t.color}"></circle><text class="dot-name" x="11" y="3.5">${esc(label)}</text>`;
     return `<g class="rdot ${t.id===find.target?'sel':''}" id="dot-${t.id}" data-target="${t.id}" transform="translate(140,140)">${inner}</g>`;
@@ -3384,7 +3384,7 @@ function viewFind(){
       <div style="min-width:0"><div class="r-name">${esc(tgt.name)}</div><div class="r-dir">—</div></div>
       <div class="r-dist">…<small>away</small></div>
     </div>` : `
-    <div class="find-prompt">👇 Tap a stage, person or pin to get a compass &amp; distance to it.</div>
+    <div class="find-prompt">Tap a stage, person or pin to get a compass &amp; distance to it.</div>
     ${walkTimesCard(null, "Walk times from here")}`;
 
   return head + shareRow + lostBanner + legend + topBlock + `
@@ -3450,7 +3450,7 @@ function updateFindDynamic(){
       ro.querySelector(".r-name").textContent=t.name;
       ro.querySelector(".r-dist").innerHTML=`${fmtDist(t.d)}<small>away</small>`;
       let dir = headingUp ? relDirText(rel) : (cardinal(t.b)+" of you");
-      if(t.kind==="person") dir = (t.lost?"🆘 needs help · ":"")+dir+(t.ts?(" · "+agoText(t.ts)):"");
+      if(t.kind==="person") dir = (t.lost?"needs help · ":"")+dir+(t.ts?(" · "+agoText(t.ts)):"");
       else if(t.kind==="rally") dir = "🚩 meet-up point · "+dir;
       else if(t.kind==="pin") dir += " · "+(t.note?esc(t.note):(t.mine?"your pin":esc(t.ownerName||"shared")+"'s pin"));
       ro.querySelector(".r-dir").textContent = dir;
@@ -3556,7 +3556,7 @@ function viewChat(){
       <div class="bubble">${linkify(m.text||"")}</div>
       <div class="msg-time">${m.createdAt&&m.createdAt.toMillis?clockMs(m.createdAt.toMillis()):''}</div>
     </div>`;
-  }).join("") : `<div class="empty"><div class="big">💬</div><h3>No messages yet</h3><div>Say hello — type @ to tag someone. Works whenever the app loads, even when other apps get flaky in the crowd.</div></div>`;
+  }).join("") : `<div class="empty"><div class="big"></div><h3>No messages yet</h3><div>Say hello — type @ to tag someone. Works whenever the app loads, even when other apps get flaky in the crowd.</div></div>`;
   return `<div class="sec-head"><div><h2>Group chat</h2><div class="lead">Everyone can see this · type @ to tag</div></div></div>
     <div class="chat-scroll" id="chat-scroll">${body}</div>
     <div class="chat-compose">
@@ -3623,7 +3623,7 @@ function renderShiftModal(){
   const wrap=document.createElement("div"); wrap.className="modal-bg";
   wrap.innerHTML=`<div class="modal">
     <div class="modal-head"><h2>${editing?"Edit shift":"Add work shift"}</h2><button class="btn ghost sm" id="s-close">Close</button></div>
-    <div class="fmt">🔒 Private — only you can see shifts. They block your time so you won’t show as free to the group, without revealing what you’re doing.</div>
+    <div class="fmt">Private — only you can see shifts. They block your time so you won’t show as free to the group, without revealing what you’re doing.</div>
     <div id="s-err"></div>
     <label class="field"><span>Label</span><input id="s-label" value="${esc(sh.label||"Work shift")}" placeholder="e.g. Bar shift"></label>
     <div class="field"><span>Day${editing?'':'s'}</span>
@@ -3672,7 +3672,7 @@ function viewPacking(){
   const rows = all.length ? all.map(i=>`<div class="pack-row ${checked.has(i.id)?'on':''}">
       <button class="pack-tap" data-pack="${i.id}"><span class="pack-box">${checked.has(i.id)?'✓':''}</span><span class="pack-label">${esc(i.label)}</span></button>
       ${!i.shared?`<button class="pack-del" data-delmine="${i.id}">✕</button>`:''}
-    </div>`).join("") : `<div class="empty"><div class="big">🎒</div><h3>Nothing on the list</h3><div>${isAdmin?'Add the shared list below — you can paste your friend’s whole list at once.':'Add your own items below, or wait for the shared list.'}</div></div>`;
+    </div>`).join("") : `<div class="empty"><div class="big"></div><h3>Nothing on the list</h3><div>${isAdmin?'Add the shared list below — you can paste your friend’s whole list at once.':'Add your own items below, or wait for the shared list.'}</div></div>`;
   const pct = all.length? Math.round(done/all.length*100):0;
   return `<div class="sec-head"><div><h2>Packing list</h2><div class="lead">${all.length?`${done}/${all.length} packed`:'Tick things off as you pack.'}</div></div></div>
     ${all.length?`<div class="pack-bar"><div class="pack-fill" style="width:${pct}%"></div></div>`:''}
@@ -3787,14 +3787,14 @@ function meetupCard(){
 
   if(state.meetMode==="crew" && !state.crew.length){
     return `<div class="free-card">
-      <div class="free-head">🤝 When can we meet?</div>
+      <div class="free-head">When can we meet?</div>
       ${modeTabs}
       <div class="find-note">Pick your core crew — the few people you actually want to link up with — and I’ll show when most of you are free.</div>
       <button class="btn primary block" id="crew-edit" style="margin-top:10px">Choose my crew</button>
     </div>`;
   }
   if(totalPlanned<1){
-    return `<div class="free-card"><div class="free-head">🤝 When can we meet?</div>${modeTabs}
+    return `<div class="free-card"><div class="free-head">When can we meet?</div>${modeTabs}
       <div class="find-note">Once a few people have picked some acts, I’ll show the best times to meet up here.</div></div>`;
   }
 
@@ -3818,7 +3818,7 @@ function meetupCard(){
   }).join("") : `<div class="find-note">No window where most of you are free today — schedules are packed! Use a rally call below to grab people in the moment.</div>`;
 
   return `<div class="free-card">
-    <div class="free-head">🤝 Best times to meet</div>
+    <div class="free-head">Best times to meet</div>
     ${modeTabs}${dayTabs}
     <div class="meet-sub"><span>Sorted by most people free, then longest. Tap one to see who & take action.</span>
       <span class="meet-weigh">${maxN} ${state.meetMode==='crew'?'crew':'planned'}${state.meetMode==='crew'?` · <button class="link-btn" id="crew-edit">edit</button>`:''}</span></div>
@@ -3854,7 +3854,7 @@ function callsCard(){
     </div>`;
   }).join("") : `<div class="find-note">Nobody’s called anything yet. Keen for food or a break? Send a call and see who joins.</div>`;
   return `<div class="free-card" style="margin-top:14px">
-    <div class="free-head">📣 Rally calls <span class="live-mini">live</span></div>
+    <div class="free-head">Rally calls <span class="live-mini">live</span></div>
     <div class="call-list">${list}</div>
     <button class="btn primary block" id="call-new" style="margin-top:12px">${mineActive?'Send another call':'Start a call'}</button>
   </div>`;
