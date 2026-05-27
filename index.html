@@ -862,7 +862,11 @@ document.addEventListener("visibilitychange", ()=>{
     renderApp();                                     // full redraw with current time
   }
   if(navigator.onLine) refreshWeather().catch(()=>{});
+  rebindOrientation && find.orientBound && rebindOrientation();   // compass often stalls across backgrounding — re-bind
 });
+window.addEventListener("focus", ()=>{ if(state.user && find.orientBound) { try{ rebindOrientation(); }catch(e){} } });
+// Lightweight compass watchdog: every 3s, if Find is open and orientation has gone quiet, re-bind.
+setInterval(()=>{ try{ checkOrientationAlive(); }catch(e){} }, 3000);
 
 // Fire a notification via the SW if possible (survives backgrounding better), else direct.
 function pushNotify(title, body, tag){
@@ -2817,7 +2821,7 @@ let find = { started:false, enabledOnce: localStorage.getItem("fp_findon")==="1"
              pos:null, acc:null, heading:null, hasOrientation:false, headingMode:"auto", target:null, error:null,
              show:{stages:true,people:true,pins:true}, share:false, shareTimer:null, myUpdated:0, lastWrite:0,
              lost:false, autoStopAt:0, autoStopTimer:null, packingSubbed:false, notify:false, notifyTimers:[], notifiedChanges:{}, notifiedMentions:{}, notifiedCalls:{}, sessionStart:Date.now(), orientNeedsGesture:false,
-             seedActive:false, seedFrom:null, seedStartT:0, seedPt:null, seedDist:0, seedWatch:null, seedClock:null };
+             seedActive:false, seedFrom:null, seedStartT:0, seedPt:null, seedDist:0, seedWatch:null, seedClock:null, orientLastEvent:0 };
 
 const R_EARTH = 6371000;
 const toRad = d => d*Math.PI/180, toDeg = r => r*180/Math.PI;
@@ -2957,8 +2961,10 @@ async function clearWalkData(){
 async function createTestStages(){
   if(!TEST_MODE) return;
   const now=new Date();
+  // Anchor the festival day so that NOW reliably reads as "during" (the phase gate opens at noon).
+  // If it's currently before noon, use YESTERDAY as the start date so the noon gate is already passed.
   const anchor=new Date(now);
-  if(now.getHours() < DAY_ROLLOVER_HOUR) anchor.setDate(anchor.getDate()-1);
+  if(now.getHours() < 12) anchor.setDate(anchor.getDate()-1);
   const ymd=`${anchor.getFullYear()}-${String(anchor.getMonth()+1).padStart(2,"0")}-${String(anchor.getDate()).padStart(2,"0")}`;
   // default stage map
   const defaults=[
@@ -2989,7 +2995,7 @@ async function generateTestLineup(){
   for(let i=0;i<eids.length;i+=20){ await Promise.all(eids.slice(i,i+20).map(id=>deleteDoc(dref("events",id)))); }
   const psnap=await getDocs(colPicks); const pids=psnap.docs.map(d=>d.id);
   for(let i=0;i<pids.length;i+=20){ await Promise.all(pids.slice(i,i+20).map(id=>deleteDoc(dref("picks",id)))); }
-  const day=DAYS[0];
+  const day=currentFestivalDay();   // tag acts to the day "now" resolves to (matches the date anchor)
   const base=Date.now()-30*60000;   // window opens ~30 min ago so something's already "on now"
   const at=o=>toHM(new Date(base+o*60000));
   const ACTS=["Aurora Skies","Midnight Caller","The Velvet Drop","Echo & Pulse","Glass Animals Jr","Sunbeam Collective",
@@ -3288,19 +3294,46 @@ function enableFind(){
 }
 function bindOrientation(){
   if(find.orientBound) return;
+  let lastPaint=0;
   const handler=ev=>{
     let h=null;
     if(typeof ev.webkitCompassHeading==="number" && !isNaN(ev.webkitCompassHeading)) h=ev.webkitCompassHeading;
     else if(ev.alpha!=null){ const off=(screen.orientation&&screen.orientation.angle)||0; h=(360-ev.alpha+off)%360; }
     if(h==null||isNaN(h)) return;
     find.heading=h;
+    find.orientLastEvent=Date.now();           // watchdog: note we're receiving events
     const had=find.hasOrientation; find.hasOrientation=true;
-    if(state.view==="find"){ if(!had) renderView(); else updateFindDynamic(); }
+    if(state.view!=="find") return;
+    if(!had){ renderView(); return; }
+    const now=Date.now();
+    if(now-lastPaint < 100) return;            // throttle: at most ~10 updates/sec (compass fires far faster)
+    lastPaint=now;
+    updateFindDynamic();
   };
   find.orientHandler=handler;
   window.addEventListener("deviceorientationabsolute",handler,true);
   window.addEventListener("deviceorientation",handler,true);
   find.orientBound=true;
+  find.orientLastEvent=Date.now();
+}
+// Recover a stalled compass (iOS sometimes silently stops delivering orientation events,
+// e.g. after heavy DOM work like pinning a stage). Tear the listener down and re-add it —
+// permission persists for the session, so no re-prompt is needed.
+function rebindOrientation(){
+  if(find.orientHandler){
+    window.removeEventListener("deviceorientationabsolute",find.orientHandler,true);
+    window.removeEventListener("deviceorientation",find.orientHandler,true);
+  }
+  find.orientBound=false; find.orientHandler=null;
+  bindOrientation();
+}
+// Watchdog: if the compass was working but events have gone quiet for ~4s while Find is open, re-bind.
+function checkOrientationAlive(){
+  if(!find.orientBound || !find.hasOrientation) return;
+  if(state.view!=="find") return;
+  if(find.orientLastEvent && Date.now()-find.orientLastEvent > 4000){
+    rebindOrientation();
+  }
 }
 function startFindSensors(skipOrientation){
   if(find.started) return;
