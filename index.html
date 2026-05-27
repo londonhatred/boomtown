@@ -115,6 +115,23 @@
   .fav-bar{height:5px;background:var(--line);border-radius:3px;margin-top:4px;overflow:hidden}
   .fav-bar i{display:block;height:100%;background:var(--teal)}
   .fav-score{font-family:"Anton";font-size:15px;color:var(--teal);flex:none}
+  .av{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:800;font-size:11px;flex:none}
+  .depart-card{background:var(--ink);color:var(--paper);border-radius:var(--radius);padding:16px;margin-bottom:14px}
+  .depart-head{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(239,231,213,.2);padding-bottom:8px;margin-bottom:10px}
+  .depart-lbl{font-family:"Anton";text-transform:uppercase;letter-spacing:.12em;font-size:13px;color:#E8A33D}
+  .depart-at{font-family:"Anton";font-size:15px;letter-spacing:.04em}
+  .depart-time{font-family:"Anton";font-size:46px;line-height:1;letter-spacing:.02em}
+  .depart-time small{font-size:18px;opacity:.7;margin:0 2px 0 1px}
+  .depart-act{font-weight:800;font-size:16px;margin-top:8px}
+  .depart-meta{font-size:12.5px;opacity:.85;margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .depart-warn{margin-top:10px;background:var(--accent);color:#fff;font-weight:800;font-size:12px;padding:5px 10px;border-radius:7px;display:inline-block;text-transform:uppercase;letter-spacing:.04em}
+  .recap{background:var(--ink);color:var(--paper);border-radius:var(--radius);padding:20px;text-align:center}
+  .recap h3{font-family:"Anton";font-weight:400;font-size:24px;margin:0 0 2px;text-transform:uppercase;letter-spacing:.01em}
+  .recap .sub{font-size:11px;opacity:.65;margin-bottom:18px;text-transform:uppercase;letter-spacing:.14em}
+  .recap-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .recap-stat .n{font-family:"Anton";font-size:32px;line-height:1;color:#E8A33D}
+  .recap-stat .l{font-size:10px;text-transform:uppercase;letter-spacing:.06em;opacity:.8;margin-top:4px}
+  .recap-foot{margin-top:18px;font-size:12.5px;border-top:1px solid rgba(239,231,213,.2);padding-top:13px}
   .rating-nudge{position:fixed;left:12px;right:12px;bottom:78px;z-index:115;display:flex;align-items:center;justify-content:space-between;gap:10px;
     background:var(--gold);color:var(--ink);border-radius:12px;padding:11px 14px;font-size:13px;font-weight:700;box-shadow:0 4px 16px rgba(0,0,0,.22)}
   .rating-nudge button{border:none;border-radius:999px;font-weight:800;font-size:12px;cursor:pointer;padding:5px 12px}
@@ -728,6 +745,7 @@ const state = {
   ready: { events:false, users:false, picks:false, structure:false },
   filters: { day:"all", district:"all", search:"" },
   sharedFriend: "all",
+  recapDay: null,             // recap view: null = overall, else a day name
   modal: null
 };
 
@@ -1324,6 +1342,8 @@ function openMenu(){
   if(locationEnabled()) items.push(["find","Find your way",""]);
   if(feat("chat")) items.push(["chat","Group chat",""]);
   items.push(["profile","Your profile",""]);
+  if(locationEnabled()) items.push(["trail","Where were you?",""]);
+  if(festivalStart() && festivalPhase()!=="before") items.push(["recap","Festival recap",""]);
   if(feat("info")) items.push(["info","Festival info","ℹ️"]);
   if(feat("packing")) items.push(["packing","Packing list",""]);
   if(state.user.admin) items.push(["admin","Manage festival",""]);
@@ -1406,6 +1426,8 @@ function renderView(){
   else if(state.view==="packing") v.innerHTML = viewPacking();
   else if(state.view==="admin") v.innerHTML = viewAdmin();
   else if(state.view==="profile") v.innerHTML = viewProfile();
+  else if(state.view==="trail") v.innerHTML = viewTrail();
+  else if(state.view==="recap") v.innerHTML = viewRecap();
   wireView();
 }
 
@@ -1570,11 +1592,26 @@ function homeDuring(){
       nextCard=`<div class="home-card accent"><div class="hc-tag">${np.status==="now"?"On shift now":"Your shift up next"}</div><div class="hc-big">${esc(np.ev.label||"Work shift")}</div><div class="hc-meta">${when}</div></div>`;
     } else {
       const walk = (locationEnabled()&&find.pos) ? walkLineFor(np.ev) : "";
-      const when=np.status==="now"?`On now · until ${esc(fmt12(toHM(np.until)))}`:`${untilText(np.mins)} · ${esc(fmt12(np.ev.start))}`;
-      nextCard=`<div class="home-card accent"><div class="hc-tag">${np.status==="now"?"Happening now":"Up next for you"}</div>
-        <div class="hc-big">${esc(np.ev.title)}</div>
-        <div class="hc-meta"><span class="area-tag" style="--c:${districtColor(np.ev.districtId)}">${esc(np.ev.districtName)}</span> ${esc(np.ev.stageName)} · ${when}${walk?` · ${walk}`:""}</div>
-        ${(locationEnabled()&&stagesWithCoords().some(s=>s.name===np.ev.stageName))?`<button class="btn lime sm" data-goto-stage="${esc(np.ev.stageName)}" style="margin-top:10px">Point me there →</button>`:""}</div>`;
+      if(np.status==="now"){
+        const when=`On now · until ${esc(fmt12(toHM(np.until)))}`;
+        nextCard=`<div class="home-card accent"><div class="hc-tag">Happening now</div>
+          <div class="hc-big">${esc(np.ev.title)}</div>
+          <div class="hc-meta"><span class="area-tag" style="--c:${districtColor(np.ev.districtId)}">${esc(np.ev.districtName)}</span> ${esc(np.ev.stageName)} · ${when}${walk?` · ${walk}`:""}</div>
+          ${(locationEnabled()&&stagesWithCoords().some(s=>s.name===np.ev.stageName))?`<button class="btn lime sm" data-goto-stage="${esc(np.ev.stageName)}" style="margin-top:10px">Point me there →</button>`:""}</div>`;
+      } else {
+        // departure-board style countdown to your next pick
+        const h=Math.floor(np.mins/60), m=np.mins%60;
+        const big = np.mins<60 ? `${np.mins}<small>min</small>` : `${h}<small>h</small> ${String(m).padStart(2,"0")}<small>m</small>`;
+        const leaveSoon = walk && np.mins<=20;   // nudge if it's close and there's a walk
+        nextCard=`<div class="depart-card">
+          <div class="depart-head"><span class="depart-lbl">Starts in</span><span class="depart-at">${esc(fmt12(np.ev.start))}</span></div>
+          <div class="depart-time">${big}</div>
+          <div class="depart-act">${esc(np.ev.title)}</div>
+          <div class="depart-meta"><span class="area-tag" style="--c:${districtColor(np.ev.districtId)}">${esc(np.ev.districtName)}</span> ${esc(np.ev.stageName)}${walk?` · ${walk}`:""}</div>
+          ${leaveSoon?`<div class="depart-warn">Leave soon to make it</div>`:""}
+          ${(locationEnabled()&&stagesWithCoords().some(s=>s.name===np.ev.stageName))?`<button class="btn lime sm" data-goto-stage="${esc(np.ev.stageName)}" style="margin-top:10px">Point me there →</button>`:""}
+        </div>`;
+      }
     }
   }
   cards.push(nextCard);
@@ -1638,6 +1675,7 @@ function homeDuring(){
 
   // 7) WALK TIMES FROM HERE (compact, nearest 4)
   cards.push(walkTimesCard(4, "Nearest stages"));
+  cards.push(crewNearbyCard());
 
   // 8) SET RECOMMENDATIONS
   cards.push(recsCard());
@@ -2320,6 +2358,111 @@ function sharedCard(ev){
 }
 
 /* ---------- ADMIN ---------- */
+// ---- Festival recap: per-day + overall "in numbers" ----
+function recapStats(dayName){
+  // dayName === null → whole festival; else just that day
+  const ids=myPickIds();
+  const now=Date.now();
+  let seen=state.events.filter(e=>ids.has(e.id)).filter(e=>{
+    if(dayName && e.day!==dayName) return false;
+    const end=eventEnd(e); return end && end.getTime()<=now;       // only count acts that have happened
+  });
+  // miles walked from the private trail (filter to the day's window if per-day)
+  const trail=loadTrail();
+  let pts=trail;
+  if(dayName){
+    const base=dateForDay(dayName);
+    if(base){
+      const dayStart=new Date(base); dayStart.setHours(DAY_ROLLOVER_HOUR,0,0,0);
+      const dayEnd=new Date(dayStart); dayEnd.setDate(dayEnd.getDate()+1);
+      pts=trail.filter(p=>p.t>=dayStart.getTime() && p.t<dayEnd.getTime());
+    }
+  }
+  let metres=0;
+  for(let i=1;i<pts.length;i++) metres+=haversine(pts[i-1].lat,pts[i-1].lng,pts[i].lat,pts[i].lng);
+  const miles=metres/1609.34;
+  // clashes survived: clusters (for the day, or all days) fully in the past
+  let clashes=0;
+  const days = dayName ? [dayName] : DAYS;
+  days.forEach(d=>{
+    if(!state.events.some(e=>ids.has(e.id)&&e.day===d)) return;
+    clashClusters(d).forEach(c=>{
+      const evs=c.filter(x=>!x.isShift).map(x=>x.e);
+      if(evs.length>=2 && evs.every(e=>{const en=eventEnd(e); return en && en.getTime()<=now;})) clashes++;
+    });
+  });
+  // latest night: latest end among seen picks
+  let latest=null;
+  seen.forEach(e=>{ const en=eventEnd(e); if(en && (!latest || en>latest)) latest=en; });
+  // my ratings + top set
+  const myRated=seen.map(e=>({e, r:myRating(e.id)})).filter(x=>x.r!=null).sort((a,b)=>b.r-a.r);
+  const topSet=myRated[0]||null;
+  return { seenCount:seen.length, miles, clashes, latest, ratedCount:myRated.length, topSet };
+}
+function viewRecap(){
+  const phase=festivalPhase();
+  // which days are "done enough" to recap (started or finished)
+  const now=Date.now();
+  const availDays=DAYS.filter(d=>{ const base=dateForDay(d); if(!base) return false; const ds=new Date(base); ds.setHours(DAY_ROLLOVER_HOUR,0,0,0); return now>=ds.getTime(); });
+  const sel = (state.recapDay!==undefined && state.recapDay!==null && availDays.includes(state.recapDay)) ? state.recapDay : null;
+  const chips = `<button class="chip ${sel===null?'on':''}" data-recap="__all">Overall</button>` +
+    availDays.map(d=>`<button class="chip ${sel===d?'on':''}" data-recap="${d}">${d.slice(0,3)}</button>`).join("");
+  const s=recapStats(sel);
+  const fmtLate=ts=>{ if(!ts) return "—"; const d=new Date(ts); let h=d.getHours(); const ap=h>=12?"pm":"am"; h=h%12||12; return `${h}${d.getMinutes()?":"+String(d.getMinutes()).padStart(2,"0"):""}${ap}`; };
+  const title = sel===null ? `Your ${esc(state.structure.festivalName||"festival")}` : `Your ${sel}`;
+  const stat=(n,l)=>`<div class="recap-stat"><div class="n">${n}</div><div class="l">${l}</div></div>`;
+  return `
+    <div class="sec-head"><div><h2>Festival recap</h2><div class="lead">Your festival in numbers${phase==="during"?" so far":""}.</div></div></div>
+    <div class="filters">${chips}</div>
+    <div class="recap">
+      <h3>${title}</h3>
+      <div class="sub">in numbers</div>
+      <div class="recap-grid">
+        ${stat(s.seenCount, "acts seen")}
+        ${stat(s.miles>=0.1?s.miles.toFixed(1):"0", "miles walked")}
+        ${stat(s.clashes, "clashes survived")}
+        ${stat(fmtLate(s.latest), "latest night")}
+      </div>
+      ${s.topSet?`<div class="recap-foot">Your top set: <b>${esc(s.topSet.e.title)}</b> · you rated it ${s.topSet.r.toFixed(1)}</div>`:(s.ratedCount===0?`<div class="recap-foot">Rate sets as they finish to crown your top one.</div>`:"")}
+    </div>
+    <div class="find-note" style="margin-top:12px">Miles walked come from your private trail — only counts time the app's location was on. Updates as the festival goes.</div>
+  `;
+}
+function viewTrail(){
+  const trail=loadTrail();
+  const stages=stagesWithCoords();
+  const head=`<div class="sec-head"><div><h2>Where were you?</h2><div class="lead">A private trail of where you wandered. Stays on your phone only.</div></div></div>`;
+  if(trail.length<2){
+    return head+emptyState("","Not much yet","Keep the app's location on as you move around and your trail builds up here. Nothing is shared — it's just for you.");
+  }
+  // collect all points (trail + stages) to compute bounds
+  const pts=trail.map(p=>({lat:p.lat,lng:p.lng})).concat(stages.map(s=>({lat:s.lat,lng:s.lng})));
+  const lats=pts.map(p=>p.lat), lngs=pts.map(p=>p.lng);
+  const minLat=Math.min(...lats), maxLat=Math.max(...lats), minLng=Math.min(...lngs), maxLng=Math.max(...lngs);
+  const W=300,H=300,PAD=24;
+  const spanLat=(maxLat-minLat)||0.0001, spanLng=(maxLng-minLng)||0.0001;
+  const sx=v=>PAD+((v-minLng)/spanLng)*(W-2*PAD);
+  const sy=v=>H-PAD-((v-minLat)/spanLat)*(H-2*PAD);   // north up
+  const path=trail.map((p,i)=>`${i?'L':'M'}${sx(p.lng).toFixed(1)},${sy(p.lat).toFixed(1)}`).join(" ");
+  const stageDots=stages.map(s=>`<circle cx="${sx(s.lng).toFixed(1)}" cy="${sy(s.lat).toFixed(1)}" r="5" fill="${s.color}" stroke="var(--ink)" stroke-width="1.5"/><text x="${sx(s.lng).toFixed(1)}" y="${(sy(s.lat)-8).toFixed(1)}" font-size="8" text-anchor="middle" fill="var(--ink-2)">${esc(abbrev(s.name))}</text>`).join("");
+  const start=trail[0], end=trail[trail.length-1];
+  const fmtT=ts=>{ const d=new Date(ts); return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); };
+  return head+`
+    <div class="card">
+      <svg viewBox="0 0 ${W} ${H}" style="width:100%">
+        <text x="${W/2}" y="13" text-anchor="middle" font-family="Anton" font-size="11" fill="var(--ink-2)">N ↑</text>
+        <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-dasharray="1 6" stroke-linecap="round" stroke-linejoin="round"/>
+        ${stageDots}
+        <circle cx="${sx(start.lng).toFixed(1)}" cy="${sy(start.lat).toFixed(1)}" r="5" fill="var(--ink-2)"/>
+        <circle cx="${sx(end.lng).toFixed(1)}" cy="${sy(end.lat).toFixed(1)}" r="6" fill="var(--accent)"/>
+      </svg>
+      <div class="find-note" style="display:flex;justify-content:space-between;margin-top:4px">
+        <span>● Start ${fmtT(start.t)}</span><span style="color:var(--accent)">● Latest ${fmtT(end.t)}</span>
+      </div>
+      <div class="find-note" style="margin-top:8px">${trail.length} points · straight lines between them, not exact paths. Coloured dots are pinned stages for reference.</div>
+      <button class="btn ghost block" id="trail-clear" style="margin-top:12px">Clear my trail</button>
+    </div>`;
+}
 function viewProfile(){
   const u=state.user;
   const myColor=personColor(u.id);
@@ -2557,6 +2700,7 @@ function wireView(){
   // home / generic navigation tiles
   v.querySelectorAll("[data-go]").forEach(b=>b.onclick=(e)=>{
     if(e.target.closest("[data-joincall],[data-goto-stage]")) return; // let specific actions handle themselves
+    if(b.dataset.targetPerson){ find.target="pe:"+b.dataset.targetPerson; find.enabledOnce=true; localStorage.setItem("fp_findon","1"); }
     state.view=b.dataset.go; renderApp();
   });
 
@@ -2614,6 +2758,10 @@ function wireView(){
     v.querySelectorAll("[data-leg]").forEach(b=>b.onclick=()=>{ find.show[b.dataset.leg]=!find.show[b.dataset.leg]; find.target=null; renderView(); });
     const shareTog=v.querySelector("#share-toggle"); if(shareTog) shareTog.onclick=()=>{ if(find.share) stopShare(true); else startShare(); renderApp(); };
     const pinsBtn=v.querySelector("#pins-btn"); if(pinsBtn) pinsBtn.onclick=()=>{ state.modal={type:"pins"}; renderModal(); };
+    const beaconBtn=v.querySelector("#beacon-btn"); if(beaconBtn) beaconBtn.onclick=async()=>{
+      if(myBeacon()){ if(confirm("Clear your find-me beacon?")){ await clearBeacon(); renderView(); } }
+      else { await dropBeacon(); renderView(); }
+    };
     const rallyBtn=v.querySelector("#rally-btn"); if(rallyBtn) rallyBtn.onclick=async()=>{ if(getRally()){ find.target="rl:rally"; renderView(); } else { await setRallyHere(); renderView(); } };
     const rallyMove=v.querySelector("#rally-move"); if(rallyMove) rallyMove.onclick=async()=>{ await setRallyHere(); renderView(); };
     const rallyClear=v.querySelector("#rally-clear"); if(rallyClear) rallyClear.onclick=async()=>{ await clearRally(); find.target=null; renderView(); };
@@ -2635,6 +2783,8 @@ function wireView(){
   v.querySelectorAll("[data-edit-shift]").forEach(b=>b.onclick=()=>{ const sh=state.shifts.find(x=>x.id===b.dataset.editShift); state.modal={type:"shift",data:sh}; renderModal(); });
   v.querySelectorAll("[data-del-shift]").forEach(b=>b.onclick=async()=>{ const sh=state.shifts.find(x=>x.id===b.dataset.delShift); if(confirm(`Delete "${sh.label||'shift'}"?`)){ await deleteShift(sh.id); toast("Shift removed"); } });
   v.querySelectorAll("[data-rate]").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openRatingModal(b.dataset.rate); });
+  const trailClear=v.querySelector("#trail-clear"); if(trailClear) trailClear.onclick=()=>{ if(confirm("Clear your private location trail?")){ clearTrail(); renderView(); } };
+  v.querySelectorAll("[data-recap]").forEach(b=>b.onclick=()=>{ state.recapDay = b.dataset.recap==="__all" ? null : b.dataset.recap; renderView(); });
   if(state.view==="mine") setTimeout(markChangesSeen, 4000);
 
   // ---- profile ----
@@ -3478,6 +3628,26 @@ function personColor(id){
   if(u && u.color) return u.color;                       // user-chosen override
   let h=0; for(let i=0;i<id.length;i++) h=(h*31+id.charCodeAt(i))>>>0; return AREA_COLORS[h%AREA_COLORS.length];
 }
+function crewNearbyCard(){
+  if(!locationEnabled() || !find.pos) return "";
+  const now=Date.now();
+  const ppl=peopleWithCoords();
+  if(!ppl.length) return "";
+  const rows=ppl.map(p=>({...p, d:haversine(find.pos.lat,find.pos.lng,p.lat,p.lng)}))
+    .sort((a,b)=>a.d-b.d).slice(0,6)
+    .map(p=>{
+      const here=p.d<=HERE_RADIUS;
+      const mins=Math.round((now-p.ts)/60000);
+      const fresh=mins<2;
+      return `<button class="wt-row tappable" data-go="find" data-target-person="${p.id}">
+        <span class="av" style="background:${p.color}">${esc(initials(p.name))}</span>
+        <span class="wt-name">${esc(p.name)}${p.lost?' · <span style="color:var(--accent)">needs help</span>':''}</span>
+        <span class="wt-time${here?' here':''}">${here?'HERE':fmtDist(p.d)}${fresh?'':` · ${mins}m ago`}</span>
+      </button>`;
+    }).join("");
+  return `<div class="home-card"><div class="hc-title">Crew near you</div><div class="wt-list">${rows}</div>
+    <div class="find-note" style="margin-top:8px">Needs them to be sharing location &amp; on signal.</div></div>`;
+}
 function peopleWithCoords(){
   const now=Date.now(); const out=[];
   state.locations.forEach(l=>{
@@ -3496,6 +3666,7 @@ function pinsForMe(){
   const me=state.user.id; const out=[];
   state.pins.forEach(p=>{
     if(p.id==="rally" || p.type==="rally") return;          // rally handled separately
+    if(p.type==="beacon" || (typeof p.id==="string" && p.id.startsWith("beacon__"))) return;  // beacons handled separately
     if(typeof p.lat!=="number" || typeof p.lng!=="number") return;
     const mine = p.ownerId===me;
     if(!mine && !p.shared) return;
@@ -3519,10 +3690,63 @@ async function setRallyHere(){
   toast("Rally point set");
 }
 async function clearRally(){ await deleteDoc(dref("pins","rally")).catch(()=>{}); toast("Rally point cleared"); }
+
+// ---- "Meet me here" beacon: a temporary per-user live pin that pings the crew ----
+const BEACON_MINS = 15;
+function myBeacon(){
+  const b=state.pins.find(p=>p.id==="beacon__"+state.user.id);
+  if(!b) return null;
+  if(b.expiresAt && Date.now()>b.expiresAt){ deleteDoc(dref("pins","beacon__"+state.user.id)).catch(()=>{}); return null; }
+  return b;
+}
+function activeBeacons(){
+  const now=Date.now();
+  return state.pins.filter(p=>typeof p.id==="string" && p.id.startsWith("beacon__") && typeof p.lat==="number" && (!p.expiresAt || p.expiresAt>now));
+}
+async function dropBeacon(){
+  if(!find.pos) return toast("No location yet — turn on Find first");
+  const near=nearestStage(find.pos.lat,find.pos.lng);
+  const whereTxt = near ? ("near "+near.stage.name) : "";
+  await setDoc(dref("pins","beacon__"+state.user.id), {
+    type:"beacon", label:(state.user.name+"'s spot"), ownerId:state.user.id, ownerName:state.user.name,
+    lat:+find.pos.lat.toFixed(6), lng:+find.pos.lng.toFixed(6), shared:true, where:whereTxt,
+    expiresAt: Date.now()+BEACON_MINS*60000, updatedAt:serverTimestamp()
+  });
+  // ping the crew via a rally-call style entry so it surfaces + can notify
+  try{
+    await addDoc(colCalls, { userId:state.user.id, name:state.user.name, kind:"beacon",
+      label:("📍 "+state.user.name+" dropped a find-me beacon"+(whereTxt?(" "+whereTxt):"")), at:"",
+      expiresAt: Date.now()+BEACON_MINS*60000, createdAt:serverTimestamp() });
+  }catch(e){}
+  toast("Beacon dropped — crew notified");
+}
+async function clearBeacon(){ await deleteDoc(dref("pins","beacon__"+state.user.id)).catch(()=>{}); toast("Beacon cleared"); }
+function beaconMinsLeft(b){ return b&&b.expiresAt ? Math.max(0,Math.round((b.expiresAt-Date.now())/60000)) : 0; }
+
+// ---- "Where were you?" private breadcrumb trail (on-device only, never shared) ----
+const TRAIL_KEY="fp_trail", TRAIL_MIN_GAP=180000, TRAIL_MIN_MOVE=20, TRAIL_MAX=400;
+function loadTrail(){ try{ return JSON.parse(localStorage.getItem(TRAIL_KEY)||"[]"); }catch(e){ return []; } }
+function recordTrailPoint(pos){
+  if(!pos) return;
+  const t=loadTrail();
+  const last=t[t.length-1];
+  const now=Date.now();
+  if(last){
+    if(now-last.t < TRAIL_MIN_GAP) return;                               // at most one point / 3 min
+    if(haversine(last.lat,last.lng,pos.lat,pos.lng) < TRAIL_MIN_MOVE) return;  // ignore standing still
+  }
+  t.push({lat:+pos.lat.toFixed(5), lng:+pos.lng.toFixed(5), t:now});
+  while(t.length>TRAIL_MAX) t.shift();
+  try{ localStorage.setItem(TRAIL_KEY, JSON.stringify(t)); }catch(e){}
+}
+function clearTrail(){ localStorage.removeItem(TRAIL_KEY); }
+
 function buildTargets(){
   const out=[];
   const rally=getRally();
   if(rally) out.push({id:"rl:rally", kind:"rally", name:rally.label||"Meet-up point", emoji:"🚩", color:"#D6371C", lat:rally.lat, lng:rally.lng});
+  // other people's live "find me" beacons
+  activeBeacons().forEach(b=>{ if(b.ownerId!==state.user.id) out.push({id:"bk:"+b.id, kind:"beacon", name:(b.ownerName||"Someone")+"'s spot", emoji:"📍", color:"#D6371C", lat:b.lat, lng:b.lng}); });
   if(find.show.stages) stagesWithCoords().forEach(s=>out.push({...s, id:"st:"+s.id, kind:"stage"}));
   if(find.show.pins)   pinsForMe().forEach(p=>out.push({...p, id:"pn:"+p.id, kind:"pin"}));
   if(find.show.people){
@@ -3726,6 +3950,7 @@ function startFindSensors(skipOrientation){
            if(find.pos && a>120 && find.acc && find.acc<a*0.6){ return; }
            const firstFix = !find.pos;
            find.pos={lat:p.coords.latitude,lng:p.coords.longitude}; find.acc=a; find.error=null;
+           recordTrailPoint(find.pos);
            if(firstFix && navigator.onLine){
              // coords may not have existed when weather first tried to load (no pinned stages yet) — retry now
              refreshWeather().then(()=>{ if(state.view==="home"&&!document.querySelector(".modal-bg")) renderView(); }).catch(()=>{});
@@ -3785,6 +4010,7 @@ function viewFind(){
     </div>
     <div class="find-actions">
       <button class="btn ghost" id="pins-btn">Pins</button>
+      <button class="btn ${myBeacon()?'primary':'ghost'}" id="beacon-btn">${myBeacon()?`Beaconing · ${beaconMinsLeft(myBeacon())}m`:'Meet me here'}</button>
       ${feat("rally")?`<button class="btn ghost" id="rally-btn">${getRally()?'Rally':'Set rally'}</button>`:""}
       ${feat("lost")?`<button class="btn ${find.lost?'primary':'ghost'}" id="lost-btn">${find.lost?'I’m OK now':'I’m lost'}</button>`:""}
     </div>`;
@@ -4296,7 +4522,7 @@ function meetupCard(){
 
 /* ---- live rally calls ---- */
 const CALL_KINDS={ food:{e:"🍔",label:"Food"}, drinks:{e:"🍺",label:"Drinks"}, coffee:{e:"☕️",label:"Coffee/break"}, meet:{e:"📍",label:"Meet up"} };
-function callText(c){ const k=CALL_KINDS[c.kind]||CALL_KINDS.meet; return `${k.e} ${esc(c.label||k.label)}${c.at?` · ${esc(c.at)}`:" · now"}`; }
+function callText(c){ if(c.kind==="beacon") return esc(c.label||"dropped a beacon"); const k=CALL_KINDS[c.kind]||CALL_KINDS.meet; return `${k.e} ${esc(c.label||k.label)}${c.at?` · ${esc(c.at)}`:" · now"}`; }
 async function createCall(kind,label,at){
   const ttl=2*3600000; // calls live 2h
   await addDoc(colCalls,{ userId:state.user.id, name:state.user.name, kind, label:(label||"").trim(), at:(at||"").trim(),
