@@ -1570,14 +1570,16 @@ function weatherCard(){
 }
 async function refreshWeather(){
   if(!feat("weather")) return;
+  if(!navigator.onLine) return;
   const co=festivalCoords(); if(!co) return;
-  // only refetch every ~3h
+  // only skip a refetch if we have a RECENT cache that actually contains data
   const w=state.structure.weatherCache;
-  if(w && w.fetchedAt && Date.now()-w.fetchedAt < 3*3600000) return;
+  if(w && w.daily && (w.daily.time||[]).length && w.fetchedAt && Date.now()-w.fetchedAt < 3*3600000) return;
   try{
     const url=`https://api.open-meteo.com/v1/forecast?latitude=${co.lat.toFixed(3)}&longitude=${co.lng.toFixed(3)}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=10`;
     const res=await fetch(url); if(!res.ok) return;
     const data=await res.json();
+    if(!data || !data.daily || !(data.daily.time||[]).length) return;   // don't cache an empty response
     if(state.user && state.user.admin) await saveStructure({...state.structure, weatherCache:{ daily:data.daily, fetchedAt:Date.now() }});
     else state.structure.weatherCache={ daily:data.daily, fetchedAt:Date.now() };  // local only for non-admins
   }catch(e){}
@@ -3308,7 +3310,12 @@ function startFindSensors(skipOrientation){
       p=>{ const a=p.coords.accuracy;
            // skip a wildly inaccurate reading if we already have a decent recent fix
            if(find.pos && a>120 && find.acc && find.acc<a*0.6){ return; }
+           const firstFix = !find.pos;
            find.pos={lat:p.coords.latitude,lng:p.coords.longitude}; find.acc=a; find.error=null;
+           if(firstFix && navigator.onLine){
+             // coords may not have existed when weather first tried to load (no pinned stages yet) — retry now
+             refreshWeather().then(()=>{ if(state.view==="home"&&!document.querySelector(".modal-bg")) renderView(); }).catch(()=>{});
+           }
            if(state.view==="find"){ if(!document.getElementById("radar")) renderView(); else updateFindDynamic(); } },
       e=>{ find.error = e.code===1 ? "denied" : "unavailable"; if(state.view==="find") renderView(); },
       {enableHighAccuracy:true,maximumAge:0,timeout:20000}
