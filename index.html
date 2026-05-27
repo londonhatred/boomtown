@@ -511,10 +511,11 @@
   .sm-add.on{background:var(--teal)} .sm-add.on svg{stroke:#fff}
 
   /* weather strip */
-  .weather-strip{display:flex;align-items:center;gap:10px;background:var(--card);border:2px solid var(--ink);border-radius:var(--radius);padding:11px 15px;margin-bottom:12px;font-size:13px;font-weight:600;flex-wrap:wrap}
-  .ws-day{font-family:"Anton";font-size:15px;text-transform:uppercase}
-  .ws-fc{font-weight:800}
-  .ws-sun{color:var(--muted);font-size:12px;margin-left:auto}
+  .weather-card .wc-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  .wc-item{flex:1 1 0;min-width:60px;background:var(--paper);border:1.5px solid var(--line);border-radius:10px;padding:8px 6px;text-align:center}
+  .wc-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-2);font-weight:700;margin-bottom:2px}
+  .wc-val{font-family:"Anton";font-size:18px;line-height:1}
+  .wc-hint{font-size:12px;color:var(--ink-2);margin-top:10px;line-height:1.4}
 
   /* clash resolver */
   .clash-list{display:flex;flex-direction:column;gap:2px}
@@ -1497,9 +1498,11 @@ function recsCard(){
 
 /* ---------- WEATHER (cached, sunrise/sunset offline) ---------- */
 function festivalCoords(){
-  // average of pinned stages, else null
-  const ss=stagesWithCoords(); if(!ss.length) return null;
-  return { lat: ss.reduce((a,s)=>a+s.lat,0)/ss.length, lng: ss.reduce((a,s)=>a+s.lng,0)/ss.length };
+  // average of pinned stages, else fall back to the device's current GPS position
+  const ss=stagesWithCoords();
+  if(ss.length) return { lat: ss.reduce((a,s)=>a+s.lat,0)/ss.length, lng: ss.reduce((a,s)=>a+s.lng,0)/ss.length };
+  if(find.pos) return { lat:find.pos.lat, lng:find.pos.lng };   // before stages are pinned, use where you are
+  return null;
 }
 // daylight from lat/long + date — pure math, works offline
 function sunTimes(date,lat,lng){
@@ -1531,25 +1534,39 @@ function weatherCard(){
   const co=festivalCoords();
   const day=currentFestivalDay();
   const date=dateForDay(day)||new Date();
-  let sunLine="";
+  let sunrise="", sunset="";
   if(co){
     const st=sunTimes(date,co.lat,co.lng);
-    if(st&&st.sunrise&&st.sunset) sunLine=`${clockMs(st.sunrise.getTime())} · ${clockMs(st.sunset.getTime())}`;
+    if(st&&st.sunrise&&st.sunset){ sunrise=clockMs(st.sunrise.getTime()); sunset=clockMs(st.sunset.getTime()); }
   }
   // cached forecast (fetched by refreshWeather when online)
   const w=state.structure.weatherCache;
-  let fc="";
+  let hi=null, lo=null, rain=null;
   if(w && w.daily){
     const dstr=date.toISOString().slice(0,10);
     const i=(w.daily.time||[]).indexOf(dstr);
     if(i>=0){
-      const hi=Math.round(w.daily.temperature_2m_max[i]), lo=Math.round(w.daily.temperature_2m_min[i]);
-      const rain=w.daily.precipitation_probability_max?w.daily.precipitation_probability_max[i]:null;
-      fc=`${hi}° / ${lo}°${rain!=null?` · ${rain}%`:""}`;
+      hi=Math.round(w.daily.temperature_2m_max[i]); lo=Math.round(w.daily.temperature_2m_min[i]);
+      rain=w.daily.precipitation_probability_max?w.daily.precipitation_probability_max[i]:null;
     }
   }
-  if(!sunLine && !fc) return "";
-  return `<div class="weather-strip"><span class="ws-day">${day.slice(0,3)}</span>${fc?`<span class="ws-fc">${fc}</span>`:""}${sunLine?`<span class="ws-sun">${sunLine}</span>`:""}</div>`;
+  // nothing to show yet — explain why instead of rendering blank
+  if(!co){
+    return `<div class="home-card weather-card"><div class="hc-title">Weather &amp; daylight</div><div class="wc-hint">Turn on location (or pin a stage) to see the forecast, sunrise &amp; sunset.</div></div>`;
+  }
+  const items=[];
+  if(hi!=null) items.push(`<div class="wc-item"><div class="wc-lbl">High</div><div class="wc-val">${hi}°</div></div>`);
+  if(lo!=null) items.push(`<div class="wc-item"><div class="wc-lbl">Low</div><div class="wc-val">${lo}°</div></div>`);
+  if(rain!=null) items.push(`<div class="wc-item"><div class="wc-lbl">Rain</div><div class="wc-val">${rain}%</div></div>`);
+  if(sunrise) items.push(`<div class="wc-item"><div class="wc-lbl">Sunrise</div><div class="wc-val">${sunrise}</div></div>`);
+  if(sunset) items.push(`<div class="wc-item"><div class="wc-lbl">Sunset</div><div class="wc-val">${sunset}</div></div>`);
+  if(!items.length) return "";
+  const fcMissing = (hi==null && navigator.onLine);
+  return `<div class="home-card weather-card">
+    <div class="hc-title">Weather &amp; daylight · ${day.slice(0,3)}</div>
+    <div class="wc-grid">${items.join("")}</div>
+    ${fcMissing?`<div class="wc-hint">Forecast loads when online — pull up again in a moment.</div>`:""}
+  </div>`;
 }
 async function refreshWeather(){
   if(!feat("weather")) return;
