@@ -54,7 +54,8 @@
   .app{max-width:760px;margin:0 auto;padding:0 16px calc(100px + var(--safe-b))}
   .topbar{position:sticky;top:0;z-index:40;display:flex;align-items:center;justify-content:space-between;gap:12px;
     padding:14px 0;background:var(--paper);border-bottom:2px solid var(--rule)}
-  .brand{display:flex;align-items:center;gap:11px;min-width:0}
+  .brand{display:flex;align-items:center;gap:11px;min-width:0;background:none;border:none;padding:0;margin:0;font:inherit;color:inherit;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .brand:active{opacity:.7}
   .brand .mark{width:40px;height:40px;flex:none;background:var(--accent);border:2px solid var(--ink);
     box-shadow:var(--hard-sm);position:relative}
   .brand .mark::after{content:"★";position:absolute;inset:0;display:grid;place-items:center;color:var(--accent-ink);font-size:18px;line-height:1}
@@ -1122,13 +1123,13 @@ function renderApp(){
     <div class="app${TEST_MODE?' testmode':''}">
       ${TEST_MODE?`<div class="test-banner">TEST MODE — sandbox data, your real festival is untouched <button class="test-exit" id="test-exit">Exit test</button></div>`:''}
       <div class="topbar">
-        <div class="brand">
+        <button class="brand" id="brand-home" title="Home" aria-label="Go to home">
           <div class="mark"></div>
           <div style="min-width:0">
             <div class="name">${esc(state.structure.festivalName)}</div>
             <div class="sub">${state.events.length} events · ${state.users.length} going</div>
           </div>
-        </div>
+        </button>
         <div class="who">
           ${find.lost?`<button class="live-pill lost" id="stop-share"><span class="dot"></span>Lost</button>`:(find.share?`<button class="live-pill" id="stop-share" title="Stop sharing your location"><span class="dot"></span>Live</button>`:"")}
           <div class="avatar ${u.admin?'adm':''}" title="${esc(u.name)}">${esc(initials(u.name))}</div>
@@ -1144,6 +1145,7 @@ function renderApp(){
   const stopShareBtn = root.querySelector("#stop-share");
   if(stopShareBtn) stopShareBtn.onclick = ()=>{ stopShare(true); renderApp(); };
   root.querySelector("#menu-btn").onclick = openMenu;
+  const brandHome=root.querySelector("#brand-home"); if(brandHome) brandHome.onclick=()=>{ state.view="home"; renderApp(); };
   root.querySelectorAll(".nav-inner button").forEach(b=>b.onclick=()=>{ state.view=b.dataset.v; renderApp(); });
   renderView();
   if(state.modal) renderModal();
@@ -1151,7 +1153,7 @@ function renderApp(){
 
 function navHTML(){
   const items = [
-    ["home","Home",`<path d="M4 11l8-7 8 7"/><path d="M6 10v9h12v-9"/>`],
+    ["browse","Lineup",`<path d="M5 5h14v14H5z"/><path d="M9 9h6M9 12h6M9 15h4"/>`],
     ["mine","Plan",`<path d="M5 4h11l4 4v12H5z"/><path d="M9 12l2 2 4-4"/>`],
     ["shared","Group",`<circle cx="9" cy="8" r="3"/><circle cx="17" cy="10" r="2.4"/><path d="M3.5 19c.6-3 3-4.5 5.5-4.5S14 16 14.6 19"/>`],
   ];
