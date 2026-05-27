@@ -992,6 +992,26 @@ function afterData(){
   renderApp();
   maybeNotifyChanges(); scheduleNotifications();
   if(navigator.onLine) refreshWeather().then(()=>{ if(state.view==="home"&&!document.querySelector(".modal-bg")) renderView(); });
+  restorePersistedToggles();
+}
+// Re-apply the user's saved location-sharing & reminder choices after a refresh. Runs once.
+let _togglesRestored=false;
+function restorePersistedToggles(){
+  if(_togglesRestored || !state.user) return;
+  _togglesRestored=true;
+  // Reminders: only resume if still permitted by the browser
+  if(localStorage.getItem("fp_notify")==="1" && !find.notify){
+    if(typeof Notification!=="undefined" && Notification.permission==="granted"){
+      find.notify=true; scheduleNotifications();
+    } else {
+      localStorage.removeItem("fp_notify");   // permission was revoked; don't keep a dead flag
+    }
+  }
+  // Location sharing: only resume if location features are still on
+  if(localStorage.getItem("fp_share")==="1" && !find.share){
+    if(locationEnabled() && navigator.geolocation){ startShare(); renderApp(); }
+    else localStorage.removeItem("fp_share");
+  }
 }
 
 /* ============================================================
@@ -3200,6 +3220,7 @@ function startShare(){
   );
   fix();
   find.shareTimer=setInterval(fix, 90000);   // ~ every 1.5 min
+  localStorage.setItem("fp_share","1");       // remember across refreshes
   if(feat("autoStop")){
     const hrs=Math.max(1, +state.structure.autoStopHours || 4);
     find.autoStopAt=Date.now()+hrs*3600000;
@@ -3208,6 +3229,7 @@ function startShare(){
 }
 function stopShare(){
   find.share=false; find.lost=false;
+  localStorage.removeItem("fp_share");
   if(find.shareTimer){ clearInterval(find.shareTimer); find.shareTimer=null; }
   if(find.autoStopTimer){ clearTimeout(find.autoStopTimer); find.autoStopTimer=null; }
   find.autoStopAt=0;
@@ -3473,11 +3495,11 @@ function notifyState(){
   return "Get a nudge ~15 min before your picks, and if a set time changes. Works while the app is open.";
 }
 async function toggleNotify(){
-  if(find.notify){ find.notify=false; find.notifyTimers.forEach(clearTimeout); find.notifyTimers=[]; toast("Reminders off"); return; }
+  if(find.notify){ find.notify=false; localStorage.removeItem("fp_notify"); find.notifyTimers.forEach(clearTimeout); find.notifyTimers=[]; toast("Reminders off"); return; }
   if(typeof Notification==="undefined"){ toast("Notifications not supported"); return; }
   try{ const p = Notification.permission==="granted" ? "granted" : await Notification.requestPermission(); if(p!=="granted"){ toast("Notifications blocked"); return; } }
   catch(e){ toast("Notifications unavailable"); return; }
-  find.notify=true; scheduleNotifications(); toast("Reminders on");
+  find.notify=true; localStorage.setItem("fp_notify","1"); scheduleNotifications(); toast("Reminders on");
 }
 function scheduleNotifications(){
   find.notifyTimers.forEach(clearTimeout); find.notifyTimers=[];
