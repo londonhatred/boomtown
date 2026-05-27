@@ -1,6 +1,6 @@
 /* Festival Planner service worker — offline app shell + runtime cache.
    Bump CACHE version to force clients to pick up a new build. */
-const CACHE = "festival-v19";
+const CACHE = "festival-v20";
 
 // App shell — relative paths so it works under /username.github.io/<repo>/
 const SHELL = [
@@ -113,24 +113,39 @@ self.addEventListener("message", (event) => {
   }
 });
 
-// Bring the app to front when a notification is tapped.
+// Bring the app to front when a notification is tapped. Honors data.url if the push provided one.
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+  const targetUrl = (event.notification.data && event.notification.data.url) || "./";
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
-      for (const c of list) { if ("focus" in c) return c.focus(); }
-      if (self.clients.openWindow) return self.clients.openWindow("./");
+      // Prefer focusing an already-open instance, navigating it if needed.
+      for (const c of list) {
+        if ("focus" in c) {
+          if (targetUrl && targetUrl !== "./" && "navigate" in c) { try { c.navigate(targetUrl); } catch(e){} }
+          return c.focus();
+        }
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(targetUrl);
     })
   );
 });
 
-// Placeholder for future server-sent push (needs FCM + a sender — see notes).
+// Server-sent push (Web Push from our Cloud Function). Payload shape:
+//   { title, body, tag?, url?, kind?, renotify? }
 self.addEventListener("push", (event) => {
   let data = {};
-  try { data = event.data ? event.data.json() : {}; } catch (e) {}
+  try { data = event.data ? event.data.json() : {}; } catch (e) {
+    try { data = { title: "Festival", body: event.data ? event.data.text() : "" }; } catch(_) {}
+  }
   event.waitUntil(
     self.registration.showNotification(data.title || "Festival", {
-      body: data.body || "", icon: "./icon-192.png", badge: "./icon-192.png"
+      body: data.body || "",
+      icon: "./icon-192.png",
+      badge: "./icon-192.png",
+      tag: data.tag || undefined,        // tag dedupes: same tag silently replaces previous
+      renotify: !!data.renotify,
+      data: { url: data.url || "./", kind: data.kind || "" }
     })
   );
 });
