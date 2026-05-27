@@ -1,6 +1,6 @@
 /* Festival Planner service worker — offline app shell + runtime cache.
    Bump CACHE version to force clients to pick up a new build. */
-const CACHE = "festival-v1";
+const CACHE = "festival-v2";
 
 // App shell — relative paths so it works under /username.github.io/<repo>/
 const SHELL = [

@@ -245,6 +245,8 @@
   .readout .r-dir{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#d8cdb2;margin-top:5px;font-weight:700}
   .readout .r-dist{font-family:"Anton";font-size:30px;color:var(--paper);line-height:1;text-align:right}
   .readout .r-dist small{display:block;font-family:"Archivo";font-size:10px;letter-spacing:.06em;color:#d8cdb2;font-weight:700;margin-top:3px;text-transform:uppercase}
+  .readout.r-here .r-dist{color:#9FD8C4}
+  .wt-time.here{color:var(--accent)}
   .radar-wrap{display:flex;justify-content:center;margin:4px 0 12px}
   #radar{width:100%;max-width:320px;height:auto;touch-action:manipulation}
   #radar .ring{fill:none;stroke:var(--line-strong);stroke-width:1.5}
@@ -2246,7 +2248,15 @@ function wireView(){
   // ---- find / compass ----
   if(state.view==="find"){
     const en=v.querySelector("#find-enable-btn"); if(en) en.onclick=()=>{ find.enabledOnce=true; localStorage.setItem("fp_findon","1"); enableFind(); };
-    if(find.enabledOnce && !find.started && !find.error && locationEnabled()) startFindSensors();
+    // Compass re-enable affordance: iOS needs a fresh user gesture for orientation permission
+    // after any page reload (e.g. entering/leaving test mode). GPS can auto-resume; compass can't.
+    const cen=v.querySelector("#compass-enable"); if(cen) cen.onclick=()=>{ enableFind(); };
+    if(find.enabledOnce && !find.started && !find.error && locationEnabled()){
+      // does this device gate orientation behind requestPermission (iOS 13+)?
+      const needsGesture = typeof DeviceOrientationEvent!=="undefined" && typeof DeviceOrientationEvent.requestPermission==="function";
+      if(needsGesture && !find.orientBound){ find.orientNeedsGesture=true; startFindSensors(true); }  // GPS only, defer compass to a tap
+      else startFindSensors();
+    }
     v.querySelectorAll("[data-leg]").forEach(b=>b.onclick=()=>{ find.show[b.dataset.leg]=!find.show[b.dataset.leg]; find.target=null; renderView(); });
     const shareTog=v.querySelector("#share-toggle"); if(shareTog) shareTog.onclick=()=>{ if(find.share) stopShare(true); else startShare(); renderApp(); };
     const pinsBtn=v.querySelector("#pins-btn"); if(pinsBtn) pinsBtn.onclick=()=>{ state.modal={type:"pins"}; renderModal(); };
@@ -2783,7 +2793,7 @@ function renderBulkModal(){
 let find = { started:false, enabledOnce: localStorage.getItem("fp_findon")==="1", geoWatch:null, orientBound:false, orientHandler:null,
              pos:null, acc:null, heading:null, hasOrientation:false, headingMode:"auto", target:null, error:null,
              show:{stages:true,people:true,pins:true}, share:false, shareTimer:null, myUpdated:0, lastWrite:0,
-             lost:false, autoStopAt:0, autoStopTimer:null, packingSubbed:false, notify:false, notifyTimers:[], notifiedChanges:{}, notifiedMentions:{}, notifiedCalls:{}, sessionStart:Date.now(),
+             lost:false, autoStopAt:0, autoStopTimer:null, packingSubbed:false, notify:false, notifyTimers:[], notifiedChanges:{}, notifiedMentions:{}, notifiedCalls:{}, sessionStart:Date.now(), orientNeedsGesture:false,
              seedActive:false, seedFrom:null, seedStartT:0, seedPt:null, seedDist:0, seedWatch:null, seedClock:null };
 
 const R_EARTH = 6371000;
@@ -2821,6 +2831,7 @@ function stagesWithCoords(){
    leg samples only — no long-term raw GPS trails.
    ============================================================ */
 const STAGE_RADIUS = 35;        // metres: "you're at this stage"
+const HERE_RADIUS = 15;         // metres: close enough to show "HERE" instead of a jittery small distance
 const WALK_MPS_FALLBACK = 1.15; // ~4.1 km/h walking, padded for crowds
 const DETOUR_FACTOR = 1.35;     // straight-line → real path padding
 const MIN_LEG_SEC = 40, MAX_LEG_SEC = 60*60;       // sanity bounds
@@ -2894,7 +2905,8 @@ function walkTimesFromHere(limit){
   if(!locationEnabled() || !find.pos) return [];
   const out=stagesWithCoords().map(s=>{
     const sec=walkSecondsFromPos(find.pos, s.id);
-    return { stage:s, sec:(sec==null?Infinity:sec) };
+    const dist=haversine(find.pos.lat, find.pos.lng, s.lat, s.lng);
+    return { stage:s, sec:(sec==null?Infinity:sec), dist };
   }).filter(x=>isFinite(x.sec)).sort((a,b)=>a.sec-b.sec);
   return limit?out.slice(0,limit):out;
 }
@@ -2902,8 +2914,8 @@ function walkTimesCard(limit, title){
   const list=walkTimesFromHere(limit);
   if(!list.length) return "";
   const rows=list.map(x=>{
-    const here=x.sec<60;
-    return `<button class="wt-row tappable" data-goto-stage="${esc(x.stage.name)}"><span class="wt-dot" style="background:${x.stage.color}"></span><span class="wt-name">${esc(x.stage.name)}</span><span class="wt-time">${here?"you're here":fmtWalk(x.sec).replace(" walk","")}</span></button>`;
+    const here = x.dist!=null && x.dist<=HERE_RADIUS;
+    return `<button class="wt-row tappable" data-goto-stage="${esc(x.stage.name)}"><span class="wt-dot" style="background:${x.stage.color}"></span><span class="wt-name">${esc(x.stage.name)}</span><span class="wt-time${here?' here':''}">${here?"HERE":fmtWalk(x.sec).replace(" walk","")}</span></button>`;
   }).join("");
   return `<div class="home-card"><div class="hc-title">${title||"Walk times from here"}</div><div class="wt-list">${rows}</div></div>`;
 }
@@ -3240,9 +3252,10 @@ window.addEventListener("pagehide",()=>{ if(find.share && state.user){ try{ dele
 
 function enableFind(){
   // iOS needs an explicit gesture-triggered permission request for the compass
+  find.orientNeedsGesture=false;
   try{
     if(typeof DeviceOrientationEvent!=="undefined" && typeof DeviceOrientationEvent.requestPermission==="function"){
-      DeviceOrientationEvent.requestPermission().then(()=>bindOrientation()).catch(()=>{});
+      DeviceOrientationEvent.requestPermission().then(()=>{ bindOrientation(); if(state.view==="find") renderView(); }).catch(()=>{});
     }
   }catch(e){}
   startFindSensors();
@@ -3263,7 +3276,7 @@ function bindOrientation(){
   window.addEventListener("deviceorientation",handler,true);
   find.orientBound=true;
 }
-function startFindSensors(){
+function startFindSensors(skipOrientation){
   if(find.started) return;
   find.started=true; find.error=null;
   if(navigator.geolocation){
@@ -3277,7 +3290,7 @@ function startFindSensors(){
       {enableHighAccuracy:true,maximumAge:0,timeout:20000}
     );
   } else { find.error="unsupported"; }
-  bindOrientation();
+  if(!skipOrientation) bindOrientation();
   if(state.view==="find") renderView();
 }
 function stopFindSensors(){
@@ -3363,7 +3376,9 @@ function viewFind(){
   const modeToggle = compassAvail ? `<div class="mode-toggle">
       <button data-fmode="auto" class="${headingUp?'on':''}">Compass</button>
       <button data-fmode="north" class="${!headingUp?'on':''}">North up</button>
-    </div>` : `<span class="find-note">Compass not available — showing north-up</span>`;
+    </div>` : (find.orientNeedsGesture
+        ? `<button class="btn ghost sm" id="compass-enable">Enable compass</button>`
+        : `<span class="find-note">Compass not available — showing north-up</span>`);
 
   const dots = targets.map(t=>{
     const label = t.name.length>12 ? t.name.slice(0,11)+'…' : t.name;
@@ -3448,12 +3463,20 @@ function updateFindDynamic(){
     if(arrow){ arrow.style.display=""; arrow.setAttribute("transform",`rotate(${rel.toFixed(1)} 140 140)`); }
     if(ro){
       ro.querySelector(".r-name").textContent=t.name;
-      ro.querySelector(".r-dist").innerHTML=`${fmtDist(t.d)}<small>away</small>`;
-      let dir = headingUp ? relDirText(rel) : (cardinal(t.b)+" of you");
-      if(t.kind==="person") dir = (t.lost?"needs help · ":"")+dir+(t.ts?(" · "+agoText(t.ts)):"");
-      else if(t.kind==="rally") dir = "🚩 meet-up point · "+dir;
-      else if(t.kind==="pin") dir += " · "+(t.note?esc(t.note):(t.mine?"your pin":esc(t.ownerName||"shared")+"'s pin"));
-      ro.querySelector(".r-dir").textContent = dir;
+      const here = t.d!=null && t.d<=HERE_RADIUS;
+      ro.classList.toggle("r-here", here);
+      if(here){
+        ro.querySelector(".r-dist").innerHTML=`HERE`;
+        let dir = t.kind==="person" ? (t.lost?"needs help · together":"you're together") : "you're here";
+        ro.querySelector(".r-dir").textContent = dir;
+      } else {
+        ro.querySelector(".r-dist").innerHTML=`${fmtDist(t.d)}<small>away</small>`;
+        let dir = headingUp ? relDirText(rel) : (cardinal(t.b)+" of you");
+        if(t.kind==="person") dir = (t.lost?"needs help · ":"")+dir+(t.ts?(" · "+agoText(t.ts)):"");
+        else if(t.kind==="rally") dir = "🚩 meet-up point · "+dir;
+        else if(t.kind==="pin") dir += " · "+(t.note?esc(t.note):(t.mine?"your pin":esc(t.ownerName||"shared")+"'s pin"));
+        ro.querySelector(".r-dir").textContent = dir;
+      }
     }
   } else if(arrow){ arrow.style.display="none"; }
 
