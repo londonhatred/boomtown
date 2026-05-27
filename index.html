@@ -1732,13 +1732,32 @@ function planCluster(items){
     freeAt=leaveBy; atStage=it.e.stageName;
   }
   route.sort((a,b)=>a.seeFrom-b.seeFrom);
-  // drop a trailing sliver (last segment, non-must, under SOLID_CHUNK) → suggest skipping it
+  // A "parallel alternative": an act that got missed/slivered not because it barely overlaps the
+  // cluster, but because it runs concurrently with something already routed. These shouldn't be
+  // called "probably skip" — they're a genuine either/or the user should know about.
+  const routedIds=new Set(route.map(r=>r.item.e.id));
+  const parallels=[];
+  // drop a trailing sliver (last segment, non-must, under SOLID_CHUNK) → suggest skipping it,
+  // BUT only if it's genuinely a thin fragment, not a full act that simply overlapped a routed one.
   let skipTail=null;
   if(route.length>=2){
     const last=route[route.length-1];
-    if(!last.must && last.seeMin<SOLID_CHUNK){ skipTail=last.item; route.pop(); }
+    const fullLen=last.item.r[1]-last.item.r[0];
+    if(!last.must && last.seeMin<SOLID_CHUNK){
+      if(fullLen>=SOLID_CHUNK){ parallels.push(last.item); route.pop(); }   // substantial act, just overlapped → alternative
+      else { skipTail=last.item; route.pop(); }                            // genuinely short overlap → skip
+    }
   }
-  return {route, missed, conflictMusts, skipTail};
+  // any act fully missed but substantial and overlapping a routed act = also a parallel alternative
+  for(const m of missed){
+    if(m.isShift) continue;
+    const [ms,me]=m.r; const fullLen=me-ms;
+    if(fullLen>=SOLID_CHUNK && route.some(r=>!r.shift && ms<r.seeTo && r.seeFrom<me)){
+      if(!parallels.includes(m)) parallels.push(m);
+    }
+  }
+  const trueMissed = missed.filter(m=>!parallels.includes(m));
+  return {route, missed:trueMissed, conflictMusts, skipTail, parallels};
 }
 // build an even-split route across a set of mutually-clashing must-sees (earliest-ending first)
 function splitMustRoute(group){
@@ -1763,7 +1782,7 @@ function splitMustRoute(group){
   return segs;
 }
 function clusterAdvice(items){
-  const {route, missed, conflictMusts, skipTail}=planCluster(items);
+  const {route, missed, conflictMusts, skipTail, parallels}=planCluster(items);
 
   // ----- multiple clashing must-sees: offer split + pick-one, warn honestly -----
   let header="";
@@ -1837,6 +1856,9 @@ function clusterAdvice(items){
   const hasShift=route.some(r=>r.shift);
   if(missed.length) line += ` <span class="ca-miss">${hasShift?"You're working then — you'll miss":"Can't also fit"} ${missed.map(m=>esc(m.e.title)).join(", ")}.</span>`;
   if(skipTail) line += ` <span class="ca-miss">${esc(skipTail.e.title)}'s only a few min by then — probably skip.</span>`;
+  if(parallels && parallels.length){
+    line += ` <span class="ca-extra">Also on then: ${parallels.map(p=>`<b>${esc(p.e.title)}</b> (${esc(fmt12(p.e.start))}–${esc(fmt12(p.e.end))})`).join(", ")} — runs alongside, so it's an either/or.</span>`;
+  }
   const slivers=route.filter(r=>!r.must && r.seeMin<SOLID_CHUNK);
   if(slivers.length>=Math.max(1,route.length-1) && route.length>=2 && !route.some(r=>r.must)){
     line += ` <span class="ca-miss">That's a lot of dashing for short bits — you might enjoy committing to one or two instead.</span>`;
