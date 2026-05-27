@@ -1081,11 +1081,11 @@ function maybeShowIntro(){
 }
 function showIntro(){
   const slides=[
-    {t:"Welcome", b:`This is your group's plan for ${esc(state.structure.festivalName||"the festival")}. Browse the lineup, pick the acts you want, and the app sorts out your days — and flags clashes.`},
-    {t:"Pick your acts", b:"In <b>Lineup</b>, tap an act to add it to your plan. Star (★) the ones you can't miss — the clash planner protects those when two picks overlap."},
-    {t:"See clashes solved", b:"Your <b>Plan</b> groups overlapping picks and suggests how to catch the most — tap the <b>Clashes</b> tile for the full advice."},
-    {t:"Find your way", b:"<b>Find</b> shows a live compass to stages, your crew and your pins — plus walk times. <b>Group</b> shows who's going where, and <b>Chat</b> keeps everyone talking."},
-    {t:"You're set", b:"Tap the festival name up top anytime to come back here. Have a great one!"}
+    {t:"HIYA!", b:`Welcome to ${esc(state.structure.festivalName||"the festival")}! This app lets you plan your festival lineup, see where everyone else is, and navigate the site to find what you want to see.`},
+    {t:"PICK YOUR ACTS", b:"In the <b>Lineup</b> tab, select the acts you want to see. Tap the star (★) to make an act a must-see, and the scheduler will make sure you catch all of it."},
+    {t:"CLASHES, SOLVED", b:"In the <b>Plan</b> tab you'll see your schedule. If any picks clash, tap the <b>Clashes</b> tile and the system helps you navigate them as best as possible."},
+    {t:"DON'T GET LOST", b:"The <b>Find</b> tab helps you navigate to each stage with a live compass — and you can drop pins for your tent or anything useful you spot, like good food or a quiet bar."},
+    {t:"YOU'RE SET!", b:"To see your dashboard, tap the star (★) at the top of the screen and you'll get your day at a glance."}
   ];
   let i=0;
   const wrap=document.createElement("div"); wrap.className="modal-bg"; wrap.id="intro-bg";
