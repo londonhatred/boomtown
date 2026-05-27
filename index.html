@@ -161,6 +161,29 @@
   .tri-toggle .tri-opt:last-child{border-right:none}
   .tri-toggle .tri-opt.on{background:var(--violet);color:#fff}
   .energy-card{background:var(--card);border:2px dashed var(--gold);border-radius:var(--radius);padding:14px 16px;margin-bottom:14px}
+  .tmrw-card{background:var(--card);border:2px solid var(--violet)}
+  .pace-card{background:var(--card);border:2px dashed var(--teal)}
+  .oracle-btn{appearance:none;width:32px;height:32px;border-radius:50%;border:2px solid var(--violet);background:var(--card);color:var(--violet);font:inherit;font-weight:800;font-size:14px;cursor:pointer;line-height:1;padding:0;-webkit-tap-highlight-color:transparent}
+  .oracle-btn:active{transform:translateY(1px)}
+  .oracle-modal .or-act{font-size:14px;line-height:1.4;margin:0 0 12px}
+  .oracle-modal .or-verdict{font-family:"Anton";font-size:28px;text-transform:uppercase;letter-spacing:.02em;text-align:center;padding:14px 12px;border:2px solid var(--ink);border-radius:var(--radius);margin:0 0 14px;line-height:1.05}
+  .oracle-modal .or-verdict.or-go{background:var(--teal);color:#fff;border-color:var(--teal)}
+  .oracle-modal .or-verdict.or-try{background:var(--gold);color:#fff;border-color:var(--gold)}
+  .oracle-modal .or-verdict.or-skip{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .oracle-modal .or-lines{display:flex;flex-direction:column;gap:6px}
+  .oracle-modal .or-line{display:flex;gap:9px;align-items:start;font-size:13.5px;line-height:1.45;padding:4px 0}
+  .oracle-modal .or-line .or-mark{flex:none;font-family:"Anton";width:16px;text-align:center}
+  .oracle-modal .or-line.good .or-mark{color:var(--teal)}
+  .oracle-modal .or-line.bad .or-mark{color:var(--accent)}
+  .tmrw-lines{display:flex;flex-direction:column;gap:4px;font-size:13.5px;line-height:1.5;margin-top:4px}
+  .mood-chip{display:inline-block;border-radius:50%;border:1.5px solid var(--ink);vertical-align:middle;margin:0 2px 1px 0}
+  .mood-strip{display:flex;gap:2px;flex-wrap:wrap;margin:6px 0 10px;padding:6px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .mood-strip .mood-bar{width:6px;height:18px;border-radius:1px}
+  .ach-row{display:flex;align-items:center;gap:12px;background:var(--card);border:1.5px solid var(--ink);border-radius:var(--radius-sm);padding:11px 14px;margin-bottom:6px}
+  .ach-trophy{font-size:22px;line-height:1;flex:none}
+  .ach-text{flex:1;min-width:0}
+  .ach-text b{font-size:14px}
+  .ach-when{font-family:"Anton";font-size:11px;color:var(--ink-2);letter-spacing:.04em}
   .rhythm-card{background:var(--card);border:2px solid var(--ink);border-radius:var(--radius);padding:14px 16px;margin-top:14px}
   .rh-stat{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;font-size:13px;border-top:1px solid var(--line)}
   .rh-stat:first-of-type{border-top:none;margin-top:6px}
@@ -424,6 +447,27 @@
   @keyframes lostpulse{0%,100%{opacity:.2}50%{opacity:.9}}
 
   /* menu */
+  /* sectioned menu */
+  .menu-modal{padding-bottom:14px}
+  .menu-section{margin-top:16px}
+  .menu-section:first-of-type{margin-top:6px}
+  .menu-section h3{font-family:"Anton";font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-2);margin:0 0 6px;padding:0 4px}
+  .menu-section.admin h3{color:var(--violet)}
+  .menu-row{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--card);
+    border:1.5px solid var(--ink);border-radius:var(--radius-sm);padding:11px 14px;margin-bottom:6px;
+    cursor:pointer;font:inherit;width:100%;text-align:left;font-weight:700;font-size:14px;-webkit-tap-highlight-color:transparent}
+  .menu-row.on{background:var(--ink);color:var(--paper)}
+  .menu-row .mr-arr{color:var(--ink-2);font-size:18px;line-height:1;flex:none}
+  .menu-row.on .mr-arr{color:var(--paper)}
+  .menu-row.toggle{cursor:default}
+  .menu-row .mr-txt{min-width:0;flex:1}
+  .menu-row .mr-txt .lbl{font-weight:700;font-size:13.5px}
+  .menu-row .mr-txt .sub{font-size:11.5px;color:var(--ink-2);font-weight:400;margin-top:1px;line-height:1.35}
+  .menu-section.admin .menu-row{border-color:var(--violet);background:#F7F2EB}
+  .menu-foot{display:flex;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+  .menu-foot .btn{flex:1;font-size:12px;padding:9px 12px}
+  .menu-foot .btn.danger{border-color:var(--accent);color:var(--accent)}
+  /* legacy aliases (in case anything else still references) */
   .menu-list{display:flex;flex-direction:column;gap:7px}
   .menu-item{display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:var(--radius-sm);
     background:var(--card);border:2px solid var(--ink);font-weight:700;font-size:14.5px;text-align:left}
@@ -876,13 +920,18 @@ function adminFeat(name){
 }
 // Catalog of experimental/admin-only features. Add new ones here as they're built.
 const ADMIN_FEATURES = [
-  ["energy",   "Energy tracking",         "Notices your peak/taper patterns; gentle nudges when you're running long"],
-  ["stagepers","Stage personality",       "Aggregates crew ratings per stage so you can see where the gold is"],
-  ["heatmap",  "Where you spent time",    "A heatmap built from your trail showing where you actually clustered"],
-  ["sleep",    "Sleep tracking",          "Infers sleep windows from gaps in your trail and ratings — no accelerometer needed"],
-  ["weatherx", "Weather-aware nudges",    "Rain / cold / UV warnings tailored to what's happening soon"],
-  ["surveys",  "Set surveys",             "After rating, tap quick tags (vibe, sound, crowd) for a richer recap"],
-  ["diary",    "Festival diary",          "A timeline of your weekend written from your real data — no fluff, just truth"],
+  ["energy",      "Energy tracking",         "Notices your peak/taper patterns; gentle nudges when you're running long"],
+  ["stagepers",   "Stage personality",       "Aggregates crew ratings per stage so you can see where the gold is"],
+  ["heatmap",     "Where you spent time",    "A heatmap built from your trail showing where you actually clustered"],
+  ["sleep",       "Sleep tracking",          "Infers sleep windows from gaps in your trail and ratings — no accelerometer needed"],
+  ["weatherx",    "Weather-aware nudges",    "Rain / cold / UV warnings tailored to what's happening soon"],
+  ["surveys",     "Set surveys",             "After rating, tap quick tags (vibe, sound, crowd) for a richer recap"],
+  ["diary",       "Festival diary",          "A timeline of your weekend written from your real data — no fluff, just truth"],
+  ["tomorrowyou", "Tomorrow you advisor",    "Evening card with a short prediction for tomorrow based on your patterns"],
+  ["moodring",    "Mood ring on ratings",    "Colours your top sets by their survey tags — visual fingerprint of your taste"],
+  ["pacer",       "Pace tracker",            "Subtle nudge if you're walking slower than usual — body trying to tell you something"],
+  ["oracle",      "Should-I-go oracle",      "Tap any future act for a quick verdict: walk, clash, crowd, weather"],
+  ["achievements","Hidden achievements",     "Tiny celebratory pop-ups when you hit milestones (first 10/10, first night under 4h sleep, etc.)"],
 ];
 function festivalStart(){ const s=state.structure.festivalStartDate; return s ? new Date(s+"T00:00:00") : null; }
 function dateForDay(day){ const base=festivalStart(); if(!base) return null; const d=new Date(base); d.setDate(d.getDate()+Math.max(0,DAYS.indexOf(day))); return d; }
@@ -1309,10 +1358,12 @@ function subscribeAll(){
   });
   onSnapshot(colRatings, snap=>{
     state.ratings = snap.docs.map(d=>({id:d.id,...d.data()}));
+    checkAchievementTriggers();
     if(state.view==="shared" && !document.querySelector(".modal-bg")) renderView();
   });
   onSnapshot(colSafety, snap=>{
     state.safety = snap.docs.map(d=>({id:d.id,...d.data()}));
+    checkAchievementTriggers();
     if((state.view==="home"||state.view==="shared") && !document.querySelector(".modal-bg")) renderView();
   });
 }
@@ -1574,35 +1625,46 @@ function navHTML(){
 }
 
 function openMenu(){
-  const items=[];
-  items.push(["home","Home",""]);
-  if(feat("onnow")&&festivalStart()) items.push(["onnow","On now & soon",""]);
-  items.push(["browse","Browse the lineup",""]);
-  items.push(["mine","My plan",""]);
-  items.push(["shared","The group",""]);
-  if(locationEnabled()) items.push(["find","Find your way",""]);
-  if(feat("chat")) items.push(["chat","Group chat",""]);
-  items.push(["profile","Your profile",""]);
-  if(locationEnabled()) items.push(["trail","Where were you?",""]);
-  if(festivalStart() && festivalPhase()!=="before") items.push(["recap","Festival recap",""]);
-  if(festivalStart() && festivalPhase()!=="before" && adminFeat("diary")) items.push(["diary","Festival diary",""]);
-  if(feat("info")) items.push(["info","Festival info","ℹ️"]);
-  if(feat("packing")) items.push(["packing","Packing list",""]);
-  if(state.user.admin) items.push(["admin","Manage festival",""]);
+  // Sectioned menu. Bottom nav already covers Home/Lineup/Plan/Group/Find/Chat — they don't repeat here.
+  // Sections: The festival · Your weekend · Settings · Admin · footer (Replay tutorial, Sign out).
+  const festival=[];
+  if(feat("onnow")&&festivalStart()) festival.push(["onnow","On now & soon"]);
+  if(feat("info"))    festival.push(["info","Festival info"]);
+  if(feat("packing")) festival.push(["packing","Packing list"]);
+
+  const weekend=[];
+  weekend.push(["profile","Your profile"]);
+  if(locationEnabled()) weekend.push(["trail","Where were you?"]);
+  if(festivalStart() && festivalPhase()!=="before") weekend.push(["recap","Festival recap"]);
+  if(festivalStart() && festivalPhase()!=="before" && adminFeat("diary")) weekend.push(["diary","Festival diary"]);
+  if(adminFeat("achievements")) weekend.push(["achievements","Achievements"]);
+
+  const row=(v,l)=>`<button class="menu-row ${state.view===v?'on':''}" data-go="${v}"><span>${esc(l)}</span><span class="mr-arr">›</span></button>`;
+  const section=(title,rows,extraClass)=>rows.length?`<div class="menu-section ${extraClass||""}"><h3>${title}</h3>${rows.map(([v,l])=>row(v,l)).join("")}</div>`:"";
+
+  const settingsHtml=`<div class="menu-section">
+    <h3>Settings</h3>
+    ${feat("notify")?`<div class="menu-row toggle"><div class="mr-txt"><div class="lbl">Reminders</div><div class="sub">${esc(notifyState())}</div></div>
+      <button class="switch ${find.notify?'on':''}" id="mn-notify" role="switch" aria-checked="${find.notify}"><span></span></button></div>`:""}
+    <div class="menu-row toggle"><div class="mr-txt"><div class="lbl">Battery saver</div><div class="sub">${BATTERY_SAVER?"On · GPS eased, live sharing paused":"Eases GPS &amp; pauses sharing to save power"}</div></div>
+      <button class="switch ${BATTERY_SAVER?'on':''}" id="mn-batt" role="switch" aria-checked="${BATTERY_SAVER}"><span></span></button></div>
+    <div class="menu-row toggle"><div class="mr-txt"><div class="lbl">Battery panic</div><div class="sub">${BATTERY_PANIC?"On · only essentials visible":"Manual trigger if battery is low (auto on Android &lt;15%)"}</div></div>
+      <button class="switch ${BATTERY_PANIC?'on':''}" id="mn-panic" role="switch" aria-checked="${BATTERY_PANIC}"><span></span></button></div>
+  </div>`;
+
+  const adminHtml = state.user.admin ? section("Admin", [["admin","Manage festival"]], "admin") : "";
+
   const wrap=document.createElement("div"); wrap.className="modal-bg";
-  wrap.innerHTML=`<div class="modal">
+  wrap.innerHTML=`<div class="modal menu-modal">
     <div class="modal-head"><h2>Menu</h2><button class="btn ghost sm" id="mn-close">Close</button></div>
-    <div class="menu-list">
-      ${items.map(([v,l,e])=>`<button class="menu-item ${state.view===v?'on':''}" data-go="${v}"><span class="mi-e">${e}</span>${l}</button>`).join("")}
+    ${section("The festival", festival)}
+    ${section("Your weekend", weekend)}
+    ${settingsHtml}
+    ${adminHtml}
+    <div class="menu-foot">
+      <button class="btn ghost" id="mn-intro">Replay tutorial</button>
+      <button class="btn ghost danger" id="mn-exit">Sign out</button>
     </div>
-    ${feat("notify")?`<div class="share-row" style="margin-top:14px"><div style="min-width:0"><b>Reminders</b><div class="find-note">${notifyState()}</div></div>
-      <button class="switch ${find.notify?'on':''}" id="mn-notify" role="switch"><span></span></button></div>`:""}
-    <div class="share-row" style="margin-top:10px"><div style="min-width:0"><b>Battery saver</b><div class="find-note">${BATTERY_SAVER?"On · GPS eased, live sharing paused":"Eases GPS &amp; pauses sharing to save power"}</div></div>
-      <button class="switch ${BATTERY_SAVER?'on':''}" id="mn-batt" role="switch"><span></span></button></div>
-    <div class="share-row" style="margin-top:10px"><div style="min-width:0"><b>Battery panic</b><div class="find-note">${BATTERY_PANIC?"On · only essentials visible":"Manual trigger if battery is low (auto on Android &lt;15%)"}</div></div>
-      <button class="switch ${BATTERY_PANIC?'on':''}" id="mn-panic" role="switch"><span></span></button></div>
-    <button class="btn ghost block" id="mn-intro" style="margin-top:14px">Replay tutorial</button>
-    <button class="btn ghost block" id="mn-exit" style="margin-top:8px">Log out</button>
   </div>`;
   document.body.appendChild(wrap);
   const close=()=>wrap.remove();
@@ -1681,6 +1743,7 @@ function renderView(){
   else if(state.view==="trail") v.innerHTML = viewTrail();
   else if(state.view==="recap") v.innerHTML = viewRecap();
   else if(state.view==="diary") v.innerHTML = viewDiary();
+  else if(state.view==="achievements") v.innerHTML = viewAchievements();
   wireView();
 }
 
@@ -1717,6 +1780,7 @@ function eventCard(ev, {picked, clash, changed}={}){
     </div>
     <div class="act">
       ${mine?`<button class="must-btn ${must?'on':''}" data-must="${ev.id}" aria-label="must-see" title="Must-see">${must?'★':'☆'}</button>`:""}
+      ${(adminFeat("oracle") && !mine && eventStart(ev) && eventStart(ev).getTime()>Date.now())?`<button class="oracle-btn" data-oracle="${ev.id}" aria-label="should I go?" title="Should I go?">?</button>`:""}
       <button class="pick-btn ${picked||mine?'on':''}" data-pick="${ev.id}" aria-label="add to my plan">
         <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
       </button>
@@ -1907,6 +1971,8 @@ function homeDuring(){
   }
   cards.push(nextCard);
   cards.push(energyNudgeCard());
+  cards.push(paceCard());
+  cards.push(tomorrowYouCard());
   cards.push(safeCheckInCard());
 
   // weather strip + clash resolver (both auto-hide when empty)
@@ -2761,6 +2827,223 @@ function energyNudgeCard(){
     <button class="btn ghost sm" id="energy-dismiss" data-tag="${n.tag}">Got it, hush for today</button>
   </div>`;
 }
+// ---- Hidden achievements scaffolding ----
+// Any feature can call unlockAchievement(id,title,desc) to fire a celebratory toast and store it.
+// Idempotent — second call does nothing. Per-user, stored in localStorage. Listed in a view.
+function loadAchievements(){
+  try{ return JSON.parse(localStorage.getItem("fp_achs")||"[]"); }catch(e){ return []; }
+}
+function hasAchievement(id){
+  return loadAchievements().some(a=>a.id===id);
+}
+function unlockAchievement(id, title, desc){
+  if(!adminFeat("achievements")) return false;
+  if(hasAchievement(id)) return false;
+  const list=loadAchievements();
+  list.push({id, title, desc, unlockedAt:Date.now()});
+  try{ localStorage.setItem("fp_achs", JSON.stringify(list)); }catch(e){}
+  // Celebratory toast
+  toast(`🏆 ${title}`);
+  return true;
+}
+// Audit point: any time data changes, walk known triggers. Cheap; runs only when called.
+function checkAchievementTriggers(){
+  if(!state.user || !adminFeat("achievements")) return;
+  const myR = state.ratings.filter(r=>r.userId===state.user.id);
+  // First rating
+  if(myR.length>=1) unlockAchievement("first_rating", "First impression", "You rated your first set.");
+  // First perfect 10
+  if(myR.some(r=>r.score>=10)) unlockAchievement("perfect_10", "A perfect ten", "You gave a set a flawless 10.");
+  // Rated 10 sets
+  if(myR.length>=10) unlockAchievement("rated_ten", "Critic", "Rated 10 sets.");
+  // Rated 25 sets
+  if(myR.length>=25) unlockAchievement("rated_25", "Connoisseur", "Rated 25 sets.");
+  // First check-in safe
+  if(state.safety.some(s=>s.userId===state.user.id)) unlockAchievement("first_safe", "Home safe", "Your first check-in of the festival.");
+  // First survey tags used
+  if(myR.some(r=>r.tags&&r.tags.length)) unlockAchievement("first_tagged", "Got opinions", "Tagged a rating with what you actually felt.");
+}
+function viewAchievements(){
+  const list=loadAchievements().sort((a,b)=>b.unlockedAt-a.unlockedAt);
+  const head=`<div class="sec-head"><div><h2>Achievements</h2><div class="lead">Tiny milestones, quietly unlocked.</div></div></div>`;
+  if(!list.length) return head+emptyState("","Nothing yet","Keep using the app — milestones appear here as you hit them.");
+  return head + list.map(a=>{
+    const d=new Date(a.unlockedAt);
+    const date=`${d.getDate()}/${d.getMonth()+1}`;
+    let h=d.getHours(); const ap=h>=12?'pm':'am'; h=h%12||12;
+    const time=`${h}${ap}`;
+    return `<div class="ach-row"><span class="ach-trophy">🏆</span><div class="ach-text"><b>${esc(a.title)}</b><div class="find-note">${esc(a.desc)}</div></div><span class="ach-when">${date} ${time}</span></div>`;
+  }).join("");
+}
+// ---- Should-I-go oracle ----
+// Tap any future-and-not-yet-picked event → focused popup with grounded data + a verdict line.
+function openOracle(eventId){
+  const ev=state.events.find(e=>e.id===eventId); if(!ev) return;
+  const start=eventStart(ev), end=eventEnd(ev);
+  let score=0; const lines=[];
+  // 1) Stage personality (uses existing stagePersonality helper)
+  const personalityList = stagePersonality();
+  const stagePer = personalityList.find(p=>p.stage===ev.stageName);
+  if(stagePer){
+    if(stagePer.avg>=8){ score+=2; lines.push({good:true, text:`This stage averages <b>${stagePer.avg.toFixed(1)}</b> across the weekend — solid form.`}); }
+    else if(stagePer.avg>=7){ score+=1; lines.push({good:true, text:`This stage averages <b>${stagePer.avg.toFixed(1)}</b> — generally well-rated.`}); }
+    else if(stagePer.avg<6){ lines.push({good:false, text:`This stage averages <b>${stagePer.avg.toFixed(1)}</b> across the weekend — quieter form.`}); }
+  }
+  // 2) Crew picking it
+  const crewCount = state.picks.filter(p=>p.eventId===ev.id && p.userId!==state.user.id).length;
+  if(crewCount>0){
+    score += Math.min(3, crewCount);
+    lines.push({good:true, text:`<b>${crewCount}</b> of your crew ${crewCount===1?"has":"have"} this on their plan.`});
+  }
+  // 3) Clash check vs your existing picks
+  const ids=myPickIds();
+  const clashWith = state.events.filter(e=>ids.has(e.id) && e.day===ev.day).find(e=>{
+    const s2=eventStart(e), e2=eventEnd(e);
+    return s2 && e2 && start && end && (s2 < end) && (e2 > start);
+  });
+  if(clashWith){
+    score-=3;
+    lines.push({good:false, text:`Clashes with your pick: <b>${esc(clashWith.title)}</b> (${fmt12(clashWith.start)}–${clashWith.end?fmt12(clashWith.end):""}).`});
+  } else {
+    lines.push({good:true, text:`No clash with your picks.`});
+  }
+  // 4) Walk from previous pick
+  const myEarlier = state.events.filter(e=>ids.has(e.id) && e.day===ev.day).map(e=>({e, end:eventEnd(e)})).filter(x=>x.end && x.end<=start).sort((a,b)=>b.end-a.end);
+  if(myEarlier.length){
+    const prev=myEarlier[0].e;
+    if(prev.stageName && ev.stageName){
+      const prevS=stagesWithCoords().find(s=>s.name===prev.stageName);
+      const thisS=stagesWithCoords().find(s=>s.name===ev.stageName);
+      if(prevS && thisS){
+        const sec=walkSeconds(prevS.id, thisS.id);
+        if(sec){
+          const min=Math.round(sec/60);
+          if(min>15){ score-=1; lines.push({good:false, text:`Long walk from your prior pick: <b>${min} min</b>.`}); }
+          else { lines.push({good:true, text:`<b>${min} min</b> walk from <i>${esc(prev.title)}</i>.`}); }
+        }
+      }
+    }
+  }
+  // 5) Rain during set
+  const w=state.structure.weatherCache;
+  if(w && w.hourly && w.hourly.time && w.hourly.precipitation_probability && start){
+    const sH=start.toISOString().slice(0,13);
+    const eH=end?end.toISOString().slice(0,13):sH;
+    let maxP=0;
+    for(let i=0;i<w.hourly.time.length;i++){
+      const h=w.hourly.time[i].slice(0,13);
+      if(h>=sH && h<=eH){ const p=w.hourly.precipitation_probability[i]||0; if(p>maxP) maxP=p; }
+    }
+    if(maxP>=60){ score-=1; lines.push({good:false, text:`<b>${maxP}% rain</b> forecast during the set.`}); }
+  }
+  // Verdict
+  let verdict, verdictKind;
+  if(score>=4){ verdict="Go."; verdictKind="go"; }
+  else if(score>=1){ verdict="Worth a try."; verdictKind="try"; }
+  else if(score===0){ verdict="Coin flip — your call."; verdictKind="try"; }
+  else { verdict="Skip — unless you love them."; verdictKind="skip"; }
+  // Render
+  const wrap=document.createElement("div"); wrap.className="modal-bg";
+  wrap.innerHTML=`<div class="modal oracle-modal">
+    <div class="modal-head"><h2>Should I go?</h2><button class="btn ghost sm" id="or-close">Close</button></div>
+    <div class="or-act"><b>${esc(ev.title)}</b><br><span class="find-note">${esc(ev.stageName||"")} · ${fmt12(ev.start)}${ev.end?'–'+fmt12(ev.end):""}</span></div>
+    <div class="or-verdict or-${verdictKind}">${verdict}</div>
+    <div class="or-lines">
+      ${lines.length?lines.map(l=>`<div class="or-line ${l.good?'good':'bad'}"><span class="or-mark" aria-hidden="true">${l.good?"+":"−"}</span><span>${l.text}</span></div>`).join(""):`<div class="find-note">Not much to go on yet — early in the festival.</div>`}
+    </div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn ghost" id="or-skip" style="flex:1">Maybe next time</button>
+      <button class="btn primary" id="or-pick" style="flex:1">Add to plan</button>
+    </div>
+    <div class="find-note" style="margin-top:8px">Every line above is one observable fact. Verdict is a quick weighting, not a prophecy.</div>
+  </div>`;
+  document.body.appendChild(wrap);
+  const close=()=>wrap.remove();
+  wrap.querySelector("#or-close").onclick=close;
+  wrap.onclick=e=>{ if(e.target===wrap) close(); };
+  wrap.querySelector("#or-skip").onclick=close;
+  wrap.querySelector("#or-pick").onclick=async()=>{
+    try{ await togglePick(eventId); toast("Added"); close(); renderView(); }
+    catch(e){ toast("Couldn't save — try again"); }
+  };
+}
+// ---- Mood ring: colour every rating by its survey tags ----
+// Hue per tag, blended in HSL for multi-tag ratings. Returns a CSS color string.
+const TAG_HUES = { vibe:170, sound:42, crowd:9, surprise:264, dancing:28 };
+function moodColor(tags){
+  if(!Array.isArray(tags) || !tags.length) return "var(--line)";
+  // Blend hues using circular mean (avoid 350° + 10° → 180° bug)
+  let sx=0, sy=0, n=0;
+  tags.forEach(t=>{ const h=TAG_HUES[t]; if(h==null) return; const r=h*Math.PI/180; sx+=Math.cos(r); sy+=Math.sin(r); n++; });
+  if(!n) return "var(--line)";
+  const hue = (Math.atan2(sy/n, sx/n) * 180/Math.PI + 360) % 360;
+  return `hsl(${Math.round(hue)} 55% 48%)`;
+}
+function moodChip(tags, size){
+  const c=moodColor(tags);
+  const s = size||10;
+  return `<span class="mood-chip" style="background:${c};width:${s}px;height:${s}px" aria-hidden="true"></span>`;
+}
+// ---- Tomorrow You advisor ----
+// Evening card (after 8pm) with 1–3 short, fact-grounded lines about tomorrow.
+function tomorrowYouCard(){
+  if(!adminFeat("tomorrowyou")) return "";
+  if(festivalPhase()!=="during") return "";
+  // Show only late evening — when "tomorrow" is meaningfully near
+  const now=new Date(); const h=now.getHours();
+  if(h<20 && h>=DAY_ROLLOVER_HOUR) return "";    // too early to think about tomorrow
+  const today=currentFestivalDay(); if(!today) return "";
+  const idx=DAYS.indexOf(today);
+  const tomorrowDay = (idx>=0 && idx<DAYS.length-1) ? DAYS[idx+1] : null;
+  if(!tomorrowDay) return "";   // no tomorrow on the last night
+  // Only show if there ARE picks tomorrow — otherwise nothing to predict
+  const ids=myPickIds();
+  const picksTomorrow = state.events.filter(e=>ids.has(e.id) && e.day===tomorrowDay);
+  if(!picksTomorrow.length) return "";
+  const lines=[];
+  // Peak line — only if we have one
+  const peak=peakHour();
+  if(peak){
+    const peakLbl = `${(peak.h%12)||12}${peak.h>=12?'pm':'am'}`;
+    lines.push(`You usually peak around <b>${peakLbl}</b>.`);
+  }
+  // Hardest clash tomorrow
+  const clusters=clashClusters(tomorrowDay);
+  if(clusters.length){
+    const worst = clusters.reduce((a,b)=>(b.items.length>a.items.length?b:a));
+    const startT = worst.items[0].s;
+    const tlbl=fmt12(toHM(startT));
+    lines.push(`Your toughest clash: <b>${tlbl}</b> (${worst.items.length} overlapping picks).`);
+  }
+  // Tomorrow's weather highlight
+  const w=state.structure.weatherCache;
+  if(w && w.daily && w.daily.time){
+    const tdate=dateForDay(tomorrowDay);
+    if(tdate){
+      const y=tdate.toISOString().slice(0,10);
+      const i=w.daily.time.indexOf(y);
+      if(i>=0){
+        const hi=w.daily.temperature_2m_max?w.daily.temperature_2m_max[i]:null;
+        const lo=w.daily.temperature_2m_min?w.daily.temperature_2m_min[i]:null;
+        const rain=w.daily.precipitation_probability_max?w.daily.precipitation_probability_max[i]:null;
+        const uv=w.daily.uv_index_max?w.daily.uv_index_max[i]:null;
+        const bits=[];
+        if(hi!=null && lo!=null) bits.push(`<b>${Math.round(lo)}°–${Math.round(hi)}°</b>`);
+        if(rain!=null && rain>=40) bits.push(`${rain}% rain`);
+        if(uv!=null && uv>=7) bits.push(`high UV`);
+        if(bits.length) lines.push(`Weather: ${bits.join(" · ")}.`);
+      }
+    }
+  }
+  // Honest count of picks
+  lines.push(`<b>${picksTomorrow.length}</b> pick${picksTomorrow.length===1?"":"s"} on the slate.`);
+  if(lines.length<2) return "";   // not worth showing if we only have one line
+  return `<div class="home-card tmrw-card">
+    <div class="hc-title">🌅 Tomorrow you</div>
+    <div class="tmrw-lines">${lines.map(l=>`<div>${l}</div>`).join("")}</div>
+    <div class="find-note" style="margin-top:8px">Lines built from your rated sets, your picks, the forecast. No fortune-telling.</div>
+  </div>`;
+}
 // ---- Festival recap: per-day + overall "in numbers" ----
 function recapStats(dayName){
   // dayName === null → whole festival; else just that day
@@ -2817,19 +3100,32 @@ function viewRecap(){
   const fmtLate=ts=>{ if(!ts) return "—"; const d=new Date(ts); let h=d.getHours(); const ap=h>=12?"pm":"am"; h=h%12||12; return `${h}${d.getMinutes()?":"+String(d.getMinutes()).padStart(2,"0"):""}${ap}`; };
   const title = sel===null ? `Your ${esc(state.structure.festivalName||"festival")}` : `Your ${sel}`;
   const stat=(n,l)=>`<div class="recap-stat"><div class="n">${n}</div><div class="l">${l}</div></div>`;
+  // Mood fingerprint: every rating in chronological order, coloured by tags
+  let moodStripHtml="";
+  if(adminFeat("moodring")){
+    const ratings = state.ratings.filter(r=>r.userId===state.user.id)
+      .map(r=>{ const e=state.events.find(x=>x.id===r.eventId); return e?{r, ev:e, start:eventStart(e)}:null; })
+      .filter(x=>x && x.start && (sel===null || x.ev.day===sel))
+      .sort((a,b)=>a.start-b.start);
+    if(ratings.length){
+      const bars = ratings.map(x=>`<div class="mood-bar" title="${esc(x.ev.title)} · ${x.r.score.toFixed(1)}" style="background:${moodColor(x.r.tags||[])};height:${8+Math.round((x.r.score||5)*1.4)}px"></div>`).join("");
+      moodStripHtml = `<div class="mood-strip">${bars}</div>`;
+    }
+  }
   return `
     <div class="sec-head"><div><h2>Festival recap</h2><div class="lead">Your festival in numbers${phase==="during"?" so far":""}.</div></div></div>
     <div class="filters">${chips}</div>
     <div class="recap">
       <h3>${title}</h3>
       <div class="sub">in numbers</div>
+      ${moodStripHtml}
       <div class="recap-grid">
         ${stat(s.seenCount, "acts seen")}
         ${stat(s.miles>=0.1?s.miles.toFixed(1):"0", "miles walked")}
         ${stat(s.clashes, "clashes survived")}
         ${stat(fmtLate(s.latest), "latest night")}
       </div>
-      ${s.topSet?`<div class="recap-foot">Your top set: <b>${esc(s.topSet.e.title)}</b> · you rated it ${s.topSet.r.toFixed(1)}${(s.topSet.tags&&s.topSet.tags.length)?` · <span style="opacity:.85">${s.topSet.tags.join(" · ")}</span>`:""}</div>`:(s.ratedCount===0?`<div class="recap-foot">Rate sets as they finish to crown your top one.</div>`:"")}
+      ${s.topSet?`<div class="recap-foot">Your top set: ${adminFeat("moodring")?moodChip(s.topSet.tags,12):""}<b>${esc(s.topSet.e.title)}</b> · you rated it ${s.topSet.r.toFixed(1)}${(s.topSet.tags&&s.topSet.tags.length)?` · <span style="opacity:.85">${s.topSet.tags.join(" · ")}</span>`:""}</div>`:(s.ratedCount===0?`<div class="recap-foot">Rate sets as they finish to crown your top one.</div>`:"")}
     </div>
     ${rhythmCard()}
     ${sleepCard()}
@@ -2911,7 +3207,7 @@ function diaryEntriesForDay(day){
     const rd = state.ratings.find(r=>r.id===state.user.id+"__"+e.id);
     const scoreTxt = rd ? ` · Rated ${rd.score.toFixed(1)}` : "";
     const tagTxt   = (rd && rd.tags && rd.tags.length) ? " · " + rd.tags.join(", ") : "";
-    out.push({ t:start, kind:"set", text:`${esc(e.title)} @ ${esc(e.stageName||"")}${scoreTxt}${tagTxt}`, score: rd?rd.score:null });
+    out.push({ t:start, kind:"set", text:`${esc(e.title)} @ ${esc(e.stageName||"")}${scoreTxt}${tagTxt}`, score: rd?rd.score:null, tags: rd?(rd.tags||[]):[] });
   });
   // 2) Acts you stumbled into (rated, not picked, end-time within the day)
   state.ratings.filter(r=>r.userId===state.user.id).forEach(r=>{
@@ -2920,7 +3216,7 @@ function diaryEntriesForDay(day){
     const start=eventStart(e), end=eventEnd(e); if(!start||!end) return;
     if(!inDay(start.getTime())) return;
     const tagTxt = (r.tags && r.tags.length) ? " · " + r.tags.join(", ") : "";
-    out.push({ t:start, kind:"stumble", text:`Caught ${esc(e.title)} @ ${esc(e.stageName||"")} · Rated ${r.score.toFixed(1)}${tagTxt}`, score:r.score });
+    out.push({ t:start, kind:"stumble", text:`Caught ${esc(e.title)} @ ${esc(e.stageName||"")} · Rated ${r.score.toFixed(1)}${tagTxt}`, score:r.score, tags:r.tags||[] });
   });
   // 3) Safe check-in
   const safe=state.safety.find(s=>s.userId===state.user.id && s.day===day);
@@ -2994,7 +3290,7 @@ function viewDiary(){
       return `<div class="${cls}">
         <span class="dl-t">${formatTime12(e.t)}</span>
         <span class="dl-i" aria-hidden="true">${icon}</span>
-        <span class="dl-txt">${e.text}</span>
+        <span class="dl-txt">${adminFeat("moodring") && (e.kind==="set"||e.kind==="stumble") && e.tags && e.tags.length ? moodChip(e.tags,10)+" " : ""}${e.text}</span>
       </div>`;
     }).join("");
     const summary = sum ? `<div class="diary-sum">
@@ -3355,6 +3651,7 @@ function wireView(){
   v.querySelectorAll("[data-must]").forEach(b=>b.onclick=async()=>{
     try{ await toggleMustSee(b.dataset.must); }catch(e){ toast("Couldn't save — try again"); }
   });
+  v.querySelectorAll("[data-oracle]").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openOracle(b.dataset.oracle); });
   v.querySelectorAll("[data-goto-stage]").forEach(b=>b.onclick=()=>{
     const s=stagesWithCoords().find(x=>x.name===b.dataset.gotoStage);
     if(s) find.target="st:"+s.id;
@@ -4061,8 +4358,44 @@ function trackTrip(pos, acc){
   }
 }
 const legKey=(a,b)=> a<b ? a+"__"+b : b+"__"+a;   // undirected pair
+// ---- Pace tracker: today's walk legs vs your historical baseline ----
 async function recordLeg(a,b,sec,dist){
   try{ await addDoc(colLegs, { pair:legKey(a,b), sec, dist, by:state.user.id, at:serverTimestamp() }); }catch(e){}
+}
+function paceToday(){
+  if(!adminFeat("pacer") || !state.user) return null;
+  if(!state.legs || state.legs.length<4) return null;
+  const todayStart = (()=>{ const d=new Date(); d.setHours(DAY_ROLLOVER_HOUR,0,0,0); return d.getTime(); })();
+  const mine = state.legs.filter(l=>l.by===state.user.id && l.at && l.at.toMillis);
+  if(mine.length<4) return null;
+  // Group by pair: collect today's samples vs historical
+  const byPair={};
+  mine.forEach(l=>{
+    const ts=l.at.toMillis();
+    const p=l.pair;
+    if(!byPair[p]) byPair[p]={today:[], hist:[]};
+    if(ts>=todayStart) byPair[p].today.push(l.sec); else byPair[p].hist.push(l.sec);
+  });
+  const ratios=[];
+  Object.values(byPair).forEach(g=>{
+    if(!g.today.length || !g.hist.length) return;
+    const t=median(g.today), h=median(g.hist);
+    if(t && h) ratios.push(t/h);
+  });
+  if(ratios.length<2) return null;       // need pairs to average
+  const avg=ratios.reduce((a,b)=>a+b,0)/ratios.length;
+  return { ratio:avg, pairsSeen:ratios.length };
+}
+function paceCard(){
+  const p=paceToday(); if(!p) return "";
+  if(p.ratio<=1.05) return "";           // not slower in any meaningful way
+  const pct=Math.round((p.ratio-1)*100);
+  if(pct<10) return "";                  // sub-noise; ignore
+  // Don't double-show with the energy nudge — pace is the same family of advice
+  return `<div class="home-card pace-card">
+    <div class="hc-title">🐢 Heads up</div>
+    <p style="font-size:13.5px;line-height:1.45;margin:6px 0 0">You're moving about <b>${pct}% slower</b> than your usual pace today (across ${p.pairsSeen} stretches). Body might be asking for a sit-down.</p>
+  </div>`;
 }
 // admin "walk this route now" — records a high-trust seed leg from the timed walk
 async function recordSeedLeg(a,b,sec,dist){
