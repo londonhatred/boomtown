@@ -89,6 +89,16 @@
   .field input,.field select,.field textarea{width:100%;padding:12px 13px;border-radius:var(--radius-sm);color:var(--ink);
     background:var(--paper);border:2px solid var(--ink);outline:none}
   .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent);box-shadow:var(--hard-sm)}
+  .fld-label{display:block;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);margin-bottom:6px}
+  .inp{width:100%;padding:12px 13px;border-radius:var(--radius-sm);color:var(--ink);background:var(--paper);border:2px solid var(--ink);outline:none;font:inherit}
+  .inp:focus{border-color:var(--accent);box-shadow:var(--hard-sm)}
+  .col-grid{display:flex;flex-wrap:wrap;gap:9px}
+  .col-swatch{width:38px;height:38px;border-radius:50%;border:2px solid var(--ink);cursor:pointer;padding:0;position:relative}
+  .col-swatch.on{box-shadow:0 0 0 3px var(--paper),0 0 0 5px var(--ink)}
+  .intro-modal{padding:22px 20px calc(20px + var(--safe-b))}
+  .intro-dots{display:flex;gap:6px;margin-bottom:4px}
+  .intro-dots span{width:7px;height:7px;border-radius:50%;background:var(--line)}
+  .intro-dots span.on{background:var(--accent)}
   .row{display:flex;gap:10px}.row>*{flex:1}
 
   .auth-wrap{min-height:100dvh;display:grid;place-items:center;padding:24px}
@@ -766,6 +776,22 @@ async function signup(name, passcode, adminCode){
   localStorage.setItem("fp_user", JSON.stringify({ id:ref.id, name, admin:!!isAdmin }));
   return { id:ref.id, name, admin:!!isAdmin };
 }
+// Update the logged-in user's display name + colour. Name is tied to login, so guard against
+// collisions and keep local storage / state in sync so the session stays valid.
+async function saveProfile(newName, color){
+  newName=newName.trim();
+  if(!newName) throw new Error("Name can't be empty");
+  const lower=newName.toLowerCase();
+  if(lower !== state.user.name.toLowerCase()){
+    const clash=await getDocs(query(colUsers, where("nameLower","==",lower)));
+    if(!clash.empty && clash.docs.some(d=>d.id!==state.user.id)) throw new Error("That name's taken");
+  }
+  await setDoc(dref("users",state.user.id), { name:newName, nameLower:lower, color:color||null }, {merge:true});
+  state.user.name=newName; state.user.color=color||null;
+  // keep the cached login record current (login matches on name)
+  const cached=JSON.parse(localStorage.getItem("fp_user")||"{}");
+  localStorage.setItem("fp_user", JSON.stringify({...cached, id:state.user.id, name:newName, admin:state.user.admin}));
+}
 async function login(name, passcode){
   name = name.trim();
   const snap = await getDocs(query(colUsers, where("nameLower","==",name.toLowerCase())));
@@ -1045,6 +1071,42 @@ function afterData(){
   maybeNotifyChanges(); scheduleNotifications();
   if(navigator.onLine) refreshWeather().then(()=>{ if(state.view==="home"&&!document.querySelector(".modal-bg")) renderView(); });
   restorePersistedToggles();
+  maybeShowIntro();
+}
+// First-time tutorial: a few simple cards, shown once (tracked in localStorage). Resettable from the menu.
+function maybeShowIntro(){
+  if(localStorage.getItem("fp_seenintro")==="1") return;
+  if(document.querySelector(".modal-bg")) return;
+  showIntro();
+}
+function showIntro(){
+  const slides=[
+    {t:"Welcome", b:`This is your group's plan for ${esc(state.structure.festivalName||"the festival")}. Browse the lineup, pick the acts you want, and the app sorts out your days — and flags clashes.`},
+    {t:"Pick your acts", b:"In <b>Lineup</b>, tap an act to add it to your plan. Star (★) the ones you can't miss — the clash planner protects those when two picks overlap."},
+    {t:"See clashes solved", b:"Your <b>Plan</b> groups overlapping picks and suggests how to catch the most — tap the <b>Clashes</b> tile for the full advice."},
+    {t:"Find your way", b:"<b>Find</b> shows a live compass to stages, your crew and your pins — plus walk times. <b>Group</b> shows who's going where, and <b>Chat</b> keeps everyone talking."},
+    {t:"You're set", b:"Tap the festival name up top anytime to come back here. Have a great one!"}
+  ];
+  let i=0;
+  const wrap=document.createElement("div"); wrap.className="modal-bg"; wrap.id="intro-bg";
+  document.body.appendChild(wrap);
+  const draw=()=>{
+    const s=slides[i]; const last=i===slides.length-1;
+    wrap.innerHTML=`<div class="modal intro-modal">
+      <div class="intro-dots">${slides.map((_,n)=>`<span class="${n===i?'on':''}"></span>`).join("")}</div>
+      <h2 style="margin:6px 0 8px">${s.t}</h2>
+      <p style="line-height:1.5;color:var(--ink-2);margin:0 0 20px">${s.b}</p>
+      <div style="display:flex;gap:8px">
+        ${i>0?`<button class="btn ghost" id="intro-back" style="flex:none">Back</button>`:`<button class="btn ghost" id="intro-skip" style="flex:none">Skip</button>`}
+        <button class="btn primary" id="intro-next" style="flex:1">${last?"Get started":"Next"}</button>
+      </div>
+    </div>`;
+    const done=()=>{ localStorage.setItem("fp_seenintro","1"); wrap.remove(); };
+    wrap.querySelector("#intro-next").onclick=()=>{ if(last) done(); else { i++; draw(); } };
+    const back=wrap.querySelector("#intro-back"); if(back) back.onclick=()=>{ i--; draw(); };
+    const skip=wrap.querySelector("#intro-skip"); if(skip) skip.onclick=done;
+  };
+  draw();
 }
 // Re-apply the user's saved location-sharing & reminder choices after a refresh. Runs once.
 let _togglesRestored=false;
@@ -1175,6 +1237,7 @@ function openMenu(){
   items.push(["shared","The group",""]);
   if(locationEnabled()) items.push(["find","Find your way",""]);
   if(feat("chat")) items.push(["chat","Group chat",""]);
+  items.push(["profile","Your profile",""]);
   if(feat("info")) items.push(["info","Festival info","ℹ️"]);
   if(feat("packing")) items.push(["packing","Packing list",""]);
   if(state.user.admin) items.push(["admin","Manage festival",""]);
@@ -1186,7 +1249,8 @@ function openMenu(){
     </div>
     ${feat("notify")?`<div class="share-row" style="margin-top:14px"><div style="min-width:0"><b>Reminders</b><div class="find-note">${notifyState()}</div></div>
       <button class="switch ${find.notify?'on':''}" id="mn-notify" role="switch"><span></span></button></div>`:""}
-    <button class="btn ghost block" id="mn-exit" style="margin-top:14px">Log out</button>
+    <button class="btn ghost block" id="mn-intro" style="margin-top:14px">Replay tutorial</button>
+    <button class="btn ghost block" id="mn-exit" style="margin-top:8px">Log out</button>
   </div>`;
   document.body.appendChild(wrap);
   const close=()=>wrap.remove();
@@ -1194,6 +1258,7 @@ function openMenu(){
   wrap.onclick=e=>{ if(e.target===wrap) close(); };
   wrap.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{ state.view=b.dataset.go; close(); renderApp(); });
   wrap.querySelector("#mn-exit").onclick=logout;
+  const introBtn=wrap.querySelector("#mn-intro"); if(introBtn) introBtn.onclick=()=>{ close(); localStorage.removeItem("fp_seenintro"); showIntro(); };
   const nt=wrap.querySelector("#mn-notify"); if(nt) nt.onclick=async()=>{ await toggleNotify(); close(); openMenu(); };
 }
 
@@ -1224,6 +1289,7 @@ function renderView(){
   else if(state.view==="info") v.innerHTML = viewInfo();
   else if(state.view==="packing") v.innerHTML = viewPacking();
   else if(state.view==="admin") v.innerHTML = viewAdmin();
+  else if(state.view==="profile") v.innerHTML = viewProfile();
   wireView();
 }
 
@@ -2110,6 +2176,29 @@ function sharedCard(ev){
 }
 
 /* ---------- ADMIN ---------- */
+function viewProfile(){
+  const u=state.user;
+  const myColor=personColor(u.id);
+  const swatches=AREA_COLORS.map(c=>`<button class="col-swatch ${myColor===c?'on':''}" data-color="${c}" style="background:${c}" aria-label="colour"></button>`).join("");
+  return `
+    <div class="sec-head"><div><h2>Your profile</h2><div class="lead">How you show up to the group.</div></div></div>
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
+        <span class="avatar" id="prof-avatar" style="background:${myColor};width:52px;height:52px;font-size:19px">${esc(initials(u.name))}</span>
+        <div><b style="font-size:17px">${esc(u.name)}</b>${u.admin?`<div class="find-note">Admin</div>`:''}</div>
+      </div>
+
+      <label class="fld-label">Display name</label>
+      <input class="inp" id="prof-name" value="${esc(u.name)}" maxlength="24" autocomplete="off">
+      <div class="find-note" style="margin:5px 0 16px">This is what everyone sees, and what you log in with. Changing it keeps you logged in.</div>
+
+      <label class="fld-label">Your colour</label>
+      <div class="col-grid" id="prof-colors">${swatches}</div>
+      <div class="find-note" style="margin:7px 0 16px">Used for your dot on the map and your name around the app.</div>
+
+      <button class="btn primary block" id="prof-save">Save profile</button>
+    </div>`;
+}
 function viewAdmin(){
   const s = state.structure;
   const districtsHTML = s.districts.length ? s.districts.map(d=>{
@@ -2238,6 +2327,19 @@ function viewAdmin(){
           <div style="min-width:0"><b style="font-size:13.5px">${t}</b><div class="find-note">${d}</div></div>
           <button class="switch ${feat(k)?'on':''}" data-feat="${k}" role="switch" aria-checked="${feat(k)}"><span></span></button>
         </div>`).join("")}
+    </div>
+
+    <div class="card admin-block">
+      <div style="font-family:Anton;font-size:15px;text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px">Accounts</div>
+      <div class="find-note" style="margin-bottom:10px">Everyone who's joined. Removing someone deletes their account and their picks, pins &amp; shared location. They can rejoin by signing up again.</div>
+      ${(()=>{
+        const others=state.users.filter(u=>u.id!==state.user.id).sort((a,b)=>a.name.localeCompare(b.name));
+        if(!others.length) return `<div class="find-note">No one else has joined yet.</div>`;
+        return others.map(u=>`<div class="share-row" style="border:none;padding:9px 0;margin:0;background:none;border-top:1px solid var(--line)">
+          <div style="min-width:0;display:flex;align-items:center;gap:9px"><span class="avatar" style="background:${personColor(u.id)}">${esc(initials(u.name))}</span><b style="font-size:13.5px">${esc(u.name)}${u.admin?' · admin':''}</b></div>
+          <button class="btn danger sm" data-del-user="${u.id}">Remove</button>
+        </div>`).join("");
+      })()}
     </div>
 
     <div class="sec-head" style="margin-top:24px"><div><h2 style="font-size:18px">Districts &amp; stages</h2></div></div>
@@ -2389,6 +2491,27 @@ function wireView(){
   v.querySelectorAll("[data-del-shift]").forEach(b=>b.onclick=async()=>{ const sh=state.shifts.find(x=>x.id===b.dataset.delShift); if(confirm(`Delete "${sh.label||'shift'}"?`)){ await deleteShift(sh.id); toast("Shift removed"); } });
   if(state.view==="mine") setTimeout(markChangesSeen, 4000);
 
+  // ---- profile ----
+  if(state.view==="profile"){
+    let pendingColor=personColor(state.user.id);
+    const avatar=v.querySelector("#prof-avatar");
+    const nameInp=v.querySelector("#prof-name");
+    v.querySelectorAll("[data-color]").forEach(b=>b.onclick=()=>{
+      pendingColor=b.dataset.color;
+      v.querySelectorAll("[data-color]").forEach(x=>x.classList.toggle("on", x===b));
+      if(avatar) avatar.style.background=pendingColor;
+    });
+    if(nameInp) nameInp.oninput=()=>{ if(avatar) avatar.textContent=initials(nameInp.value.trim()||"?"); };
+    const save=v.querySelector("#prof-save");
+    if(save) save.onclick=async()=>{
+      const newName=(nameInp.value||"").trim();
+      if(!newName){ toast("Name can't be empty"); return; }
+      save.disabled=true; save.textContent="Saving…";
+      try{ await saveProfile(newName, pendingColor); toast("Profile saved"); renderApp(); }
+      catch(e){ save.disabled=false; save.textContent="Save profile"; toast(e.message||"Couldn't save"); }
+    };
+  }
+
   // ---- chat ----
   if(state.view==="chat"){
     const sc=v.querySelector("#chat-scroll"); if(sc) sc.scrollTop=sc.scrollHeight;
@@ -2494,6 +2617,13 @@ function wireView(){
   v.querySelectorAll("[data-feat]").forEach(b=>b.onclick=async()=>{
     const k=b.dataset.feat; const features={...(state.structure.features||{})}; features[k]=!feat(k);
     await saveStructure({...state.structure, features});
+  });
+  v.querySelectorAll("[data-del-user]").forEach(b=>b.onclick=async()=>{
+    const u=state.users.find(x=>x.id===b.dataset.delUser); if(!u) return;
+    if(!confirm(`Remove ${u.name}? This deletes their account and all their picks, pins and shared location. They can sign up again later. This can't be undone.`)) return;
+    b.disabled=true; b.textContent="Removing…";
+    try{ await deleteUserAccount(u.id); toast(`${u.name} removed`); }
+    catch(e){ b.disabled=false; b.textContent="Remove"; toast("Couldn't remove — try again"); }
   });
   const addDist = v.querySelector("#add-dist");
   if(addDist) addDist.onclick = async()=>{
@@ -3103,6 +3233,25 @@ async function generateTestLineup(){
   //  more than one act on the same stage at once; clashes only ever occur across stages.)
   for(const e of ev){ await addDoc(colEvents, {...e, createdAt:serverTimestamp()}); }
 }
+// Admin: remove a user account and all the data tied to them (picks, shared location, personal pins).
+async function deleteUserAccount(userId){
+  // picks (doc ids are `userId__eventId`, plus a userId field)
+  const psnap=await getDocs(colPicks);
+  const delP=psnap.docs.filter(d=> d.id.startsWith(userId+"__") || d.data().userId===userId).map(d=>d.id);
+  for(let i=0;i<delP.length;i+=20){ await Promise.all(delP.slice(i,i+20).map(id=>deleteDoc(dref("picks",id)))); }
+  // personal pins owned by them
+  const pinsnap=await getDocs(colPins);
+  const delPins=pinsnap.docs.filter(d=>d.data().ownerId===userId || d.data().userId===userId).map(d=>d.id);
+  for(let i=0;i<delPins.length;i+=20){ await Promise.all(delPins.slice(i,i+20).map(id=>deleteDoc(dref("pins",id)))); }
+  // shared location
+  try{ await deleteDoc(dref("locations",userId)); }catch(e){}
+  // their work shifts (private to them)
+  const shsnap=await getDocs(colShifts);
+  const delSh=shsnap.docs.filter(d=>d.data().ownerId===userId).map(d=>d.id);
+  for(let i=0;i<delSh.length;i+=20){ await Promise.all(delSh.slice(i,i+20).map(id=>deleteDoc(dref("shifts",id)))); }
+  // finally the user record itself
+  await deleteDoc(dref("users",userId));
+}
 async function wipeTestData(){
   if(!TEST_MODE) return;   // safety: only ever wipe the sandbox
   for(const col of [colEvents, colPicks, colShifts, colPins, colLegs, colLocations, colCalls, colMessages]){
@@ -3178,7 +3327,11 @@ function cleanupSeed(){
   if(find.seedClock) clearInterval(find.seedClock);
   find.seedActive=false; find.seedWatch=null; find.seedClock=null;
 }
-function personColor(id){ let h=0; for(let i=0;i<id.length;i++) h=(h*31+id.charCodeAt(i))>>>0; return AREA_COLORS[h%AREA_COLORS.length]; }
+function personColor(id){
+  const u=state.users.find(x=>x.id===id);
+  if(u && u.color) return u.color;                       // user-chosen override
+  let h=0; for(let i=0;i<id.length;i++) h=(h*31+id.charCodeAt(i))>>>0; return AREA_COLORS[h%AREA_COLORS.length];
+}
 function peopleWithCoords(){
   const now=Date.now(); const out=[];
   state.locations.forEach(l=>{
