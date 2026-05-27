@@ -429,6 +429,24 @@
   .app.testmode .topbar{border-top:2px solid var(--violet)}
   .test-step{display:flex;gap:10px;align-items:flex-start;margin-bottom:8px}
   .test-step .ts-n{flex:none;width:22px;height:22px;border-radius:50%;background:var(--violet);color:#fff;font-weight:800;font-size:12px;display:grid;place-items:center;margin-top:1px}
+  /* walk-times-from-here list */
+  .wt-list{display:flex;flex-direction:column;gap:2px;margin-top:8px}
+  .wt-row{display:flex;align-items:center;gap:9px;padding:9px 2px;border-top:1px solid var(--line);width:100%;text-align:left;font-size:13.5px}
+  .wt-row:first-child{border-top:none}
+  .wt-dot{flex:none;width:11px;height:11px;border-radius:50%;border:1.5px solid var(--ink)}
+  .wt-name{flex:1;min-width:0;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .wt-time{flex:none;font-family:"Anton";font-size:14px;color:var(--teal)}
+  /* admin walk-time matrix */
+  .wm-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table.wm{border-collapse:collapse;font-size:12px;min-width:100%}
+  table.wm th,table.wm td{border:1px solid var(--line);padding:5px 7px;text-align:center;white-space:nowrap}
+  table.wm thead th,table.wm tbody th{background:var(--panel);font-family:"Anton";font-weight:400;letter-spacing:.02em}
+  table.wm td small{font-size:8px;opacity:.6;margin-left:1px}
+  .wm-self{color:var(--muted)}
+  .wm-meas{background:rgba(30,90,80,.12);color:var(--teal);font-weight:700}
+  .wm-est{color:var(--ink-2)}
+  .wm-meas-k{color:var(--teal);font-weight:800}
+  .wm-est-k{color:var(--ink-2);font-weight:800}
   .seed-live #seed-clock{font-family:"Anton";font-size:16px;margin-left:4px}
 
   /* ---------- HOME ---------- */
@@ -1335,10 +1353,13 @@ function homeDuring(){
     cards.push(`<div class="home-card"><div class="hc-title">📋 Rest of ${today}</div><div class="today-list">${rows}</div>${todayLeft.length>5?`<button class="link-btn" data-go="mine" style="margin-top:8px">full plan →</button>`:""}</div>`);
   }
 
-  // 7) SET RECOMMENDATIONS
+  // 7) WALK TIMES FROM HERE (compact, nearest 4)
+  cards.push(walkTimesCard(4, "Nearest stages"));
+
+  // 8) SET RECOMMENDATIONS
   cards.push(recsCard());
 
-  // 8) QUICK ACTIONS
+  // 9) QUICK ACTIONS
   cards.push(homeQuickActions());
 
   return cards.filter(Boolean).join("");
@@ -2044,6 +2065,7 @@ function viewAdmin(){
       ${stagesWithCoords().length<2?`<div class="find-note">Pin at least 2 stages first.</div>`:''}
       <button class="btn danger block" id="reset-walk">Reset walk-time data</button>
       <div class="find-note" style="margin-top:6px">Run this once just before the festival to wipe any test data so it relearns on-site.${s.walkReset?` Last reset: ${new Date(s.walkReset).toLocaleString()}.`:''}</div>
+      ${walkMatrixHTML()}
     </div>`:""}
 
     <div class="card admin-block" style="border-color:var(--violet)">
@@ -2846,6 +2868,24 @@ function walkSecondsFromPos(pos,bId){
   return Math.round(d/WALK_MPS_FALLBACK);
 }
 function fmtWalk(sec){ if(sec==null) return ""; const m=Math.max(1,Math.round(sec/60)); return "~"+m+" min walk"; }
+// stages with a walk-time from the user's current position, nearest-first
+function walkTimesFromHere(limit){
+  if(!locationEnabled() || !find.pos) return [];
+  const out=stagesWithCoords().map(s=>{
+    const sec=walkSecondsFromPos(find.pos, s.id);
+    return { stage:s, sec:(sec==null?Infinity:sec) };
+  }).filter(x=>isFinite(x.sec)).sort((a,b)=>a.sec-b.sec);
+  return limit?out.slice(0,limit):out;
+}
+function walkTimesCard(limit, title){
+  const list=walkTimesFromHere(limit);
+  if(!list.length) return "";
+  const rows=list.map(x=>{
+    const here=x.sec<60;
+    return `<button class="wt-row tappable" data-goto-stage="${esc(x.stage.name)}"><span class="wt-dot" style="background:${x.stage.color}"></span><span class="wt-name">${esc(x.stage.name)}</span><span class="wt-time">${here?"you're here":fmtWalk(x.sec).replace(" walk","")}</span></button>`;
+  }).join("");
+  return `<div class="home-card"><div class="hc-title">🚶 ${title||"Walk times from here"}</div><div class="wt-list">${rows}</div></div>`;
+}
 async function clearWalkData(){
   const snap=await getDocs(colLegs);
   const ids=snap.docs.map(d=>d.id);
@@ -2935,6 +2975,28 @@ function walkAdminStatus(){
   }
   return `<div class="find-note" style="margin-bottom:10px">${n? `${n} walk sample${n>1?'s':''} across ${pairs} route${pairs>1?'s':''} learned so far.` : "No walk data yet — estimates in use."}</div>`;
 }
+// stage-to-stage walk-time matrix — a test instrument to sanity-check the learning
+function walkMatrixHTML(){
+  const stages=stagesWithCoords();
+  if(stages.length<2) return `<div class="find-note" style="margin-top:14px">Pin at least 2 stages to see the walk-time matrix.</div>`;
+  const measuredPairs=new Set(state.legs.map(l=>l.pair));
+  const head=`<th></th>`+stages.map(s=>`<th>${esc(abbrev(s.name))}</th>`).join("");
+  const rows=stages.map(a=>{
+    const cells=stages.map(b=>{
+      if(a.id===b.id) return `<td class="wm-self">·</td>`;
+      const sec=walkSeconds(a.id,b.id);
+      const m=sec!=null?Math.max(1,Math.round(sec/60)):"?";
+      const measured=measuredPairs.has(legKey(a.id,b.id));
+      return `<td class="${measured?'wm-meas':'wm-est'}">${m}<small>${measured?'m':'e'}</small></td>`;
+    }).join("");
+    return `<tr><th>${esc(abbrev(a.name))}</th>${cells}</tr>`;
+  }).join("");
+  return `<div style="margin-top:16px">
+    <div class="find-note" style="margin-bottom:6px"><b>Walk-time matrix</b> (minutes). <span class="wm-meas-k">m</span> = measured, <span class="wm-est-k">e</span> = estimate. Sanity-check these against reality while testing.</div>
+    <div class="wm-scroll"><table class="wm"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>
+  </div>`;
+}
+function abbrev(name){ return name.length<=10?name:name.split(/\s+/).map(w=>w[0]).join("").slice(0,4).toUpperCase(); }
 function startSeedWalk(){
   if(!navigator.geolocation){ toast("Location not supported"); return; }
   navigator.geolocation.getCurrentPosition(p=>{
@@ -3318,6 +3380,7 @@ function viewFind(){
     <div class="target-chips">${tchips}</div>
     <a class="btn ghost block" href="${mapsLink}" target="_blank" rel="noopener">${mapsLabel}</a>
     ${tgt.kind==="rally"?`<div class="row" style="gap:8px;margin-top:10px"><button class="btn ghost sm" id="rally-move" style="flex:1">Move meet-up here</button><button class="btn danger sm" id="rally-clear" style="flex:1">Clear meet-up</button></div>`:""}
+    <div style="margin-top:14px">${walkTimesCard(null, "Walk times from here")}</div>
     <p class="find-note" style="margin-top:12px">Hold the phone flat for the compass. If the arrow drifts, wave it in a figure-8, or switch to North-up. People &amp; pins update roughly every 1½ minutes.</p>
   `;
 }
