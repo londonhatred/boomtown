@@ -1091,7 +1091,7 @@ function renderApp(){
   const exitBtn=root.querySelector("#test-exit");
   if(exitBtn) exitBtn.onclick=()=>setTestMode(false);
   const stopShareBtn = root.querySelector("#stop-share");
-  if(stopShareBtn) stopShareBtn.onclick = ()=>{ stopShare(); renderApp(); };
+  if(stopShareBtn) stopShareBtn.onclick = ()=>{ stopShare(true); renderApp(); };
   root.querySelector("#menu-btn").onclick = openMenu;
   root.querySelectorAll(".nav-inner button").forEach(b=>b.onclick=()=>{ state.view=b.dataset.v; renderApp(); });
   renderView();
@@ -2248,7 +2248,7 @@ function wireView(){
     const en=v.querySelector("#find-enable-btn"); if(en) en.onclick=()=>{ find.enabledOnce=true; enableFind(); };
     if(find.enabledOnce && !find.started && !find.error && locationEnabled()) startFindSensors();
     v.querySelectorAll("[data-leg]").forEach(b=>b.onclick=()=>{ find.show[b.dataset.leg]=!find.show[b.dataset.leg]; find.target=null; renderView(); });
-    const shareTog=v.querySelector("#share-toggle"); if(shareTog) shareTog.onclick=()=>{ if(find.share) stopShare(); else startShare(); renderApp(); };
+    const shareTog=v.querySelector("#share-toggle"); if(shareTog) shareTog.onclick=()=>{ if(find.share) stopShare(true); else startShare(); renderApp(); };
     const pinsBtn=v.querySelector("#pins-btn"); if(pinsBtn) pinsBtn.onclick=()=>{ state.modal={type:"pins"}; renderModal(); };
     const rallyBtn=v.querySelector("#rally-btn"); if(rallyBtn) rallyBtn.onclick=async()=>{ if(getRally()){ find.target="rl:rally"; renderView(); } else { await setRallyHere(); renderView(); } };
     const rallyMove=v.querySelector("#rally-move"); if(rallyMove) rallyMove.onclick=async()=>{ await setRallyHere(); renderView(); };
@@ -3224,12 +3224,12 @@ function startShare(){
   if(feat("autoStop")){
     const hrs=Math.max(1, +state.structure.autoStopHours || 4);
     find.autoStopAt=Date.now()+hrs*3600000;
-    find.autoStopTimer=setTimeout(()=>{ stopShare(); toast("Auto-stopped sharing"); if(state.user) renderApp(); }, hrs*3600000);
+    find.autoStopTimer=setTimeout(()=>{ stopShare(true); toast("Auto-stopped sharing"); if(state.user) renderApp(); }, hrs*3600000);
   }
 }
-function stopShare(){
+function stopShare(userInitiated=false){
   find.share=false; find.lost=false;
-  localStorage.removeItem("fp_share");
+  if(userInitiated) localStorage.removeItem("fp_share");   // keep saved intent through GPS hiccups / auto-stop
   if(find.shareTimer){ clearInterval(find.shareTimer); find.shareTimer=null; }
   if(find.autoStopTimer){ clearTimeout(find.autoStopTimer); find.autoStopTimer=null; }
   find.autoStopAt=0;
