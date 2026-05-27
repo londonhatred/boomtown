@@ -185,6 +185,26 @@
   .ach-text{flex:1;min-width:0}
   .ach-text b{font-size:14px}
   .ach-when{font-family:"Anton";font-size:11px;color:var(--ink-2);letter-spacing:.04em}
+  .dna-sig{background:var(--card);border:2px solid var(--ink);border-radius:var(--radius);padding:18px 18px 16px;margin-bottom:14px;box-shadow:var(--hard-sm)}
+  .dna-sig .find-note{margin-bottom:4px}
+  .dna-sig h3{font-family:"Anton";font-size:26px;text-transform:uppercase;letter-spacing:.02em;margin:0;line-height:1.1;color:var(--accent)}
+  .dna-stats{display:grid;grid-template-columns:repeat(2, 1fr);gap:8px;margin-bottom:14px}
+  .dna-stat{background:var(--card);border:1.5px solid var(--ink);border-radius:var(--radius-sm);padding:12px;text-align:center}
+  .dna-stat .n{font-family:"Anton";font-size:24px;line-height:1;color:var(--ink)}
+  .dna-stat .l{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-2);margin-top:4px}
+  .dna-row{display:flex;gap:12px;align-items:flex-start;background:var(--card);border:1.5px solid var(--ink);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px;font-size:13.5px;line-height:1.45}
+  .dna-row .dna-rh{font-family:"Anton";font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-2);min-width:90px;flex:none;padding-top:2px}
+  .dna-row > div:last-child{flex:1;min-width:0}
+  .dna-scores{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+  .dna-score{display:inline-block;color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px}
+  .tg-list{display:flex;flex-direction:column;gap:6px}
+  .tg-row{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--line)}
+  .tg-row:first-child{border-top:none}
+  .tg-name{font-weight:700;font-size:13px;flex:0 0 auto;min-width:60px}
+  .tg-mets{display:flex;flex-wrap:wrap;gap:10px;flex:1;justify-content:flex-end}
+  .tg-met{display:flex;flex-direction:column;align-items:flex-end;line-height:1}
+  .tg-met .tg-l{font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-2)}
+  .tg-met b{font-family:"Anton";font-size:14px;margin-top:2px}
   .rhythm-card{background:var(--card);border:2px solid var(--ink);border-radius:var(--radius);padding:14px 16px;margin-top:14px}
   .rh-stat{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;font-size:13px;border-top:1px solid var(--line)}
   .rh-stat:first-of-type{border-top:none;margin-top:6px}
@@ -848,6 +868,7 @@ const colShifts    = pcol("shifts");
 const colLegs      = pcol("legs");   // crowdsourced walk-time samples between stage pairs
 const colRatings   = pcol("ratings"); // set ratings: doc id `userId__eventId`, {userId,eventId,score 0-10,createdAt}
 const colSafety    = pcol("safety");  // I'm-safe check-ins: doc id `userId__day`, {userId,day,checkedAt}
+const colCopresence = pcol("copresence"); // co-presence samples: doc id auto, {pair, by, near, at} — pair is sorted "uidA__uidB"
 
 /* ---- App state ---- */
 const state = {
@@ -862,6 +883,7 @@ const state = {
   legs: [],                   // walk-time samples: [{id,pair,sec,dist,seed}]
   ratings: [],                // set ratings: [{id,userId,eventId,score}]
   safety: [],                 // I'm-safe check-ins: [{id,userId,day,checkedAt}]
+  copresence: [],             // co-presence samples: [{id,pair,by,near,at}]
   menuOpen: false,
   locations: [],              // [{id(userId),name,lat,lng,acc,updatedAt}]
   pins: [],                   // [{id,ownerId,ownerName,label,type,lat,lng,shared,updatedAt}]
@@ -933,6 +955,7 @@ const ADMIN_FEATURES = [
   ["pacer",       "Pace tracker",            "Subtle nudge if you're walking slower than usual — body trying to tell you something"],
   ["oracle",      "Should-I-go oracle",      "Tap any future act for a quick verdict: walk, clash, crowd, weather"],
   ["achievements","Hidden achievements",     "Tiny celebratory pop-ups when you hit milestones (first 10/10, first night under 4h sleep, etc.)"],
+  ["crewdna",     "Crew DNA",                "A shared portrait of the whole group — peak hour, signature tag, the contrarian"],
 ];
 function festivalStart(){ const s=state.structure.festivalStartDate; return s ? new Date(s+"T00:00:00") : null; }
 function dateForDay(day){ const base=festivalStart(); if(!base) return null; const d=new Date(base); d.setDate(d.getDate()+Math.max(0,DAYS.indexOf(day))); return d; }
@@ -1367,6 +1390,10 @@ function subscribeAll(){
     checkAchievementTriggers();
     if((state.view==="home"||state.view==="shared") && !document.querySelector(".modal-bg")) renderView();
   });
+  onSnapshot(colCopresence, snap=>{
+    state.copresence = snap.docs.map(d=>({id:d.id,...d.data()}));
+    if(state.view==="crewdna" && !document.querySelector(".modal-bg")) renderView();
+  });
 }
 function activeCalls(){
   const now=Date.now();
@@ -1639,6 +1666,7 @@ function openMenu(){
   if(festivalStart() && festivalPhase()!=="before") weekend.push(["recap","Festival recap"]);
   if(festivalStart() && festivalPhase()!=="before" && adminFeat("diary")) weekend.push(["diary","Festival diary"]);
   if(adminFeat("achievements")) weekend.push(["achievements","Achievements"]);
+  if(adminFeat("crewdna")) weekend.push(["crewdna","Crew DNA"]);
 
   const row=(v,l)=>`<button class="menu-row ${state.view===v?'on':''}" data-go="${v}"><span>${esc(l)}</span><span class="mr-arr">›</span></button>`;
   const section=(title,rows,extraClass)=>rows.length?`<div class="menu-section ${extraClass||""}"><h3>${title}</h3>${rows.map(([v,l])=>row(v,l)).join("")}</div>`:"";
@@ -1745,6 +1773,7 @@ function renderView(){
   else if(state.view==="recap") v.innerHTML = viewRecap();
   else if(state.view==="diary") v.innerHTML = viewDiary();
   else if(state.view==="achievements") v.innerHTML = viewAchievements();
+  else if(state.view==="crewdna") v.innerHTML = viewCrewDNA();
   wireView();
 }
 
@@ -3237,6 +3266,233 @@ function stagePersonalityCard(){
     <div class="find-note" style="margin-bottom:6px">Average rating across every set at each stage (crew-wide). Score · number of ratings.</div>
     ${items}</div>`;
 }
+// ---- Togetherness: who you've actually spent the festival with ----
+// Real time = unique 2-minute buckets per pair (both sides log, we dedupe).
+// Witnessed = events both members rated. Planned = events both members picked.
+function togetherness(){
+  if(!state.user) return [];
+  // Aggregate co-presence buckets per pair
+  const buckets = {};   // pair -> Set of buckets
+  state.copresence.forEach(s=>{
+    if(!s.pair || s.bucket==null) return;
+    if(s.pair.indexOf(state.user.id)<0) return;
+    (buckets[s.pair] = buckets[s.pair] || new Set()).add(s.bucket);
+  });
+  // Witnessed: my ratings overlapped with theirs by eventId
+  const myRated = new Set(state.ratings.filter(r=>r.userId===state.user.id).map(r=>r.eventId));
+  // Planned: my picks
+  const myPicks = new Set(state.picks.filter(p=>p.userId===state.user.id).map(p=>p.eventId));
+  // Build per-friend stats
+  const rows = state.users.filter(u=>u.id!==state.user.id).map(u=>{
+    const pair = [state.user.id, u.id].sort().join("__");
+    const buckSet = buckets[pair] || new Set();
+    const minutes = buckSet.size * 2;     // each bucket is 2 minutes
+    let witnessed=0, planned=0;
+    state.ratings.filter(r=>r.userId===u.id).forEach(r=>{ if(myRated.has(r.eventId)) witnessed++; });
+    state.picks.filter(p=>p.userId===u.id).forEach(p=>{ if(myPicks.has(p.eventId)) planned++; });
+    return { user:u, minutes, witnessed, planned };
+  });
+  // Sort by a composite "togetherness" score: real minutes weighted heaviest
+  rows.forEach(r=>{ r.score = r.minutes + r.witnessed*5 + r.planned*2; });
+  rows.sort((a,b)=> b.score-a.score);
+  return rows;
+}
+function togethernessBlock(){
+  const rows = togetherness();
+  if(!rows.length) return "";
+  // Drop people with literally no signal at all (cleaner empty)
+  const live = rows.filter(r=>r.minutes||r.witnessed||r.planned);
+  if(!live.length){
+    return `<div class="dna-row">
+      <div class="dna-rh">Togetherness</div>
+      <div class="find-note">No shared moments logged yet. Real-time togetherness builds while location sharing is on; rating &amp; picking together count too.</div>
+    </div>`;
+  }
+  // The lead: who I was most together with
+  const lead = live[0];
+  const fmtHr = m => m>=60 ? `${(m/60).toFixed(1)}h` : `${m}m`;
+  const leadBits = [];
+  if(lead.minutes) leadBits.push(`<b>${fmtHr(lead.minutes)}</b> at the same spot`);
+  if(lead.witnessed) leadBits.push(`<b>${lead.witnessed}</b> rated set${lead.witnessed===1?"":"s"} witnessed together`);
+  if(lead.planned) leadBits.push(`<b>${lead.planned}</b> shared pick${lead.planned===1?"":"s"}`);
+  let html = `<div class="dna-row">
+    <div class="dna-rh">Most together</div>
+    <div><b style="color:${personColor(lead.user.id)}">${esc(lead.user.name)}</b>${leadBits.length?` — ${leadBits.join(", ")}`:""}</div>
+  </div>`;
+  // Then a compact table of everyone with any signal
+  const tableRows = live.map(r=>{
+    const cells=[];
+    cells.push(`<span class="tg-met"><span class="tg-l">together</span><b>${r.minutes?fmtHr(r.minutes):"—"}</b></span>`);
+    cells.push(`<span class="tg-met"><span class="tg-l">witnessed</span><b>${r.witnessed||"—"}</b></span>`);
+    cells.push(`<span class="tg-met"><span class="tg-l">planned</span><b>${r.planned||"—"}</b></span>`);
+    return `<div class="tg-row">
+      <span class="av" style="background:${personColor(r.user.id)}">${esc(initials(r.user.name))}</span>
+      <span class="tg-name">${esc(r.user.name)}</span>
+      <div class="tg-mets">${cells.join("")}</div>
+    </div>`;
+  }).join("");
+  html += `<div class="dna-row" style="flex-direction:column;align-items:stretch;gap:8px">
+    <div class="dna-rh">By friend</div>
+    <div class="tg-list">${tableRows}</div>
+    <div class="find-note">Together = physically within ${COPRESENCE_RADIUS}m, sampled while location sharing was on. Witnessed = both of you rated it. Planned = both of you picked it.</div>
+  </div>`;
+  return html;
+}
+// ---- Crew DNA ----
+// A portrait of the group, computed from collective ratings, picks, and tags.
+// Every line grounded; only shows lines we have data for.
+function crewDNA(){
+  const dna = {
+    crewSize: state.users.length,
+    raters: 0,                          // how many users have rated anything
+    ratingsTotal: 0,
+    peakHour: null,                     // {h, count}
+    homeStage: null,                    // {stage, avg, count, districtId, districtName}
+    tagTop: null,                       // {tag, count}
+    signature: "",                      // composed personality line
+    contrarian: null,                   // {user, diffFromMean}
+    unanimous: null,                    // {ev, scores:[], avg, spread}
+    sharedSets: 0,                      // sets rated by 2+ crew
+  };
+  if(!state.ratings.length) return dna;
+  // Who rated anything
+  const raterIds = new Set(state.ratings.map(r=>r.userId));
+  dna.raters = raterIds.size;
+  dna.ratingsTotal = state.ratings.length;
+  // Collective peak hour
+  const hourCounts = {};
+  state.ratings.forEach(r=>{
+    const ev=state.events.find(e=>e.id===r.eventId); if(!ev) return;
+    const end=eventEnd(ev); if(!end) return;
+    const h=end.getHours();
+    hourCounts[h] = (hourCounts[h]||0) + 1;
+  });
+  let bestH=null, bestC=0;
+  Object.entries(hourCounts).forEach(([h,c])=>{ if(c>bestC){ bestH=+h; bestC=c; } });
+  if(bestC>=3) dna.peakHour = { h:bestH, count:bestC };
+  // Home stage — most-rated stage with avg
+  const sp = stagePersonality();
+  if(sp.length){
+    // Sort by count first, then avg, to find the place the crew kept going back to
+    const home = [...sp].sort((a,b)=> b.count-a.count || b.avg-a.avg)[0];
+    dna.homeStage = home;
+  }
+  // Top tag across all rated sets with tags
+  const tagCounts = {};
+  state.ratings.forEach(r=>{ (r.tags||[]).forEach(t=>{ tagCounts[t] = (tagCounts[t]||0)+1; }); });
+  let bestT=null, bestTC=0;
+  Object.entries(tagCounts).forEach(([t,c])=>{ if(c>bestTC){ bestT=t; bestTC=c; } });
+  if(bestTC>=2) dna.tagTop = { tag:bestT, count:bestTC };
+  // Contrarian — user whose ratings most diverge from the crew mean on shared sets
+  // Build: for each event with ≥2 ratings, the mean. Per user: average diff from mean across all shared sets they rated.
+  const byEvent = {};
+  state.ratings.forEach(r=>{ (byEvent[r.eventId]=byEvent[r.eventId]||[]).push(r); });
+  const userDiffs = {};   // userId → {diffSum, n}
+  Object.values(byEvent).forEach(list=>{
+    if(list.length<2) return;
+    const mean = list.reduce((a,b)=>a+b.score,0)/list.length;
+    list.forEach(r=>{
+      userDiffs[r.userId] = userDiffs[r.userId] || {diffSum:0, n:0};
+      userDiffs[r.userId].diffSum += (r.score - mean);
+      userDiffs[r.userId].n++;
+    });
+  });
+  let worstId=null, worstAbs=0, worstDelta=0;
+  Object.entries(userDiffs).forEach(([uid,d])=>{
+    if(d.n<3) return;            // need at least 3 shared sets to call it a pattern
+    const avg = d.diffSum/d.n;
+    if(Math.abs(avg)>worstAbs){ worstAbs=Math.abs(avg); worstId=uid; worstDelta=avg; }
+  });
+  if(worstId && worstAbs>=0.7){
+    const u=state.users.find(x=>x.id===worstId);
+    dna.contrarian = { user:u, delta:worstDelta };
+  }
+  // Most-shared set — the set rated by most crew members
+  const sharedSetEntries = Object.entries(byEvent).filter(([,list])=>list.length>=2);
+  dna.sharedSets = sharedSetEntries.length;
+  if(sharedSetEntries.length){
+    const top = sharedSetEntries.map(([eid,list])=>{
+      const avg = list.reduce((a,b)=>a+b.score,0)/list.length;
+      const spread = Math.max(...list.map(r=>r.score)) - Math.min(...list.map(r=>r.score));
+      const ev = state.events.find(e=>e.id===eid);
+      return { ev, scores:list, avg, spread };
+    }).filter(x=>x.ev).sort((a,b)=> b.scores.length-a.scores.length || a.spread-b.spread || b.avg-a.avg)[0];
+    if(top) dna.unanimous = top;
+  }
+  // Signature line — templated from what we have
+  const parts = [];
+  if(dna.peakHour){
+    const h=dna.peakHour.h;
+    const band = h<10 ? "early-rising" : h<14 ? "morning-loving" : h<18 ? "afternoon-anchored" : h<22 ? "evening-peaking" : "late-blooming";
+    parts.push(band);
+  }
+  if(dna.tagTop) parts.push(`${dna.tagTop.tag}-led`);
+  if(dna.homeStage) parts.push(`${dna.homeStage.stage}-loyal`);
+  dna.signature = parts.length ? parts.join(", ") : "";
+  return dna;
+}
+function viewCrewDNA(){
+  if(!adminFeat("crewdna")) return `<div class="sec-head"><div><h2>Crew DNA</h2></div></div>${emptyState("","Not enabled","Toggle Crew DNA on in Manage → Just for me.")}`;
+  const d = crewDNA();
+  const head=`<div class="sec-head"><div><h2>Crew DNA</h2><div class="lead">Your group, in one portrait.</div></div></div>`;
+  if(!d.ratingsTotal){
+    return head+emptyState("","Nothing to read yet","Crew DNA fills in as the group rates sets. Come back after a few rated sets have landed.");
+  }
+  const fmtH = h => `${(h%12)||12}${h>=12?'pm':'am'}`;
+  const blocks = [];
+  // Signature personality line
+  if(d.signature){
+    const cap = d.signature[0].toUpperCase()+d.signature.slice(1);
+    blocks.push(`<div class="dna-sig"><div class="find-note">The crew, in three words</div><h3>${esc(cap)}.</h3></div>`);
+  }
+  // Headline stats
+  const stats = [];
+  stats.push(`<div class="dna-stat"><div class="n">${d.crewSize}</div><div class="l">in the crew</div></div>`);
+  stats.push(`<div class="dna-stat"><div class="n">${d.ratingsTotal}</div><div class="l">total ratings</div></div>`);
+  if(d.peakHour) stats.push(`<div class="dna-stat"><div class="n">${fmtH(d.peakHour.h)}</div><div class="l">collective peak</div></div>`);
+  if(d.sharedSets) stats.push(`<div class="dna-stat"><div class="n">${d.sharedSets}</div><div class="l">sets you all rated</div></div>`);
+  blocks.push(`<div class="dna-stats">${stats.join("")}</div>`);
+  // Togetherness (composite physical + witnessed + planned)
+  const tg = togethernessBlock();
+  if(tg) blocks.push(tg);
+  // Home stage
+  if(d.homeStage){
+    const c = districtColor(d.homeStage.districtId);
+    blocks.push(`<div class="dna-row">
+      <div class="dna-rh">Home stage</div>
+      <div><span class="area-tag" style="--c:${c}">${esc(d.homeStage.districtName||"")}</span> <b>${esc(d.homeStage.stage)}</b><div class="find-note">Rated by the crew ${d.homeStage.count} times · averaging <b>${d.homeStage.avg.toFixed(1)}</b>.</div></div>
+    </div>`);
+  }
+  // Top tag
+  if(d.tagTop){
+    blocks.push(`<div class="dna-row">
+      <div class="dna-rh">What you come for</div>
+      <div><b>${esc(d.tagTop.tag)}</b><div class="find-note">Tagged on ${d.tagTop.count} rated sets — your group's most-named feeling.</div></div>
+    </div>`);
+  }
+  // The unanimous moment
+  if(d.unanimous && d.unanimous.scores.length>=2){
+    const u=d.unanimous;
+    const scoresLine = u.scores.map(r=>{
+      const usr=state.users.find(x=>x.id===r.userId);
+      return `<span class="dna-score" style="background:${personColor(r.userId)}">${esc(initials(usr?usr.name:"?"))} ${r.score.toFixed(1)}</span>`;
+    }).join("");
+    const spreadDesc = u.spread<=1.0 ? "near-unanimous" : u.spread<=2.5 ? "broadly agreed" : "split decision";
+    blocks.push(`<div class="dna-row">
+      <div class="dna-rh">${spreadDesc==="near-unanimous"?"You all agreed":spreadDesc==="broadly agreed"?"Broadly agreed":"Split decision"}</div>
+      <div><b>${esc(u.ev.title)}</b> @ ${esc(u.ev.stageName||"")}<div class="dna-scores">${scoresLine}</div><div class="find-note" style="margin-top:6px">Spread of ${u.spread.toFixed(1)} · averaged <b>${u.avg.toFixed(1)}</b>.</div></div>
+    </div>`);
+  }
+  // The contrarian
+  if(d.contrarian && d.contrarian.user){
+    const dir = d.contrarian.delta<0 ? "harsher" : "kinder";
+    blocks.push(`<div class="dna-row">
+      <div class="dna-rh">The contrarian</div>
+      <div><b style="color:${personColor(d.contrarian.user.id)}">${esc(d.contrarian.user.name)}</b> rates <b>${Math.abs(d.contrarian.delta).toFixed(1)}</b> points ${dir} than the crew average on shared sets.</div>
+    </div>`);
+  }
+  return head + blocks.join("") + `<div class="find-note" style="margin-top:14px">Every line above is one fact from group data. Fills in as more sets get rated.</div>`;
+}
 function rhythmCard(){
   if(!adminFeat("energy")) return "";
   const d=energyData();
@@ -4623,7 +4879,7 @@ async function deleteUserAccount(userId){
 }
 async function wipeTestData(){
   if(!TEST_MODE) return;   // safety: only ever wipe the sandbox
-  for(const col of [colEvents, colPicks, colShifts, colPins, colLegs, colLocations, colCalls, colMessages]){
+  for(const col of [colEvents, colPicks, colShifts, colPins, colLegs, colLocations, colCalls, colMessages, colRatings, colSafety, colCopresence]){
     const snap=await getDocs(col);
     const ids=snap.docs.map(d=>d.id);
     for(let i=0;i<ids.length;i+=20){ await Promise.all(ids.slice(i,i+20).map(id=>deleteDoc(doc(col, id)))); }
@@ -4928,6 +5184,26 @@ function writeMyLocation(){
   setDoc(dref("locations",state.user.id),
     { name:state.user.name, lat:+find.pos.lat.toFixed(6), lng:+find.pos.lng.toFixed(6), acc:find.acc||null, lost:!!find.lost, updatedAt:serverTimestamp() }
   ).catch(()=>{});
+  // Co-presence sampling — log each nearby crew member.
+  // Two-sided: both phones write samples for the same pair; aggregator dedupes by minute bucket.
+  logCopresence();
+}
+const COPRESENCE_RADIUS = 30;     // metres — "you were together"
+function logCopresence(){
+  if(!find.pos || !state.user) return;
+  const now=Date.now();
+  state.locations.forEach(l=>{
+    if(!l || l.id===state.user.id) return;
+    if(typeof l.lat!=="number" || typeof l.lng!=="number") return;
+    const ts = (l.updatedAt && l.updatedAt.toMillis) ? l.updatedAt.toMillis() : now;
+    if(now-ts > 5*60*1000) return;             // stale, don't pair
+    const d = haversine(find.pos.lat, find.pos.lng, l.lat, l.lng);
+    if(d > COPRESENCE_RADIUS) return;
+    const pair = [state.user.id, l.id].sort().join("__");
+    // bucket per 2 minutes so simultaneous writes don't double-count when aggregating
+    const bucket = Math.floor(now/(2*60*1000));
+    addDoc(colCopresence, { pair, bucket, by:state.user.id, near:l.id, dist:Math.round(d), at:serverTimestamp() }).catch(()=>{});
+  });
 }
 function startShare(){
   if(find.shareTimer) return;
