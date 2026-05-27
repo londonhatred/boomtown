@@ -175,6 +175,7 @@
   .oracle-modal .or-line .or-mark{flex:none;font-family:"Anton";width:16px;text-align:center}
   .oracle-modal .or-line.good .or-mark{color:var(--teal)}
   .oracle-modal .or-line.bad .or-mark{color:var(--accent)}
+  .oracle-modal .or-swing{font-size:12px;color:var(--ink-2);background:var(--card);border-left:3px solid var(--gold);padding:7px 10px;border-radius:4px;margin:-6px 0 12px;line-height:1.4}
   .tmrw-lines{display:flex;flex-direction:column;gap:4px;font-size:13.5px;line-height:1.5;margin-top:4px}
   .mood-chip{display:inline-block;border-radius:50%;border:1.5px solid var(--ink);vertical-align:middle;margin:0 2px 1px 0}
   .mood-strip{display:flex;gap:2px;flex-wrap:wrap;margin:6px 0 10px;padding:6px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
@@ -2881,33 +2882,66 @@ function openOracle(eventId){
   const ev=state.events.find(e=>e.id===eventId); if(!ev) return;
   const start=eventStart(ev), end=eventEnd(ev);
   let score=0; const lines=[];
-  // 1) Stage personality (uses existing stagePersonality helper)
+  const pushLine = (good, text, weight) => { score += (good?weight:-weight); lines.push({good, text, weight}); };
+
+  // 1) Stage personality
   const personalityList = stagePersonality();
   const stagePer = personalityList.find(p=>p.stage===ev.stageName);
   if(stagePer){
-    if(stagePer.avg>=8){ score+=2; lines.push({good:true, text:`This stage averages <b>${stagePer.avg.toFixed(1)}</b> across the weekend — solid form.`}); }
-    else if(stagePer.avg>=7){ score+=1; lines.push({good:true, text:`This stage averages <b>${stagePer.avg.toFixed(1)}</b> — generally well-rated.`}); }
-    else if(stagePer.avg<6){ lines.push({good:false, text:`This stage averages <b>${stagePer.avg.toFixed(1)}</b> across the weekend — quieter form.`}); }
+    if(stagePer.avg>=8)        pushLine(true,  `This stage averages <b>${stagePer.avg.toFixed(1)}</b> across the weekend — solid form.`, 2);
+    else if(stagePer.avg>=7)   pushLine(true,  `This stage averages <b>${stagePer.avg.toFixed(1)}</b> — generally well-rated.`, 1);
+    else if(stagePer.avg<6)    pushLine(false, `This stage averages <b>${stagePer.avg.toFixed(1)}</b> across the weekend — quieter form.`, 1);
   }
-  // 2) Crew picking it
-  const crewCount = state.picks.filter(p=>p.eventId===ev.id && p.userId!==state.user.id).length;
-  if(crewCount>0){
-    score += Math.min(3, crewCount);
-    lines.push({good:true, text:`<b>${crewCount}</b> of your crew ${crewCount===1?"has":"have"} this on their plan.`});
+
+  // 2) Crew picks — show names, weight must-sees more heavily
+  const crewPicks = state.picks.filter(p=>p.eventId===ev.id && p.userId!==state.user.id);
+  const crewMusts  = crewPicks.filter(p=>p.mustSee);
+  const crewPlain  = crewPicks.filter(p=>!p.mustSee);
+  const nameOf = id => { const u=state.users.find(x=>x.id===id); return u?u.name:"Friend"; };
+  const formatNames = (list, limit) => {
+    if(!list.length) return "";
+    if(list.length<=limit) return list.length===1 ? list[0] : list.length===2 ? `${list[0]} and ${list[1]}` : `${list.slice(0,-1).join(", ")} and ${list[list.length-1]}`;
+    const extra = list.length-limit;
+    return `${list.slice(0,limit).join(", ")} and ${extra} other${extra>1?'s':''}`;
+  };
+  if(crewMusts.length){
+    const names = formatNames(crewMusts.map(p=>nameOf(p.userId)), 3);
+    const w = Math.min(4, crewMusts.length*1.5);   // must-see is worth 1.5 each, capped 4
+    pushLine(true, `<b>★ ${names}</b> ${crewMusts.length===1?"has":"have"} this as a must-see.`, w);
   }
-  // 3) Clash check vs your existing picks
+  if(crewPlain.length){
+    const names = formatNames(crewPlain.map(p=>nameOf(p.userId)), 3);
+    const w = Math.min(2, crewPlain.length*0.5);   // pick alone is 0.5 each, capped 2
+    pushLine(true, `${names} ${crewPlain.length===1?"has":"have"} it on their plan.`, w);
+  }
+
+  // 3) Crew already near the stage right now (only for imminent sets — starts within 30 min)
+  const minsTo = start ? (start.getTime()-Date.now())/60000 : null;
+  if(minsTo!=null && minsTo<=30 && minsTo>=-15 && ev.stageName){
+    const stage = stagesWithCoords().find(s=>s.name===ev.stageName);
+    if(stage){
+      const NEAR = 60;   // metres
+      const here = peopleWithCoords().filter(p=>haversine(p.lat,p.lng,stage.lat,stage.lng)<=NEAR);
+      if(here.length){
+        const names = formatNames(here.map(p=>p.name), 3);
+        pushLine(true, `<b>${names}</b> ${here.length===1?"is":"are"} at the stage right now.`, 2);
+      }
+    }
+  }
+
+  // 4) Clash check
   const ids=myPickIds();
   const clashWith = state.events.filter(e=>ids.has(e.id) && e.day===ev.day).find(e=>{
     const s2=eventStart(e), e2=eventEnd(e);
     return s2 && e2 && start && end && (s2 < end) && (e2 > start);
   });
   if(clashWith){
-    score-=3;
-    lines.push({good:false, text:`Clashes with your pick: <b>${esc(clashWith.title)}</b> (${fmt12(clashWith.start)}–${clashWith.end?fmt12(clashWith.end):""}).`});
+    pushLine(false, `Clashes with your pick: <b>${esc(clashWith.title)}</b> (${fmt12(clashWith.start)}–${clashWith.end?fmt12(clashWith.end):""}).`, 3);
   } else {
-    lines.push({good:true, text:`No clash with your picks.`});
+    pushLine(true, `No clash with your picks.`, 0.5);
   }
-  // 4) Walk from previous pick
+
+  // 5) Walk from previous pick
   const myEarlier = state.events.filter(e=>ids.has(e.id) && e.day===ev.day).map(e=>({e, end:eventEnd(e)})).filter(x=>x.end && x.end<=start).sort((a,b)=>b.end-a.end);
   if(myEarlier.length){
     const prev=myEarlier[0].e;
@@ -2918,13 +2952,40 @@ function openOracle(eventId){
         const sec=walkSeconds(prevS.id, thisS.id);
         if(sec){
           const min=Math.round(sec/60);
-          if(min>15){ score-=1; lines.push({good:false, text:`Long walk from your prior pick: <b>${min} min</b>.`}); }
-          else { lines.push({good:true, text:`<b>${min} min</b> walk from <i>${esc(prev.title)}</i>.`}); }
+          if(min>15)      pushLine(false, `Long walk from your prior pick: <b>${min} min</b>.`, 1);
+          else if(min<=5) pushLine(true,  `Short hop from <i>${esc(prev.title)}</i>: <b>${min} min</b>.`, 0.5);
+          else            pushLine(true,  `<b>${min} min</b> walk from <i>${esc(prev.title)}</i>.`, 0);
         }
       }
     }
   }
-  // 5) Rain during set
+
+  // 6) Time-of-day fit — does it align with your peak hour?
+  if(start){
+    const peak=peakHour();
+    if(peak){
+      const setH=start.getHours();
+      const distH = Math.min(((setH-peak.h)+24)%24, ((peak.h-setH)+24)%24);
+      if(distH<=1)        pushLine(true,  `Right in your <b>peak hour</b> (~${(peak.h%12)||12}${peak.h>=12?'pm':'am'}).`, 1);
+      else if(distH>=6)   pushLine(false, `Well outside your usual peak hour (~${(peak.h%12)||12}${peak.h>=12?'pm':'am'}).`, 1);
+    }
+  }
+
+  // 7) Have I rated this artist (same title) before?
+  if(state.user){
+    const prevRatings = state.ratings
+      .filter(r=>r.userId===state.user.id && r.eventId!==ev.id)
+      .map(r=>({r, e:state.events.find(x=>x.id===r.eventId)}))
+      .filter(x=>x.e && x.e.title.toLowerCase()===ev.title.toLowerCase());
+    if(prevRatings.length){
+      const avg = prevRatings.reduce((a,b)=>a+b.r.score,0)/prevRatings.length;
+      if(avg>=8)      pushLine(true,  `You rated them <b>${avg.toFixed(1)}</b> the last time you saw them.`, 2);
+      else if(avg<=5) pushLine(false, `You rated them <b>${avg.toFixed(1)}</b> the last time you saw them.`, 2);
+      else            pushLine(true,  `Last time, you rated them ${avg.toFixed(1)}.`, 0);
+    }
+  }
+
+  // 8) Rain during set
   const w=state.structure.weatherCache;
   if(w && w.hourly && w.hourly.time && w.hourly.precipitation_probability && start){
     const sH=start.toISOString().slice(0,13);
@@ -2934,20 +2995,31 @@ function openOracle(eventId){
       const h=w.hourly.time[i].slice(0,13);
       if(h>=sH && h<=eH){ const p=w.hourly.precipitation_probability[i]||0; if(p>maxP) maxP=p; }
     }
-    if(maxP>=60){ score-=1; lines.push({good:false, text:`<b>${maxP}% rain</b> forecast during the set.`}); }
+    if(maxP>=60) pushLine(false, `<b>${maxP}% rain</b> forecast during the set.`, 1);
   }
-  // Verdict
+
+  // Sort lines by weight so the strongest signals appear first
+  lines.sort((a,b)=>b.weight-a.weight);
+
+  // Verdict — wider thresholds now that the score range is larger (-9..+13 ish)
   let verdict, verdictKind;
-  if(score>=4){ verdict="Go."; verdictKind="go"; }
-  else if(score>=1){ verdict="Worth a try."; verdictKind="try"; }
-  else if(score===0){ verdict="Coin flip — your call."; verdictKind="try"; }
-  else { verdict="Skip — unless you love them."; verdictKind="skip"; }
-  // Render
+  if(score>=4)         { verdict="Go.";                       verdictKind="go"; }
+  else if(score>=1.5)  { verdict="Worth a try.";              verdictKind="try"; }
+  else if(score>=-0.5) { verdict="Coin flip — your call.";    verdictKind="try"; }
+  else                 { verdict="Skip — unless you love them."; verdictKind="skip"; }
+  // For coin-flips, surface the single most-influential line as the deciding factor
+  let swingNote = "";
+  if(verdictKind==="try" && score>=-0.5 && score<2 && lines.length){
+    const swing = lines.find(l=>l.weight>=1);
+    if(swing) swingNote = `<div class="or-swing">The deciding factor: <b>${swing.good?"+":"−"}</b> ${swing.text}</div>`;
+  }
+
   const wrap=document.createElement("div"); wrap.className="modal-bg";
   wrap.innerHTML=`<div class="modal oracle-modal">
     <div class="modal-head"><h2>Should I go?</h2><button class="btn ghost sm" id="or-close">Close</button></div>
     <div class="or-act"><b>${esc(ev.title)}</b><br><span class="find-note">${esc(ev.stageName||"")} · ${fmt12(ev.start)}${ev.end?'–'+fmt12(ev.end):""}</span></div>
     <div class="or-verdict or-${verdictKind}">${verdict}</div>
+    ${swingNote}
     <div class="or-lines">
       ${lines.length?lines.map(l=>`<div class="or-line ${l.good?'good':'bad'}"><span class="or-mark" aria-hidden="true">${l.good?"+":"−"}</span><span>${l.text}</span></div>`).join(""):`<div class="find-note">Not much to go on yet — early in the festival.</div>`}
     </div>
@@ -2955,7 +3027,7 @@ function openOracle(eventId){
       <button class="btn ghost" id="or-skip" style="flex:1">Maybe next time</button>
       <button class="btn primary" id="or-pick" style="flex:1">Add to plan</button>
     </div>
-    <div class="find-note" style="margin-top:8px">Every line above is one observable fact. Verdict is a quick weighting, not a prophecy.</div>
+    <div class="find-note" style="margin-top:8px">Lines ordered by how much they swing the verdict. Stronger signals first.</div>
   </div>`;
   document.body.appendChild(wrap);
   const close=()=>wrap.remove();
