@@ -99,6 +99,27 @@
   .intro-dots{display:flex;gap:6px;margin-bottom:4px}
   .intro-dots span{width:7px;height:7px;border-radius:50%;background:var(--line)}
   .intro-dots span.on{background:var(--accent)}
+  .rate-line{display:flex;align-items:center;gap:10px;margin-top:8px}
+  .rate-open{border:2px solid var(--ink);background:var(--paper);border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer}
+  .rate-open.rated{background:var(--gold);border-color:var(--gold)}
+  .rate-agg{font-size:11.5px;color:var(--ink-2);font-weight:600}
+  .rate-modal{padding:20px 20px calc(20px + var(--safe-b));text-align:center}
+  .rate-act{font-weight:700;font-size:15px;margin:4px 0 6px}
+  .rate-big{font-family:"Anton";font-size:54px;line-height:1;color:var(--accent)}
+  .rate-slider{width:100%;margin:14px 0 2px;accent-color:var(--accent)}
+  .rate-scale{display:flex;justify-content:space-between;font-size:11px;color:var(--ink-2)}
+  .fav{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:13.5px}
+  .fav:first-child{border-top:none}
+  .fav-rank{font-family:"Anton";font-size:17px;color:var(--accent);width:20px;flex:none;text-align:center}
+  .fav-name{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fav-bar{height:5px;background:var(--line);border-radius:3px;margin-top:4px;overflow:hidden}
+  .fav-bar i{display:block;height:100%;background:var(--teal)}
+  .fav-score{font-family:"Anton";font-size:15px;color:var(--teal);flex:none}
+  .rating-nudge{position:fixed;left:12px;right:12px;bottom:78px;z-index:115;display:flex;align-items:center;justify-content:space-between;gap:10px;
+    background:var(--gold);color:var(--ink);border-radius:12px;padding:11px 14px;font-size:13px;font-weight:700;box-shadow:0 4px 16px rgba(0,0,0,.22)}
+  .rating-nudge button{border:none;border-radius:999px;font-weight:800;font-size:12px;cursor:pointer;padding:5px 12px}
+  .rating-nudge .rn-rate{background:var(--ink);color:var(--paper);margin-right:6px}
+  .rating-nudge .rn-x{background:transparent;color:var(--ink);padding:5px 8px}
   .row{display:flex;gap:10px}.row>*{flex:1}
 
   .auth-wrap{min-height:100dvh;display:grid;place-items:center;padding:24px}
@@ -652,6 +673,15 @@ try {
    The mode is fixed at page load (persisted in localStorage) and toggling reloads the page,
    so all snapshot listeners re-establish cleanly against the right world. */
 const TEST_MODE = localStorage.getItem("fp_testmode")==="1";
+// Battery saver: throttles GPS frequency, pauses live location sharing, slows live updates.
+let BATTERY_SAVER = localStorage.getItem("fp_battsaver")==="1";
+function setBatterySaver(on){
+  BATTERY_SAVER = on;
+  if(on) localStorage.setItem("fp_battsaver","1"); else localStorage.removeItem("fp_battsaver");
+  if(on && find.share) stopShare(true);          // pause live sharing to save power
+  else if(find.started){ stopFindSensors(); if(state.view==="find") startFindSensors(); }  // restart GPS at new cadence
+  renderApp();
+}
 const PFX = TEST_MODE ? "test_" : "";
 function setTestMode(on){
   if(on) localStorage.setItem("fp_testmode","1"); else localStorage.removeItem("fp_testmode");
@@ -672,6 +702,7 @@ const colCalls     = pcol("calls");
 const colPacking   = pcol("packing");
 const colShifts    = pcol("shifts");
 const colLegs      = pcol("legs");   // crowdsourced walk-time samples between stage pairs
+const colRatings   = pcol("ratings"); // set ratings: doc id `userId__eventId`, {userId,eventId,score 0-10,createdAt}
 
 /* ---- App state ---- */
 const state = {
@@ -684,6 +715,7 @@ const state = {
   myPacking: { checked:[], mine:[] },
   shifts: [],                 // private, owner-only: [{id,ownerId,label,day,start,end,note}]
   legs: [],                   // walk-time samples: [{id,pair,sec,dist,seed}]
+  ratings: [],                // set ratings: [{id,userId,eventId,score}]
   menuOpen: false,
   locations: [],              // [{id(userId),name,lat,lng,acc,updatedAt}]
   pins: [],                   // [{id,ownerId,ownerName,label,type,lat,lng,shared,updatedAt}]
@@ -791,6 +823,27 @@ async function saveProfile(newName, color){
   // keep the cached login record current (login matches on name)
   const cached=JSON.parse(localStorage.getItem("fp_user")||"{}");
   localStorage.setItem("fp_user", JSON.stringify({...cached, id:state.user.id, name:newName, admin:state.user.admin}));
+}
+// ---- set ratings ----
+function myRating(eventId){ const r=state.ratings.find(x=>x.id===state.user.id+"__"+eventId); return r?r.score:null; }
+async function saveRating(eventId, score){
+  await setDoc(dref("ratings", state.user.id+"__"+eventId), { userId:state.user.id, eventId, score, createdAt:serverTimestamp() }, {merge:true});
+}
+async function clearRating(eventId){ try{ await deleteDoc(dref("ratings", state.user.id+"__"+eventId)); }catch(e){} }
+function eventRatingAgg(eventId){
+  const rs=state.ratings.filter(x=>x.eventId===eventId);
+  if(!rs.length) return null;
+  return { avg: rs.reduce((a,b)=>a+b.score,0)/rs.length, count: rs.length };
+}
+// top-rated events across the crew (min 1 rating), for the faves board
+function topRatedEvents(limit){
+  const byEvent={};
+  state.ratings.forEach(r=>{ (byEvent[r.eventId]=byEvent[r.eventId]||[]).push(r.score); });
+  const rows=Object.entries(byEvent).map(([eid,scores])=>{
+    const ev=state.events.find(e=>e.id===eid);
+    return ev ? { ev, avg:scores.reduce((a,b)=>a+b,0)/scores.length, count:scores.length } : null;
+  }).filter(Boolean).sort((a,b)=> b.avg-a.avg || b.count-a.count);
+  return limit?rows.slice(0,limit):rows;
 }
 async function login(name, passcode){
   name = name.trim();
@@ -919,6 +972,35 @@ function timeTick(){
   if(ae && (ae.tagName==="INPUT"||ae.tagName==="TEXTAREA")) return;
   if(TIME_VIEWS.has(state.view)) renderView();
   scheduleNotifications();                           // re-arm leave-now / starting-soon timers
+  maybeRatingNudge();
+}
+// Gentle, dismissable nudge to rate a just-ended pick (only once per act, never forced).
+let _ratingNudged = {};
+function maybeRatingNudge(){
+  if(!feat("ratings") || !state.user) return;
+  if(document.querySelector(".modal-bg")) return;
+  const now=Date.now();
+  const ids=myPickIds();
+  // a pick that ended in the last ~20 min, not yet rated, not yet nudged this session
+  const cand=state.events.find(e=>{
+    if(!ids.has(e.id)) return false;
+    const end=eventEnd(e); if(!end) return false;
+    const ago=now-end.getTime();
+    return ago>0 && ago<20*60000 && myRating(e.id)==null && !_ratingNudged[e.id];
+  });
+  if(!cand) return;
+  _ratingNudged[cand.id]=true;
+  showRatingNudge(cand);
+}
+function showRatingNudge(ev){
+  if(document.querySelector(".rating-nudge")) return;
+  const bar=document.createElement("div"); bar.className="rating-nudge";
+  bar.innerHTML=`<span>How was <b>${esc(ev.title)}</b>?</span><div><button class="rn-rate">Rate</button><button class="rn-x" aria-label="dismiss">✕</button></div>`;
+  document.body.appendChild(bar);
+  const close=()=>bar.remove();
+  bar.querySelector(".rn-rate").onclick=()=>{ close(); openRatingModal(ev.id); };
+  bar.querySelector(".rn-x").onclick=close;
+  setTimeout(()=>{ if(bar.parentNode) bar.remove(); }, 12000);   // auto-dismiss after 12s
 }
 // Align the heartbeat to the top of each minute so "on now" flips right on the minute.
 setTimeout(()=>{ timeTick(); setInterval(timeTick, 60000); }, (60-new Date().getSeconds())*1000 + 200);
@@ -966,12 +1048,12 @@ function subscribeAll(){
     state.ready.events=true; afterData();
   });
   onSnapshot(colUsers, snap=>{
-    state.users = snap.docs.map(d=>({id:d.id,name:d.data().name,admin:!!d.data().admin}));
+    state.users = snap.docs.map(d=>({id:d.id,name:d.data().name,admin:!!d.data().admin,color:d.data().color||null}));
     state.ready.users=true;
-    // refresh current user (admin status / name) from live data
+    // refresh current user (admin status / name / colour) from live data
     if(state.user){
       const me = state.users.find(u=>u.id===state.user.id);
-      if(me) state.user = {...state.user, name:me.name, admin:me.admin};
+      if(me) state.user = {...state.user, name:me.name, admin:me.admin, color:me.color};
     }
     afterData();
   });
@@ -998,6 +1080,10 @@ function subscribeAll(){
   });
   onSnapshot(colLegs, snap=>{
     state.legs = snap.docs.map(d=>({id:d.id,...d.data()}));
+  });
+  onSnapshot(colRatings, snap=>{
+    state.ratings = snap.docs.map(d=>({id:d.id,...d.data()}));
+    if(state.view==="shared" && !document.querySelector(".modal-bg")) renderView();
   });
 }
 function activeCalls(){
@@ -1249,6 +1335,8 @@ function openMenu(){
     </div>
     ${feat("notify")?`<div class="share-row" style="margin-top:14px"><div style="min-width:0"><b>Reminders</b><div class="find-note">${notifyState()}</div></div>
       <button class="switch ${find.notify?'on':''}" id="mn-notify" role="switch"><span></span></button></div>`:""}
+    <div class="share-row" style="margin-top:10px"><div style="min-width:0"><b>Battery saver</b><div class="find-note">${BATTERY_SAVER?"On · GPS eased, live sharing paused":"Eases GPS &amp; pauses sharing to save power"}</div></div>
+      <button class="switch ${BATTERY_SAVER?'on':''}" id="mn-batt" role="switch"><span></span></button></div>
     <button class="btn ghost block" id="mn-intro" style="margin-top:14px">Replay tutorial</button>
     <button class="btn ghost block" id="mn-exit" style="margin-top:8px">Log out</button>
   </div>`;
@@ -1260,8 +1348,36 @@ function openMenu(){
   wrap.querySelector("#mn-exit").onclick=logout;
   const introBtn=wrap.querySelector("#mn-intro"); if(introBtn) introBtn.onclick=()=>{ close(); localStorage.removeItem("fp_seenintro"); showIntro(); };
   const nt=wrap.querySelector("#mn-notify"); if(nt) nt.onclick=async()=>{ await toggleNotify(); close(); openMenu(); };
+  const bt=wrap.querySelector("#mn-batt"); if(bt) bt.onclick=()=>{ setBatterySaver(!BATTERY_SAVER); close(); openMenu(); };
 }
 
+function openRatingModal(eventId){
+  const ev=state.events.find(e=>e.id===eventId); if(!ev) return;
+  let val = myRating(eventId); if(val==null) val=7;   // sensible default
+  const wrap=document.createElement("div"); wrap.className="modal-bg";
+  document.body.appendChild(wrap);
+  const draw=()=>{
+    wrap.innerHTML=`<div class="modal rate-modal">
+      <div class="modal-head"><h2>Rate it</h2><button class="btn ghost sm" id="rt-close">Close</button></div>
+      <div class="rate-act">${esc(ev.title)}</div>
+      <div class="rate-big" id="rt-val">${val.toFixed(1)}</div>
+      <input type="range" id="rt-slider" min="0" max="10" step="0.5" value="${val}" class="rate-slider">
+      <div class="rate-scale"><span>0</span><span>5</span><span>10</span></div>
+      <div style="display:flex;gap:8px;margin-top:16px">
+        ${myRating(eventId)!=null?`<button class="btn ghost" id="rt-clear" style="flex:none">Remove</button>`:""}
+        <button class="btn primary" id="rt-save" style="flex:1">Save rating</button>
+      </div>
+    </div>`;
+    const slider=wrap.querySelector("#rt-slider");
+    const out=wrap.querySelector("#rt-val");
+    slider.oninput=()=>{ val=parseFloat(slider.value); out.textContent=val.toFixed(1); };
+    wrap.querySelector("#rt-close").onclick=()=>wrap.remove();
+    wrap.onclick=e=>{ if(e.target===wrap) wrap.remove(); };
+    wrap.querySelector("#rt-save").onclick=async()=>{ await saveRating(eventId, val); wrap.remove(); toast("Rated "+val.toFixed(1)); renderView(); };
+    const clr=wrap.querySelector("#rt-clear"); if(clr) clr.onclick=async()=>{ await clearRating(eventId); wrap.remove(); toast("Rating removed"); renderView(); };
+  };
+  draw();
+}
 function openClashModal(){
   const inner=clashCard();   // uncapped — shows every cluster
   if(!inner) return;
@@ -1322,6 +1438,7 @@ function eventCard(ev, {picked, clash, changed}={}){
       ${ev.notes?`<div class="notes">${esc(ev.notes)}</div>`:""}
       ${clash?`<div class="clash-note">Overlaps with another pick</div>`:""}
       ${count?`<div class="goers">${attendeeChips(goers)}</div>`:""}
+      ${ratingRow(ev)}
     </div>
     <div class="act">
       ${mine?`<button class="must-btn ${must?'on':''}" data-must="${ev.id}" aria-label="must-see" title="Must-see">${must?'★':'☆'}</button>`:""}
@@ -1329,6 +1446,18 @@ function eventCard(ev, {picked, clash, changed}={}){
         <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
       </button>
     </div>
+  </div>`;
+}
+function ratingRow(ev){
+  if(!feat("ratings")) return "";
+  const ended = eventEnd(ev) && eventEnd(ev).getTime() < Date.now();
+  const mine = myPickIds().has(ev.id);
+  if(!ended || !mine) return "";        // only rate acts you picked, after they've ended
+  const mr=myRating(ev.id);
+  const agg=eventRatingAgg(ev.id);
+  return `<div class="rate-line">
+    <button class="rate-open ${mr!=null?'rated':''}" data-rate="${ev.id}">${mr!=null?`You: <b>${mr.toFixed(1)}</b>`:"Rate this set"}</button>
+    ${agg?`<span class="rate-agg">crew ${agg.avg.toFixed(1)} · ${agg.count}</span>`:""}
   </div>`;
 }
 function attendeeChips(goers){
@@ -2150,10 +2279,25 @@ function viewShared(){
   return `
     <div class="sec-head"><div><h2>The group</h2><div class="lead">${lead}</div></div></div>
     <div class="filters">${friendChips}</div>
+    ${friend==="all"?favesCard():""}
     ${friend==="all"?meetupCard():""}
     ${friend==="all"?callsCard():""}
     ${body}
   `;
+}
+function favesCard(){
+  if(!feat("ratings")) return "";
+  const top=topRatedEvents(5);
+  if(!top.length) return "";
+  const max=top[0].avg||10;
+  const rows=top.map((r,i)=>`<div class="fav">
+    <span class="fav-rank">${i+1}</span>
+    <div style="flex:1;min-width:0"><div class="fav-name">${esc(r.ev.title)}</div><div class="fav-bar"><i style="width:${Math.round(r.avg/10*100)}%"></i></div></div>
+    <span class="fav-score">${r.avg.toFixed(1)}</span>
+  </div>`).join("");
+  return `<div class="free-card"><div class="free-head">Crew's top sets</div>
+    <div class="find-note" style="margin-bottom:6px">Highest-rated sets so far — rate yours as they finish.</div>
+    ${rows}</div>`;
 }
 function sharedCard(ev){
   const goers = state.picks.filter(p=>p.eventId===ev.id);
@@ -2322,7 +2466,8 @@ function viewAdmin(){
          ["shifts","Private work shifts","Lets anyone add private shifts that block their free time"],
          ["onnow","On now &amp; soon board","Live view of what’s playing across stages right now"],
          ["recs","Set recommendations","Suggests acts your crew are seeing that you’re free for"],
-         ["weather","Weather &amp; daylight","Shows forecast + sunrise/sunset on Home"]].map(([k,t,d])=>`
+         ["weather","Weather &amp; daylight","Shows forecast + sunrise/sunset on Home"],
+         ["ratings","Set ratings &amp; faves","Rate sets after they end; builds a crew top-sets board"]].map(([k,t,d])=>`
         <div class="share-row" style="border:none;padding:8px 0;margin:0;background:none;border-top:1px solid var(--line)">
           <div style="min-width:0"><b style="font-size:13.5px">${t}</b><div class="find-note">${d}</div></div>
           <button class="switch ${feat(k)?'on':''}" data-feat="${k}" role="switch" aria-checked="${feat(k)}"><span></span></button>
@@ -2489,6 +2634,7 @@ function wireView(){
   const addShift=v.querySelector("#add-shift"); if(addShift) addShift.onclick=()=>{ state.modal={type:"shift",data:null}; renderModal(); };
   v.querySelectorAll("[data-edit-shift]").forEach(b=>b.onclick=()=>{ const sh=state.shifts.find(x=>x.id===b.dataset.editShift); state.modal={type:"shift",data:sh}; renderModal(); });
   v.querySelectorAll("[data-del-shift]").forEach(b=>b.onclick=async()=>{ const sh=state.shifts.find(x=>x.id===b.dataset.delShift); if(confirm(`Delete "${sh.label||'shift'}"?`)){ await deleteShift(sh.id); toast("Shift removed"); } });
+  v.querySelectorAll("[data-rate]").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openRatingModal(b.dataset.rate); });
   if(state.view==="mine") setTimeout(markChangesSeen, 4000);
 
   // ---- profile ----
@@ -3498,7 +3644,7 @@ function startShare(){
     {enableHighAccuracy:true,maximumAge:30000,timeout:20000}
   );
   fix();
-  find.shareTimer=setInterval(fix, 90000);   // ~ every 1.5 min
+  find.shareTimer=setInterval(fix, BATTERY_SAVER ? 300000 : 90000);   // 5 min in saver, else ~1.5 min
   localStorage.setItem("fp_share","1");       // remember across refreshes
   if(feat("autoStop")){
     const hrs=Math.max(1, +state.structure.autoStopHours || 4);
@@ -3586,7 +3732,7 @@ function startFindSensors(skipOrientation){
            }
            if(state.view==="find"){ if(!document.getElementById("radar")) renderView(); else updateFindDynamic(); } },
       e=>{ find.error = e.code===1 ? "denied" : "unavailable"; if(state.view==="find") renderView(); },
-      {enableHighAccuracy:true,maximumAge:0,timeout:20000}
+      BATTERY_SAVER ? {enableHighAccuracy:false,maximumAge:60000,timeout:30000} : {enableHighAccuracy:true,maximumAge:0,timeout:20000}
     );
   } else { find.error="unsupported"; }
   if(!skipOrientation) bindOrientation();
