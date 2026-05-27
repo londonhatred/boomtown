@@ -4276,7 +4276,10 @@ async function subscribePush(){
       platform: navigator.userAgent.slice(0,160),
       updatedAt: serverTimestamp()
     }, {merge:true});
-  }catch(e){ /* silently — push will just stay off for this device */ }
+  }catch(e){
+    // Silent in production. console.warn keeps a breadcrumb in dev tools if you ever need to diagnose again.
+    try{ console.warn("subscribePush failed", e); }catch(_){}
+  }
 }
 async function unsubscribePush(){
   if(!("serviceWorker" in navigator)) return;
