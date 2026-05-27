@@ -3001,18 +3001,18 @@ async function generateTestLineup(){
     "The Gloaming","Copper Wren","Fathom","Tin Soldiers","Hidden Hand","Wildflower"];
   let ai=0; const ev=[];
   stages.forEach((s,si)=>{
-    let t=si*15; const windowEnd=480;
+    // First act on the first 3 stages all START at the same time (minute 20) → a genuine
+    // cross-stage clash the planner can route between. Other stages stagger normally.
+    let t = si<3 ? 20 : si*15;
+    const windowEnd=480;
     while(t<windowEnd && ai<ACTS.length){
       const len=[30,45,60,75,90][Math.floor(Math.random()*5)];
       ev.push({ districtId:s.d.id, districtName:s.d.name, stageId:s.st.id, stageName:s.st.name, day, start:at(t), end:at(t+len), title:ACTS[ai++], notes:"" });
-      t+=len+[0,0,5,10][Math.floor(Math.random()*4)];
+      t+=len+[0,0,5,10][Math.floor(Math.random()*4)];   // next act on THIS stage starts after this one ends
     }
   });
-  // guarantee a 3-way clash near now across the first three distinct stages (real names)
-  if(stages.length>=3){
-    const cl=[[20,90],[35,60],[40,75]];
-    cl.forEach(([s,l],i)=>{ const sg=stages[i]; const nm=ACTS[ai++]||("Late Add "+(i+1)); ev.push({ districtId:sg.d.id, districtName:sg.d.name, stageId:sg.st.id, stageName:sg.st.name, day, start:at(s), end:at(s+l), title:nm, notes:"" }); });
-  }
+  // (no extra overlay — each stage runs its own sequential chain, so there is never
+  //  more than one act on the same stage at once; clashes only ever occur across stages.)
   for(const e of ev){ await addDoc(colEvents, {...e, createdAt:serverTimestamp()}); }
 }
 async function wipeTestData(){
