@@ -1108,6 +1108,7 @@ async function uncheckInSafe(){
   await deleteDoc(dref("safety", state.user.id+"__"+day)).catch(()=>{});
 }
 function safeCheckInCard(){
+  if(!feat("safety")) return "";
   // Show only late at night so it doesn't nag mid-day. After 22:00 OR if it's 00:00–05:59 (still "tonight" in festival logic).
   const now=new Date(); const h=now.getHours();
   if(h<22 && h>=DAY_ROLLOVER_HOUR) return "";
@@ -1125,6 +1126,7 @@ function safeCheckInCard(){
   </button>`;
 }
 function safetyCrewCard(){
+  if(!feat("safety")) return "";
   const day=safetyDayKey(); if(!day) return "";
   const checked=state.safety.filter(s=>s.day===day);
   if(!checked.length) return "";
@@ -2223,12 +2225,16 @@ function weatherCard(){
     const st=sunTimes(date,co.lat,co.lng);
     if(st&&st.sunrise&&st.sunset){ sunrise=clockMs(st.sunrise.getTime()); sunset=clockMs(st.sunset.getTime()); }
   }
-  // cached forecast (fetched by refreshWeather when online)
+  // cached forecast (fetched by refreshWeather when online).
+  // Temp/rain always reflect REAL today (the only thing the API can actually forecast);
+  // the festival "day" may be months out, so we never key the forecast to it.
   const w=state.structure.weatherCache;
-  let hi=null, lo=null, rain=null;
+  let hi=null, lo=null, rain=null, forecastForToday=false;
   if(w && w.daily){
-    const dstr=date.toISOString().slice(0,10);
-    const i=(w.daily.time||[]).indexOf(dstr);
+    const realToday = new Date().toISOString().slice(0,10);
+    let i=(w.daily.time||[]).indexOf(realToday);
+    if(i<0) i = (w.daily.time||[]).length ? 0 : -1;   // fall back to first available day
+    else forecastForToday=true;
     if(i>=0){
       hi=Math.round(w.daily.temperature_2m_max[i]); lo=Math.round(w.daily.temperature_2m_min[i]);
       rain=w.daily.precipitation_probability_max?w.daily.precipitation_probability_max[i]:null;
@@ -2246,10 +2252,13 @@ function weatherCard(){
   if(sunset) items.push(`<div class="wc-item"><div class="wc-lbl">Sunset</div><div class="wc-val">${sunset}</div></div>`);
   if(!items.length) return "";
   const fcMissing = (hi==null && navigator.onLine);
+  // If the festival is more than ~2 days out, the temps are "today's", so say so.
+  const festFar = (()=>{ const fd=dateForDay(currentFestivalDay()); if(!fd) return false; return (fd.getTime()-Date.now()) > 2*86400000; })();
+  const header = festFar ? `Weather today` : `Weather &amp; daylight · ${day.slice(0,3)}`;
   return `<div class="home-card weather-card">
-    <div class="hc-title">Weather &amp; daylight · ${day.slice(0,3)}</div>
+    <div class="hc-title">${header}</div>
     <div class="wc-grid">${items.join("")}</div>
-    ${fcMissing?`<div class="wc-hint">Forecast loads when online — pull up again in a moment.</div>`:""}
+    ${festFar && hi!=null ? `<div class="wc-hint">Showing today's weather — festival forecast appears nearer the time.</div>` : (fcMissing?`<div class="wc-hint">Forecast loads when online — pull up again in a moment.</div>`:"")}
   </div>`;
 }
 function weatherNudgeCard(){
@@ -2687,6 +2696,7 @@ function viewMine(){
         return nClash ? `<button class="stat stat-tap" id="open-clashes"><div class="n">${nClash}</div><div class="l">Clashes · tap for advice</div></button>`
                       : `<div class="stat"><div class="n">0</div><div class="l">Clashes</div></div>`; })()}
     </div>
+    ${meetupCard()}
     ${DAYS.filter(d=>byDay[d]&&byDay[d].length).map(d=>`
       <div class="day-label">${d}</div>
       ${byDay[d].map(item=> item.kind==="ev"
@@ -2760,11 +2770,8 @@ function viewShared(){
   return `
     <div class="sec-head"><div><h2>The group</h2><div class="lead">${lead}</div></div></div>
     <div class="filters">${friendChips}</div>
-    ${friend==="all"?favesCard():""}
-    ${friend==="all"?stagePersonalityCard():""}
-    ${friend==="all"?safetyCrewCard():""}
-    ${friend==="all"?meetupCard():""}
     ${friend==="all"?callsCard():""}
+    ${friend==="all"?safetyCrewCard():""}
     ${body}
   `;
 }
@@ -3230,6 +3237,8 @@ function viewRecap(){
     </div>
     ${rhythmCard()}
     ${sleepCard()}
+    ${sel===null?favesCard():""}
+    ${sel===null?stagePersonalityCard():""}
     <div class="find-note" style="margin-top:12px">Miles walked come from your private trail — only counts time the app's location was on. Updates as the festival goes.</div>
   `;
 }
@@ -3861,7 +3870,8 @@ function viewAdmin(){
          ["onnow","On now &amp; soon board","Live view of what’s playing across stages right now"],
          ["recs","Set recommendations","Suggests acts your crew are seeing that you’re free for"],
          ["weather","Weather &amp; daylight","Shows forecast + sunrise/sunset on Home"],
-         ["ratings","Set ratings &amp; faves","Rate sets after they end; builds a crew top-sets board"]].map(([k,t,d])=>`
+         ["ratings","Set ratings &amp; faves","Rate sets after they end; builds a crew top-sets board"],
+         ["safety","I'm safe check-in","End-of-night one-tap check-in so the crew knows you're back at your tent"]].map(([k,t,d])=>`
         <div class="share-row" style="border:none;padding:8px 0;margin:0;background:none;border-top:1px solid var(--line)">
           <div style="min-width:0"><b style="font-size:13.5px">${t}</b><div class="find-note">${d}</div></div>
           <button class="switch ${feat(k)?'on':''}" data-feat="${k}" role="switch" aria-checked="${feat(k)}"><span></span></button>
