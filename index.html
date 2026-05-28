@@ -1465,8 +1465,11 @@ function applyRatingTimeGate(){
   const all = state._allRatings || [];
   const now = Date.now();
   const next = all.filter(r=>{
-    const t = r.createdAt && r.createdAt.toMillis ? r.createdAt.toMillis()
-            : (typeof r.simAt==="number" ? r.simAt : 0);
+    // Prefer simAt (the scheduled reveal time for sim ratings); fall back to real createdAt.
+    // Previously createdAt was checked first, but sim writes ALSO stamp createdAt=now for ordering,
+    // which caused future-scheduled sim ratings to be revealed immediately — the time-gate became a no-op.
+    const t = (typeof r.simAt==="number") ? r.simAt
+            : (r.createdAt && r.createdAt.toMillis ? r.createdAt.toMillis() : 0);
     return t<=now;
   });
   // only swap + re-render if the visible set actually changed (avoid needless churn)
@@ -4377,6 +4380,8 @@ function viewAdmin(){
         <div class="test-step"><span class="ts-n">1</span><div><b>Set up stages</b><div class="find-note">Build your own in <b>Districts &amp; stages</b> below with any names you like — or tap to generate 4 quick placeholders. ${stageCount?`<span style="color:var(--teal)">✓ ${stageCount} stage${stageCount!==1?'s':''}${pinnedCount?`, ${pinnedCount} pinned`:''}</span>`:'<span style="color:var(--accent)">none yet</span>'}</div></div></div>
         <button class="btn primary block" id="test-stages" style="margin-bottom:6px">${stageCount?'Add 4 placeholder stages':'Generate 4 placeholder stages'}</button>
         <div class="find-note" style="margin-bottom:12px">Then go to <b>Find</b>, pin each stage to a real spot near you, and walk between them to seed walk-times. Or scroll down to <b>Districts &amp; stages</b> to name your own.</div>
+        <div class="test-step"><span class="ts-n">1b</span><div><b>Auto-generate stage pins</b><div class="find-note">Scatters all stages around your current location in a realistic festival layout (~1.2km across, districts clustered). First tap fixes the centre at your spot; later taps re-shuffle the layout. <b>Wipes any existing pins.</b> ${stageCount?'':'<span style="color:var(--accent)">need stages first</span>'}${state.structure.testCenter?'<br><span style="color:var(--teal)">✓ centre fixed at first tap — re-tapping just re-shuffles</span>':''}</div></div></div>
+        <button class="btn block" id="test-pins" ${stageCount?'':'disabled'} style="margin-bottom:12px;background:var(--gold);color:#fff">${state.structure.testCenter?'Re-shuffle pins':'Generate stage pins'}</button>
         <div class="test-step"><span class="ts-n">2</span><div><b>Generate lineup</b><div class="find-note">~25 acts over ~8 hours around now, with clashes, spread across <b>whatever stages exist</b> — your custom ones or the placeholders. Keeps your stages &amp; walk-data. ${actCount?`<span style="color:var(--teal)">✓ ${actCount} acts</span>`:''}</div></div></div>
         <button class="btn lime block" id="test-lineup" ${stageCount?'':'disabled'} style="margin-bottom:6px">${actCount?'Regenerate lineup':'Generate lineup'}</button>
         ${stageCount?'':`<div class="find-note" style="margin-bottom:12px">Set up at least one stage first (custom or placeholder).</div>`}
@@ -4742,6 +4747,27 @@ function wireView(){
     tStages.disabled=true; tStages.textContent="Adding…";
     try{ await createTestStages(); toast("Placeholder stages added — name your own in Districts & stages, or pin these in Find"); renderApp(); }
     catch(e){ tStages.disabled=false; tStages.textContent="Generate placeholder stages"; toast("Couldn't add — try again"); }
+  };
+  const tPins=v.querySelector("#test-pins");
+  if(tPins) tPins.onclick=async()=>{
+    const haveCentre = !!(state.structure.testCenter && typeof state.structure.testCenter.lat==="number");
+    const msg = haveCentre
+      ? "Re-shuffle stage pins around the fixed test centre? All existing pins will be replaced with a fresh random layout — walk-time data is kept."
+      : "Generate stage pins around your current location? This sets the test festival's centre point (used for all future re-shuffles) and pins every stage. Any existing pins are replaced.";
+    if(!confirm(msg)) return;
+    tPins.disabled=true; tPins.textContent="Locating…";
+    try{
+      await generateTestStagePins();
+      toast(haveCentre?"Pins re-shuffled":"Pins generated — centre fixed at your location");
+      renderApp();
+    } catch(e){
+      tPins.disabled=false; tPins.textContent=haveCentre?"Re-shuffle pins":"Generate stage pins";
+      if(e.message==="no-geo") toast("Your device doesn't support GPS");
+      else if(e.message==="location-blocked") toast("Location blocked — allow it to set the centre");
+      else if(e.message==="no-fix") toast("Couldn't get a GPS fix — try outside");
+      else if(e.message==="no-districts") toast("Create some districts/stages first");
+      else toast("Couldn't generate — try again");
+    }
   };
   const tLineup=v.querySelector("#test-lineup");
   if(tLineup) tLineup.onclick=async()=>{
@@ -5510,6 +5536,98 @@ async function createTestStages(){
     autoStopHours: state.structure.autoStopHours||4
   });
 }
+// Test-mode pin generator: scatters realistic-feeling stage pins around a fixed centre.
+// Site model: 560m radius circle → ~1.1km diameter straight-line, ~1.5km walked with the app's
+// existing 1.35× detour factor → ~25 min end-to-end at crowd-padded pace. Matches felt experience.
+// Districts go into 2–3 random clusters; stages within a district cluster around its centre.
+// Main-tagged stages get both corners pinned synthetically so they "just work" via the v53 path.
+async function generateTestStagePins(){
+  if(!TEST_MODE) return;
+  const SITE_RADIUS = 560;          // metres from centre to outer ring
+  const CLUSTER_OFFSET_MIN = 350;   // each cluster centre this far+ from site centre
+  const CLUSTER_OFFSET_MAX = 560;   // and no further than this (so clusters can sit on opposite sides)
+  const DIST_JITTER = 100;          // district centre this far from its cluster centre
+  const STAGE_SPREAD = 45;          // stages within ~this many metres of district centre
+  const STAGE_JITTER = 22;          // small random nudge so stages don't sit exactly on each other
+  const MAIN_SPAN_MIN = 60;         // metres between the two corners of a main stage
+  const MAIN_SPAN_MAX = 110;
+
+  // Need a centre. Use stored testCenter if it exists (preserves walk-time learning across re-shuffles).
+  // Otherwise grab current GPS and store it.
+  let centre = state.structure.testCenter;
+  if(!centre || typeof centre.lat!=="number"){
+    if(!navigator.geolocation) throw new Error("no-geo");
+    centre = await new Promise((resolve,reject)=>{
+      navigator.geolocation.getCurrentPosition(
+        pos=>resolve({lat:+pos.coords.latitude.toFixed(6), lng:+pos.coords.longitude.toFixed(6)}),
+        err=>reject(new Error(err.code===1?"location-blocked":"no-fix")),
+        {enableHighAccuracy:true,timeout:12000,maximumAge:0}
+      );
+    });
+  }
+  // Helper: offset a {lat,lng} by metres on a bearing (0=N, 90=E)
+  const offsetLatLng = (lat,lng, metres, bearingRad) => {
+    const R = 6378137;                                  // earth radius m
+    const dLat = (metres * Math.cos(bearingRad)) / R;
+    const dLng = (metres * Math.sin(bearingRad)) / (R * Math.cos(lat*Math.PI/180));
+    return { lat: +(lat + dLat*180/Math.PI).toFixed(6), lng: +(lng + dLng*180/Math.PI).toFixed(6) };
+  };
+  const rand=(a,b)=> a + Math.random()*(b-a);
+  const rng = ()=> Math.random();
+
+  // Pick how many clusters (2 or 3) and place each cluster centre at a random bearing from the site centre.
+  // Bearings are fully random so two clusters can naturally land on opposite sides, giving a real end-to-end span.
+  // After placing each, light "repulsion" from previously-placed clusters keeps them from overlapping.
+  const districts = (state.structure.districts||[]);
+  if(!districts.length) throw new Error("no-districts");
+  const clusterCount = Math.min(3, Math.max(2, Math.round(districts.length/4)));
+  const clusterCentres = [];
+  for(let c=0;c<clusterCount;c++){
+    let best=null, bestSep=-1;
+    // try 6 candidate bearings, pick the one most separated from existing clusters (simple repulsion)
+    for(let tries=0; tries<6; tries++){
+      const bearing = rng()*2*Math.PI;
+      const dist    = rand(CLUSTER_OFFSET_MIN, CLUSTER_OFFSET_MAX);
+      const pt = offsetLatLng(centre.lat, centre.lng, dist, bearing);
+      const minSep = clusterCentres.reduce((m,p)=>{
+        const d = haversine(pt.lat, pt.lng, p.lat, p.lng);
+        return d<m?d:m;
+      }, Infinity);
+      if(minSep > bestSep){ bestSep=minSep; best=pt; }
+    }
+    clusterCentres.push(best);
+  }
+  // Assign each district to a random cluster, then place its centre near that cluster.
+  // Place stages clustered around the district centre. Main stages get c1/c2 corners.
+  const newDistricts = districts.map(d=>{
+    const cc = clusterCentres[Math.floor(rng()*clusterCentres.length)];
+    const distBearing = rng()*2*Math.PI;
+    const distOffset  = rand(0, DIST_JITTER);
+    const dCentre = offsetLatLng(cc.lat, cc.lng, distOffset, distBearing);
+
+    const stages = (d.stages||[]).map(st=>{
+      const sBearing = rng()*2*Math.PI;
+      const sOffset  = rand(0, STAGE_SPREAD) + (rng()-0.5)*STAGE_JITTER;
+      const sCentre  = offsetLatLng(dCentre.lat, dCentre.lng, Math.abs(sOffset), sBearing);
+      // Strip any existing pin/corner data first (full regenerate, not merge).
+      const {lat,lng,radius,c1lat,c1lng,c2lat,c2lng, ...rest}=st;
+      const ns = {...rest, lat:sCentre.lat, lng:sCentre.lng};
+      // Main stages: drop two corners so the stage gets a measured radius via the existing v53 code path.
+      if(st.type==="main"){
+        const span = rand(MAIN_SPAN_MIN, MAIN_SPAN_MAX);
+        const ang  = rng()*2*Math.PI;
+        const c1 = offsetLatLng(sCentre.lat, sCentre.lng, span/2, ang);
+        const c2 = offsetLatLng(sCentre.lat, sCentre.lng, span/2, ang+Math.PI);
+        ns.c1lat=c1.lat; ns.c1lng=c1.lng;
+        ns.c2lat=c2.lat; ns.c2lng=c2.lng;
+        ns.radius=Math.max(STAGE_RADIUS, Math.round(span/2 + 10));
+      }
+      return ns;
+    });
+    return {...d, stages};
+  });
+  await saveStructure({...state.structure, districts:newDistricts, testCenter:centre});
+}
 // Step 2: generate the LINEUP onto the existing test stages. Wipes only events, keeps stages/pins/walk-data.
 async function generateTestLineup(){
   if(!TEST_MODE) return;
@@ -5620,6 +5738,13 @@ async function simulateCrew(){
     const lsnap=await getDocs(colLegs);
     const oldLegs=lsnap.docs.filter(d=>String(d.data().by||"").startsWith("sim_")).map(d=>d.id);
     for(let i=0;i<oldLegs.length;i+=20){ await Promise.all(oldLegs.slice(i,i+20).map(id=>deleteDoc(dref("legs",id)))); }
+    // clear meetup votes belonging to deleted/sim users (orphan cleanup).
+    // Real-user votes survive; only votes whose userId no longer exists in users get cleared.
+    const usnap2=await getDocs(colUsers);
+    const liveUserIds=new Set(usnap2.docs.map(d=>d.id));
+    const mvsnap=await getDocs(colMeetVotes);
+    const orphanVotes=mvsnap.docs.filter(d=>!liveUserIds.has(d.data().userId)).map(d=>d.id);
+    for(let i=0;i<orphanVotes.length;i+=20){ await Promise.all(orphanVotes.slice(i,i+20).map(id=>deleteDoc(dref("meetvotes",id)))); }
   }catch(e){}
 
   const NAMES=["Sam","Jo","Mira","Theo","Nadia","Ravi","Esme","Cass","Otis","Lola","Kit","June","Milo","Vera","Dré"];
