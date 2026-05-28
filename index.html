@@ -3841,13 +3841,13 @@ function viewAdmin(){
         const pinnedCount=stagesWithCoords().length;
         const actCount=state.events.length;
         return `
-        <div class="find-note" style="margin-bottom:12px">You're in the <b>test sandbox</b> — completely separate data, your real festival is never touched. Do it in order: make the stages, pin &amp; walk them to gather walk-data, then drop a lineup on top.</div>
-        <div class="test-step"><span class="ts-n">1</span><div><b>Create test stages</b><div class="find-note">4 stages (the “map”), no acts yet. ${stageCount?`<span style="color:var(--teal)">✓ ${stageCount} stages${pinnedCount?`, ${pinnedCount} pinned`:''}</span>`:''}</div></div></div>
-        <button class="btn primary block" id="test-stages" style="margin-bottom:6px">${stageCount?'Reset test stages':'Create test stages'}</button>
-        <div class="find-note" style="margin-bottom:12px">Then go to <b>Find</b>, pin each stage to a real spot near you, and walk between them to seed walk-times.</div>
-        <div class="test-step"><span class="ts-n">2</span><div><b>Generate lineup</b><div class="find-note">~25 acts over ~8 hours around now, with clashes. Keeps your stages &amp; walk-data. ${actCount?`<span style="color:var(--teal)">✓ ${actCount} acts</span>`:''}</div></div></div>
+        <div class="find-note" style="margin-bottom:12px">You're in the <b>test sandbox</b> — completely separate data, your real festival is never touched. Build stages (your own names below, or generate quick placeholders), pin &amp; walk them, then drop a lineup on top.</div>
+        <div class="test-step"><span class="ts-n">1</span><div><b>Set up stages</b><div class="find-note">Build your own in <b>Districts &amp; stages</b> below with any names you like — or tap to generate 4 quick placeholders. ${stageCount?`<span style="color:var(--teal)">✓ ${stageCount} stage${stageCount!==1?'s':''}${pinnedCount?`, ${pinnedCount} pinned`:''}</span>`:'<span style="color:var(--accent)">none yet</span>'}</div></div></div>
+        <button class="btn primary block" id="test-stages" style="margin-bottom:6px">${stageCount?'Add 4 placeholder stages':'Generate 4 placeholder stages'}</button>
+        <div class="find-note" style="margin-bottom:12px">Then go to <b>Find</b>, pin each stage to a real spot near you, and walk between them to seed walk-times. Or scroll down to <b>Districts &amp; stages</b> to name your own.</div>
+        <div class="test-step"><span class="ts-n">2</span><div><b>Generate lineup</b><div class="find-note">~25 acts over ~8 hours around now, with clashes, spread across <b>whatever stages exist</b> — your custom ones or the placeholders. Keeps your stages &amp; walk-data. ${actCount?`<span style="color:var(--teal)">✓ ${actCount} acts</span>`:''}</div></div></div>
         <button class="btn lime block" id="test-lineup" ${stageCount?'':'disabled'} style="margin-bottom:6px">${actCount?'Regenerate lineup':'Generate lineup'}</button>
-        ${stageCount?'':`<div class="find-note" style="margin-bottom:12px">Create stages first </div>`}
+        ${stageCount?'':`<div class="find-note" style="margin-bottom:12px">Set up at least one stage first (custom or placeholder).</div>`}
         <div style="border-top:1px solid var(--line);margin:14px 0 12px"></div>
         <button class="btn ghost block" id="test-wipe" style="margin-bottom:8px">Wipe all test data</button>
         <button class="btn block" id="test-exit2" style="background:var(--ink);color:var(--paper)">Exit test mode</button>
@@ -4174,10 +4174,10 @@ function wireView(){
   if(tExit2) tExit2.onclick=()=>setTestMode(false);
   const tStages=v.querySelector("#test-stages");
   if(tStages) tStages.onclick=async()=>{
-    if(!confirm("Create/reset the test stages? Existing pins on test stages are kept so walk-data stays meaningful. (Sandbox only — real festival untouched.)")) return;
-    tStages.disabled=true; tStages.textContent="Creating…";
-    try{ await createTestStages(); toast("Test stages ready — pin them in Find, then walk between them"); renderApp(); }
-    catch(e){ tStages.disabled=false; tStages.textContent="Create test stages"; toast("Couldn't create — try again"); }
+    if(!confirm("Add 4 placeholder stages to your test sandbox? Any stages you've already built (custom or placeholder) are kept — these are just added alongside. Real festival untouched.")) return;
+    tStages.disabled=true; tStages.textContent="Adding…";
+    try{ await createTestStages(); toast("Placeholder stages added — name your own in Districts & stages, or pin these in Find"); renderApp(); }
+    catch(e){ tStages.disabled=false; tStages.textContent="Generate placeholder stages"; toast("Couldn't add — try again"); }
   };
   const tLineup=v.querySelector("#test-lineup");
   if(tLineup) tLineup.onclick=async()=>{
@@ -4801,25 +4801,28 @@ async function createTestStages(){
   if(!TEST_MODE) return;
   const now=new Date();
   // Anchor the festival day so that NOW reliably reads as "during" (the phase gate opens at noon).
-  // If it's currently before noon, use YESTERDAY as the start date so the noon gate is already passed.
+  // Only set the date if we don't already have one (don't clobber a custom setup).
   const anchor=new Date(now);
   if(now.getHours() < 12) anchor.setDate(anchor.getDate()-1);
-  const ymd=`${anchor.getFullYear()}-${String(anchor.getMonth()+1).padStart(2,"0")}-${String(anchor.getDate()).padStart(2,"0")}`;
-  // default stage map
+  const ymd= state.structure.festivalStartDate || `${anchor.getFullYear()}-${String(anchor.getMonth()+1).padStart(2,"0")}-${String(anchor.getDate()).padStart(2,"0")}`;
+  // placeholder stage map — only the ones not already present get added
   const defaults=[
     {id:"t_main", name:"Main Field",  stages:[{id:"t_s1",name:"Main Stage"}]},
     {id:"t_woods",name:"The Woods",   stages:[{id:"t_s2",name:"Forest Clearing"}]},
     {id:"t_barn", name:"The Barn",    stages:[{id:"t_s3",name:"Barn Stage"}]},
     {id:"t_tent", name:"Big Top",     stages:[{id:"t_s4",name:"Circus Tent"}]},
   ];
-  // preserve any coords already pinned on existing test stages (so re-running keeps walk-data meaningful)
-  const existing={};
-  (state.structure.districts||[]).forEach(d=>(d.stages||[]).forEach(st=>{ if(typeof st.lat==="number") existing[st.id]={lat:st.lat,lng:st.lng}; }));
-  const districts=defaults.map(d=>({...d, stages:d.stages.map(st=> existing[st.id]?{...st,...existing[st.id]}:st)}));
+  // Start from existing districts (custom ones the user built), preserve their coords.
+  const districts = (state.structure.districts||[]).map(d=>({...d, stages:(d.stages||[]).map(st=>({...st}))}));
+  const existingDistrictIds = new Set(districts.map(d=>d.id));
+  // Append any placeholder district that isn't already there (by id)
+  defaults.forEach(d=>{ if(!existingDistrictIds.has(d.id)) districts.push({...d, stages:d.stages.map(st=>({...st}))}); });
   await saveStructure({
-    festivalName:"Test Festival", districts, festivalStartDate:ymd,
-    features:state.structure.features||{}, adminFeatures:state.structure.adminFeatures||{}, autoStopHours:4,
-    infoItems:[], packingItems:[], walkReset:state.structure.walkReset||null, weatherCache:null
+    ...state.structure,
+    festivalName: state.structure.festivalName || "Test Festival",
+    districts, festivalStartDate:ymd,
+    features:state.structure.features||{}, adminFeatures:state.structure.adminFeatures||{},
+    autoStopHours: state.structure.autoStopHours||4
   });
 }
 // Step 2: generate the LINEUP onto the existing test stages. Wipes only events, keeps stages/pins/walk-data.
@@ -4829,6 +4832,14 @@ async function generateTestLineup(){
   const stages=[];
   (state.structure.districts||[]).forEach(d=>(d.stages||[]).forEach(st=>stages.push({d, st})));
   if(!stages.length) throw new Error("no-stages");
+  // Ensure the festival has a start date anchored to "now-ish" so the phase reads "during".
+  // (If you built custom stages without using the placeholder button, no date may be set yet.)
+  if(!state.structure.festivalStartDate){
+    const now=new Date(); const anchor=new Date(now);
+    if(now.getHours()<12) anchor.setDate(anchor.getDate()-1);
+    const ymd=`${anchor.getFullYear()}-${String(anchor.getMonth()+1).padStart(2,"0")}-${String(anchor.getDate()).padStart(2,"0")}`;
+    await saveStructure({...state.structure, festivalStartDate:ymd});
+  }
   // wipe existing events + picks only (NOT stages, pins or legs)
   const esnap=await getDocs(colEvents); const eids=esnap.docs.map(d=>d.id);
   for(let i=0;i<eids.length;i+=20){ await Promise.all(eids.slice(i,i+20).map(id=>deleteDoc(dref("events",id)))); }
@@ -4840,14 +4851,41 @@ async function generateTestLineup(){
   const QUARTER=15*60000;
   const base=Math.floor((Date.now()-30*60000)/QUARTER)*QUARTER;
   const at=o=>toHM(new Date(base+o*60000));
-  const ACTS=["Aurora Skies","Midnight Caller","The Velvet Drop","Echo & Pulse","Glass Animals Jr","Sunbeam Collective",
+  const ACTS=[
+    // band-style
+    "Aurora Skies","Midnight Caller","The Velvet Drop","Echo & Pulse","Glass Animals Jr","Sunbeam Collective",
     "Bass Theory","Northern Lights","Paper Tigers","The Lowlands","Disco Volante","Neon Forest","Wild Honey",
-    "Tidal","Crooked Teeth","Mr Scruff Jr","Lunar Tide","Brass Monkey","The Haxans","Solar Flare","Cosmic Dust",
+    "Tidal","Crooked Teeth","Lunar Tide","Brass Monkey","The Haxans","Solar Flare","Cosmic Dust",
     "Riptide","Golden Hour","Static Bloom","Moth & Moon","Deep End","The Foxgloves","Velvet Sky","Iron Bloom",
     "Sable & Sons","The Quiet Hours","Marigold","Pulsewidth","Honeytrap","The Wandering","Cinder","Low Country",
     "Saltwater","Ember & Oak","Night Bus","The Reverie","Wax Lyrical","Dust Devils","Slow Tide","Kingfisher",
-    "The Gloaming","Copper Wren","Fathom","Tin Soldiers","Hidden Hand","Wildflower"];
+    "The Gloaming","Copper Wren","Fathom","Tin Soldiers","Hidden Hand","Wildflower","The Paper Kites Jr",
+    "Smoke & Mirrors","The Brass Tacks","Coral Throne","Black Velvet","The Wax Birds","Rust & Bone",
+    "Silver Linings","The Tall Grass","Moonshine Revival","Fox & Feather","The Drowned World","Amber Run Jr",
+    "The Loose Ends","Painted Wolves","Sea Change","The Wild Roots","Echo Chamber","Hollow Bones",
+    "The Night Porters","Glasshouse","Tin Pan Alley","The Slow Burn","Driftwood","The Hinterland",
+    // solo-style
+    "Sol Marin","Vera Wilde","Otis Grey","Lola Ferreira","Cass Holloway","Dré Saint","June Hartley","Milo Vance",
+    "Saffron Boyd","Theo Marsh","Indra Bell","Rufus Crane","Nadia Voss","Eli Sundberg","Margo Tate","Kit Ferris",
+    "Anais Roux","Bobby Slade","Esme Lindqvist","Ravi Mistry",
+    // DJ-style
+    "DJ Halcyon","Velour","Subsonic","Mira Glow","Tunnel Vision","Late Reply","Acid Rain","DJ Marrow",
+    "Loop Theory","Nightshift","Patchwork","DJ Tidewater","Glint","Overtone","Submerge","DJ Foxglove",
+    "Bassline Betty","Modulate","DJ Castaway","Phase Lock","Halftone","DJ Wildfire","Crosswire","Lowtide Sound",
+    "Vinyl Frontier","DJ Petrichor","Sundown Sound","Polyrhythm","DJ Cinder","Afterglow"
+  ];
+  // Shuffle the pool so each generation feels fresh, and so the first acts aren't always the same.
+  const pool=[...ACTS];
+  for(let i=pool.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; }
   let ai=0; const ev=[];
+  const nextName=()=>{
+    // Wrap around if we somehow exhaust the pool (many stages × long window). Append a numeral on wrap
+    // so we never show a literal duplicate name in the same generation.
+    const base=pool[ai % pool.length];
+    const wrap=Math.floor(ai/pool.length);
+    ai++;
+    return wrap>0 ? `${base} ${["II","III","IV","V"][wrap-1]||("#"+(wrap+1))}` : base;
+  };
   stages.forEach((s,si)=>{
     // First act on the first 3 stages all START at the same clean boundary (minute 15) → a genuine
     // cross-stage clash the planner can route between. Other stages stagger in 15-min steps.
@@ -4858,9 +4896,9 @@ async function generateTestLineup(){
     const LENS=[60,60,60,60,60,60,90,90,90,45,75,30,120];
     // Gaps mirror reality too: half of acts back-to-back, half with a 30-min changeover, occasional 15.
     const GAPS=[0,0,0,0,0,30,30,30,30,15];
-    while(t<windowEnd && ai<ACTS.length){
+    while(t<windowEnd){
       const len=LENS[Math.floor(Math.random()*LENS.length)];
-      ev.push({ districtId:s.d.id, districtName:s.d.name, stageId:s.st.id, stageName:s.st.name, day, start:at(t), end:at(t+len), title:ACTS[ai++], notes:"" });
+      ev.push({ districtId:s.d.id, districtName:s.d.name, stageId:s.st.id, stageName:s.st.name, day, start:at(t), end:at(t+len), title:nextName(), notes:"" });
       t+=len+GAPS[Math.floor(Math.random()*GAPS.length)];  // next act on THIS stage starts after this one ends, still on a boundary
     }
   });
