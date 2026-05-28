@@ -652,6 +652,18 @@
   .mr-count{font-family:"Anton";font-size:22px;line-height:1;color:var(--teal)}
   .mr-count span{font-family:"Archivo";font-size:12px;color:var(--muted);font-weight:700}
   .mr-len{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-top:3px}
+  .meet-block{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+  .sub-slots{display:flex;flex-wrap:wrap;gap:5px;padding:0 2px}
+  .sub-slot{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;background:var(--card);border:1.5px solid var(--line-strong);border-radius:999px;cursor:pointer;font:inherit;color:var(--ink-2);min-height:28px}
+  .sub-slot .ss-time{font-size:11px;font-weight:700;line-height:1}
+  .sub-slot .ss-count{font-family:"Anton";font-size:12px;background:var(--ink);color:var(--paper);border-radius:999px;padding:1px 6px;line-height:1.3;min-width:14px;text-align:center}
+  .sub-slot:active{transform:translate(1px,1px)}
+  .sub-slot.on{background:var(--teal);color:#fff;border-color:var(--teal)}
+  .sub-slot.on .ss-count{background:#fff;color:var(--teal)}
+  .sub-slot.hot{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+  .sub-slot.clash{background:rgba(214,55,28,.12);border-color:rgba(214,55,28,.55);color:var(--ink-2)}
+  .sub-slot.on.clash{background:var(--teal);color:#fff;border-color:rgba(214,55,28,.85);box-shadow:inset 0 0 0 2px rgba(214,55,28,.35)}
+  [data-theme="dark"] .sub-slot.clash{background:rgba(242,85,59,.18);border-color:rgba(242,85,59,.55)}
 
   /* rally calls */
   .live-mini{font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-ink);background:var(--accent);border:1.5px solid var(--ink);border-radius:2px;padding:1px 6px;vertical-align:2px}
@@ -959,6 +971,7 @@ const colLegs      = pcol("legs");   // crowdsourced walk-time samples between s
 const colRatings   = pcol("ratings"); // set ratings: doc id `userId__eventId`, {userId,eventId,score 0-10,createdAt}
 const colSafety    = pcol("safety");  // I'm-safe check-ins: doc id `userId__day`, {userId,day,checkedAt}
 const colCopresence = pcol("copresence"); // co-presence samples: doc id auto, {pair, by, near, at} — pair is sorted "uidA__uidB"
+const colMeetVotes = pcol("meetvotes"); // meetup sub-slot votes: doc id `userId__day__slotMin`, {userId,day,slot,createdAt}
 
 /* ---- App state ---- */
 const state = {
@@ -975,6 +988,7 @@ const state = {
   _allRatings: [],            // full ratings incl. future-scheduled (sim); gated into .ratings by time
   safety: [],                 // I'm-safe check-ins: [{id,userId,day,checkedAt}]
   copresence: [],             // co-presence samples: [{id,pair,by,near,at}]
+  meetVotes: [],              // meetup sub-slot votes: [{id,userId,day,slot}]
   menuOpen: false,
   locations: [],              // [{id(userId),name,lat,lng,acc,updatedAt}]
   pins: [],                   // [{id,ownerId,ownerName,label,type,lat,lng,shared,updatedAt}]
@@ -1587,6 +1601,10 @@ function subscribeAll(){
   onSnapshot(colCopresence, snap=>{
     state.copresence = snap.docs.map(d=>({id:d.id,...d.data()}));
     if(state.view==="crewdna" && !document.querySelector(".modal-bg")) renderView();
+  });
+  onSnapshot(colMeetVotes, snap=>{
+    state.meetVotes = snap.docs.map(d=>({id:d.id,...d.data()}));
+    if(state.view==="mine" && !document.querySelector(".modal-bg")) renderView();
   });
 }
 function activeCalls(){
@@ -4536,6 +4554,19 @@ function wireView(){
     const bNames=busy.map(id=>userName(id));
     state.modal={type:"meetwin",data:{day,mid:+mid,free:fNames,busy:bNames}}; renderModal();
   });
+  // Sub-slot voting: tap to add yourself, tap again to remove. Doc id = `userId__day__slot` for upsert/delete.
+  v.querySelectorAll("[data-vote]").forEach(b=>b.onclick=async(e)=>{
+    e.stopPropagation();
+    if(!state.user) return;
+    const [day,slot]=b.dataset.vote.split("|");
+    const slotN=+slot;
+    const id=`${state.user.id}__${day}__${slotN}`;
+    const existing=state.meetVotes.find(v=>v.id===id);
+    try{
+      if(existing){ await deleteDoc(dref("meetvotes",id)); }
+      else { await setDoc(dref("meetvotes",id), { userId:state.user.id, day, slot:slotN, createdAt:serverTimestamp() }); }
+    }catch(err){ toast("Couldn't update vote"); }
+  });
   // ---- rally calls ----
   const callNew=v.querySelector("#call-new"); if(callNew) callNew.onclick=()=>{ state.modal={type:"call"}; renderModal(); };
   v.querySelectorAll("[data-joincall]").forEach(b=>b.onclick=async()=>{ const c=state.calls.find(x=>x.id===b.dataset.joincall); if(c){ try{ await joinCall(c); }catch(e){ toast("Couldn’t update"); } } });
@@ -5689,7 +5720,7 @@ async function deleteUserAccount(userId){
 }
 async function wipeTestData(){
   if(!TEST_MODE) return;   // safety: only ever wipe the sandbox
-  for(const col of [colEvents, colPicks, colShifts, colPins, colLegs, colLocations, colCalls, colMessages, colRatings, colSafety, colCopresence]){
+  for(const col of [colEvents, colPicks, colShifts, colPins, colLegs, colLocations, colCalls, colMessages, colRatings, colSafety, colCopresence, colMeetVotes]){
     const snap=await getDocs(col);
     const ids=snap.docs.map(d=>d.id);
     for(let i=0;i<ids.length;i+=20){ await Promise.all(ids.slice(i,i+20).map(id=>deleteDoc(doc(col, id)))); }
@@ -6730,6 +6761,15 @@ function bestWindows(day, people, minLen){
   const n=people.length||1;
   // threshold: at least ~60% free (and at least 2), so it stays useful at scale
   const need=Math.max(2, Math.ceil(n*0.6));
+  // If 'day' is today, drop windows that have already ended — no use suggesting a past slot.
+  const today = currentFestivalDay();
+  let nowMin = -1;
+  if(day===today){
+    const now=new Date();
+    nowMin = now.getHours()*60 + now.getMinutes();
+    // late-night wrap: between rollover and noon, "today" is still last night → add a day
+    if(nowMin < MEET_START) nowMin += 24*60;
+  }
   const wins=[]; let i=0;
   while(i<prof.length){
     if(prof[i]>=need){
@@ -6737,7 +6777,16 @@ function bestWindows(day, people, minLen){
       while(j<prof.length && prof[j]>=need){ if(prof[j]>maxFree){ maxFree=prof[j]; peakIdx=j; } minFree=Math.min(minFree,prof[j]); j++; }
       const start=MEET_START+i*MEET_STEP, end=MEET_START+j*MEET_STEP, len=end-start;
       const peak=MEET_START+peakIdx*MEET_STEP;
-      if(len>=minLen) wins.push({day,start,end,len,minFree,maxFree,peak});
+      // Skip if entirely in the past today. If partly in past, clip to "now" so the window starts from now.
+      if(nowMin>=0 && end <= nowMin){ i=j; continue; }
+      let startEff=start, peakEff=peak;
+      if(nowMin>=0 && start < nowMin){
+        // round nowMin up to the next MEET_STEP boundary so window starts on a clean tick
+        startEff = Math.ceil(nowMin/MEET_STEP)*MEET_STEP;
+        if(peakEff < startEff) peakEff = startEff;
+      }
+      const lenEff = end - startEff;
+      if(lenEff>=minLen) wins.push({day,start:startEff,end,len:lenEff,minFree,maxFree,peak:peakEff});
       i=j;
     } else i++;
   }
@@ -6783,26 +6832,52 @@ function meetupCard(){
   const maxN=people.length||1;
   const wins=bestWindows(day,people,30).slice(0,6);
   const fmtLen=m=>{ const h=Math.floor(m/60),mm=m%60; return (h?h+"h":"")+(mm?(h?" ":"")+mm+"m":(h?"":"0m")); };
+  // Compute the user's own busy ranges so we can soft-mark sub-slots that clash with their picks.
+  const myBusy = state.user ? busyFor(state.user.id, day) : [];
+  const isMineBusy = (slotStart, slotEnd) => myBusy.some(([s,e])=>slotStart<e && slotEnd>s);
+  // Votes scoped to the current people set (so whole-group vs my-crew is respected).
+  const peopleSet = new Set(people);
   const winRows = wins.length ? wins.map(w=>{
     const {free}=whoFreeAt(day,w.peak,people);
     const names=free.map(id=>userName(id));
     const shown=names.slice(0,5).map(esc).join(", ")+(names.length>5?` +${names.length-5}`:"");
-    return `<button class="meet-row" data-meetwin="${day}|${w.peak}">
-      <div class="mr-left">
-        <div class="mr-time">${minToHM(w.start)} – ${minToHM(w.end)}</div>
-        <div class="mr-who">${shown}</div>
-      </div>
-      <div class="mr-right">
-        <div class="mr-count">${w.maxFree}<span>/${maxN}</span></div>
-        <div class="mr-len">${fmtLen(w.len)} free</div>
-      </div>
-    </button>`;
+    // Sub-slots: 15-min if window ≤ 60min, otherwise 30-min (capped per your spec).
+    const step = (w.end - w.start) <= 60 ? 15 : 30;
+    const slots=[];
+    for(let t=w.start; t<w.end; t+=step) slots.push(t);
+    const myId = state.user && state.user.id;
+    const subHtml = slots.length ? slots.map(t=>{
+      const tEnd = t+step;
+      // Count votes from people in scope only
+      const voters = state.meetVotes.filter(v=>v.day===day && v.slot===t && peopleSet.has(v.userId));
+      const count = voters.length;
+      const mine = !!voters.find(v=>v.userId===myId);
+      const clash = isMineBusy(t, tEnd);
+      const cls = ["sub-slot", mine?"on":"", clash?"clash":"", count>=Math.max(2, Math.ceil(maxN*0.5))?"hot":""].filter(Boolean).join(" ");
+      return `<button class="${cls}" data-vote="${day}|${t}" title="${minToHM(t)}–${minToHM(tEnd)}${clash?' · you have a pick here':''}">
+        <span class="ss-time">${minToHM(t)}</span>
+        ${count?`<span class="ss-count">${count}</span>`:""}
+      </button>`;
+    }).join("") : "";
+    return `<div class="meet-block">
+      <button class="meet-row" data-meetwin="${day}|${w.peak}">
+        <div class="mr-left">
+          <div class="mr-time">${minToHM(w.start)} – ${minToHM(w.end)}</div>
+          <div class="mr-who">${shown}</div>
+        </div>
+        <div class="mr-right">
+          <div class="mr-count">${w.maxFree}<span>/${maxN}</span></div>
+          <div class="mr-len">${fmtLen(w.len)} free</div>
+        </div>
+      </button>
+      ${subHtml ? `<div class="sub-slots">${subHtml}</div>` : ""}
+    </div>`;
   }).join("") : `<div class="find-note">No window where most of you are free today — schedules are packed! Use a rally call below to grab people in the moment.</div>`;
 
   return `<div class="free-card">
     <div class="free-head">Best times to meet</div>
     ${modeTabs}${dayTabs}
-    <div class="meet-sub"><span>Sorted by most people free, then longest. Tap one to see who & take action.</span>
+    <div class="meet-sub"><span>Tap the row to see who's free. Tap a time below it to vote — most-voted slots highlight.</span>
       <span class="meet-weigh">${maxN} ${state.meetMode==='crew'?'crew':'planned'}${state.meetMode==='crew'?` · <button class="link-btn" id="crew-edit">edit</button>`:''}</span></div>
     <div class="meet-list">${winRows}</div>
   </div>`;
