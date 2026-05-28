@@ -234,7 +234,7 @@
   .ach-when{font-family:"Anton";font-size:11px;color:var(--ink-2);letter-spacing:.04em}
   .dna-sig{background:var(--card);border:2px solid var(--ink);border-radius:var(--radius);padding:18px 18px 16px;margin-bottom:14px;box-shadow:var(--hard-sm)}
   .dna-sig .find-note{margin-bottom:4px}
-  .dna-sig h3{font-family:"Anton";font-size:26px;text-transform:uppercase;letter-spacing:.02em;margin:0;line-height:1.1;color:var(--accent)}
+  .dna-sig h3{font-family:"Anton";font-size:21px;letter-spacing:.01em;margin:0;line-height:1.2;color:var(--accent)}
   .dna-stats{display:grid;grid-template-columns:repeat(2, 1fr);gap:8px;margin-bottom:14px}
   .dna-stat{background:var(--card);border:1.5px solid var(--ink);border-radius:var(--radius-sm);padding:12px;text-align:center}
   .dna-stat .n{font-family:"Anton";font-size:24px;line-height:1;color:var(--ink)}
@@ -1176,11 +1176,11 @@ async function uncheckInSafe(){
   const day=safetyDayKey(); if(!day) return;
   await deleteDoc(dref("safety", state.user.id+"__"+day)).catch(()=>{});
 }
+// The check-in window: 11pm → 6am (late night only, never nags during the day).
+function inSafetyWindow(){ const h=new Date().getHours(); return h>=23 || h<6; }
 function safeCheckInCard(){
   if(!feat("safety")) return "";
-  // Show only late at night so it doesn't nag mid-day. After 22:00 OR if it's 00:00–05:59 (still "tonight" in festival logic).
-  const now=new Date(); const h=now.getHours();
-  if(h<22 && h>=DAY_ROLLOVER_HOUR) return "";
+  if(!inSafetyWindow()) return "";
   if(!safetyDayKey()) return "";
   const mine=mySafetyToday();
   if(mine){
@@ -1196,6 +1196,7 @@ function safeCheckInCard(){
 }
 function safetyCrewCard(){
   if(!feat("safety")) return "";
+  if(!inSafetyWindow()) return "";
   const day=safetyDayKey(); if(!day) return "";
   const checked=state.safety.filter(s=>s.day===day);
   if(!checked.length) return "";
@@ -1980,10 +1981,7 @@ function ratingRow(ev){
   </div>`;
 }
 function attendeeChips(goers){
-  const names = goers.map(g=>{
-    const u = state.users.find(x=>x.id===g.userId);
-    return { id:g.userId, name:u?u.name:"?" };
-  });
+  const names = goers.map(g=>({ id:g.userId, name:userName(g.userId) }));
   return names.map(n=>`<span class="goer ${n.id===state.user.id?'me':''}">${esc(n.name)}</span>`).join("");
 }
 function groupByDay(list){
@@ -2255,15 +2253,22 @@ function homeDuring(){
     }
   }
   cards.push(nextCard);
-  cards.push(reachCard());
-  cards.push(energyNudgeCard());
-  cards.push(paceCard());
-  cards.push(tomorrowYouCard());
-  cards.push(safeCheckInCard());
+  // ADVISORY cards (nudges/suggestions) — cap how many show at once so Home stays curated.
+  // Priority order: reach (actionable now) > energy/pace (wellbeing) > tomorrow (planning) > weather nudge.
+  const ADVISORY_MAX = 2;
+  const advisories = [];
+  advisories.push(reachCard());
+  const energyHtml = energyNudgeCard();
+  if(energyHtml) advisories.push(energyHtml);
+  else advisories.push(paceCard());          // pace only if energy isn't already nudging
+  advisories.push(tomorrowYouCard());
+  advisories.push(weatherNudgeCard());
+  const shownAdvisories = advisories.filter(Boolean).slice(0, ADVISORY_MAX);
+  shownAdvisories.forEach(c=>cards.push(c));
 
-  // weather strip + clash resolver (both auto-hide when empty)
+  // ESSENTIAL cards — always shown (safety, weather strip, clashes)
+  cards.push(safeCheckInCard());
   cards.push(weatherCard());
-  cards.push(weatherNudgeCard());
   cards.push(clashWarnCard());
 
   // 2) ON NOW across the festival (your areas/picks first feel: just show a few)
@@ -2415,7 +2420,7 @@ function setRecs(limit){
     if(!peerCount[e.id]) return false;                // nobody's going
     const ss=eventStart(e); if(ss && ss.getTime()<now-30*60000) return false;  // already passed
     return freeFor(e);                                // you're free
-  }).map(e=>({e, n:peerCount[e.id], who:state.picks.filter(p=>p.eventId===e.id && peerSet.has(p.userId)).map(p=>{const u=state.users.find(x=>x.id===p.userId);return u?u.name:"?";})}))
+  }).map(e=>({e, n:peerCount[e.id], who:state.picks.filter(p=>p.eventId===e.id && peerSet.has(p.userId)).map(p=>userName(p.userId))}))
     .sort((a,b)=> b.n-a.n || (eventStart(a.e)?.getTime()||0)-(eventStart(b.e)?.getTime()||0));
   return limit?recs.slice(0,limit):recs;
 }
@@ -3188,7 +3193,7 @@ function openOracle(eventId){
   const crewPicks = state.picks.filter(p=>p.eventId===ev.id && p.userId!==state.user.id);
   const crewMusts  = crewPicks.filter(p=>p.mustSee);
   const crewPlain  = crewPicks.filter(p=>!p.mustSee);
-  const nameOf = id => { const u=state.users.find(x=>x.id===id); return u?u.name:"Friend"; };
+  const nameOf = id => userName(id);
   const formatNames = (list, limit) => {
     if(!list.length) return "";
     if(list.length<=limit) return list.length===1 ? list[0] : list.length===2 ? `${list[0]} and ${list[1]}` : `${list.slice(0,-1).join(", ")} and ${list[list.length-1]}`;
@@ -3683,16 +3688,40 @@ function crewDNA(){
     }).filter(x=>x.ev).sort((a,b)=> b.scores.length-a.scores.length || a.spread-b.spread || b.avg-a.avg)[0];
     if(top) dna.unanimous = top;
   }
-  // Signature line — templated from what we have
-  const parts = [];
+  // Signature line — a natural sentence assembled from real signals (not a Mad-Lib).
+  // Computes a couple of extra characteristics for flavour.
+  const allScores = state.ratings.map(r=>r.score);
+  const avgScore = allScores.length ? allScores.reduce((a,b)=>a+b,0)/allScores.length : null;
+  // generosity
+  let generosity="";
+  if(avgScore!=null){
+    generosity = avgScore>=8.2 ? "easily pleased" : avgScore>=7 ? "warm-hearted" : avgScore>=5.5 ? "fair but firm" : "hard to impress";
+  }
+  // time-of-day character (richer than before)
+  let timeChar="";
   if(dna.peakHour){
     const h=dna.peakHour.h;
-    const band = h<10 ? "early-rising" : h<14 ? "morning-loving" : h<18 ? "afternoon-anchored" : h<22 ? "evening-peaking" : "late-blooming";
-    parts.push(band);
+    timeChar = h<8 ? "dawn chasers" : h<12 ? "early risers" : h<16 ? "afternoon souls" : h<20 ? "golden-hour people" : h<23 ? "night owls" : "creatures of the small hours";
   }
-  if(dna.tagTop) parts.push(`${dna.tagTop.tag}-led`);
-  if(dna.homeStage) parts.push(`${dna.homeStage.stage}-loyal`);
-  dna.signature = parts.length ? parts.join(", ") : "";
+  // taste anchor
+  let tasteAnchor="";
+  if(dna.tagTop){
+    const t=dna.tagTop.tag;
+    const map={ vibe:"chasing a feeling", sound:"in it for the sound", crowd:"there for the crowd", surprise:"hunting the unexpected", dancing:"only happy when dancing" };
+    tasteAnchor = map[t] || `drawn to the ${t}`;
+  }
+  // assemble: "Night owls, in it for the sound, easily pleased — and loyal to Lion's Den."
+  const lead=[];
+  if(timeChar) lead.push(timeChar[0].toUpperCase()+timeChar.slice(1));
+  if(tasteAnchor) lead.push(tasteAnchor);
+  if(generosity) lead.push(generosity);
+  let sentence = lead.join(", ");
+  if(dna.homeStage){
+    sentence += sentence ? ` — and loyal to ${dna.homeStage.stage}.` : `Loyal to ${dna.homeStage.stage}.`;
+  } else if(sentence){
+    sentence += ".";
+  }
+  dna.signature = sentence;
   return dna;
 }
 function viewCrewDNA(){
@@ -3707,7 +3736,7 @@ function viewCrewDNA(){
   // Signature personality line
   if(d.signature){
     const cap = d.signature[0].toUpperCase()+d.signature.slice(1);
-    blocks.push(`<div class="dna-sig"><div class="find-note">The crew, in three words</div><h3>${esc(cap)}.</h3></div>`);
+    blocks.push(`<div class="dna-sig"><div class="find-note">The crew, in a nutshell</div><h3>${esc(cap)}</h3></div>`);
   }
   // Headline stats
   const stats = [];
@@ -4103,6 +4132,8 @@ function viewAdmin(){
         <div class="test-step"><span class="ts-n">2</span><div><b>Generate lineup</b><div class="find-note">~25 acts over ~8 hours around now, with clashes, spread across <b>whatever stages exist</b> — your custom ones or the placeholders. Keeps your stages &amp; walk-data. ${actCount?`<span style="color:var(--teal)">✓ ${actCount} acts</span>`:''}</div></div></div>
         <button class="btn lime block" id="test-lineup" ${stageCount?'':'disabled'} style="margin-bottom:6px">${actCount?'Regenerate lineup':'Generate lineup'}</button>
         ${stageCount?'':`<div class="find-note" style="margin-bottom:12px">Set up at least one stage first (custom or placeholder).</div>`}
+        <div class="test-step"><span class="ts-n">3</span><div><b>Simulate a busy crew</b><div class="find-note">Adds ~5 fake friends with picks, ratings, check-ins &amp; co-presence so the social features (crowd radar, Crew DNA, togetherness, faves) light up without needing other phones. ${actCount?'':'<span style="color:var(--accent)">generate a lineup first</span>'}</div></div></div>
+        <button class="btn block" id="test-sim" ${actCount?'':'disabled'} style="margin-bottom:6px;background:var(--violet);color:#fff">Simulate busy crew</button>
         <div style="border-top:1px solid var(--line);margin:14px 0 12px"></div>
         <button class="btn ghost block" id="test-wipe" style="margin-bottom:8px">Wipe all test data</button>
         <button class="btn block" id="test-exit2" style="background:var(--ink);color:var(--paper)">Exit test mode</button>
@@ -4271,8 +4302,8 @@ function wireView(){
   v.querySelectorAll("[data-meetwin]").forEach(b=>b.onclick=()=>{
     const [day,mid]=b.dataset.meetwin.split("|");
     const people=meetPeople(); const {free,busy}=whoFreeAt(day,+mid,people);
-    const fNames=free.map(id=>{const u=state.users.find(x=>x.id===id);return u?u.name:"?";});
-    const bNames=busy.map(id=>{const u=state.users.find(x=>x.id===id);return u?u.name:"?";});
+    const fNames=free.map(id=>userName(id));
+    const bNames=busy.map(id=>userName(id));
     state.modal={type:"meetwin",data:{day,mid:+mid,free:fNames,busy:bNames}}; renderModal();
   });
   // ---- rally calls ----
@@ -4445,6 +4476,13 @@ function wireView(){
     tLineup.disabled=true; tLineup.textContent="Generating…";
     try{ await generateTestLineup(); toast("Lineup ready — check Home & On now"); renderApp(); }
     catch(e){ tLineup.disabled=false; tLineup.textContent="Generate lineup"; toast(e.message==="no-stages"?"Create test stages first":"Couldn't generate — try again"); }
+  };
+  const tSim=v.querySelector("#test-sim");
+  if(tSim) tSim.onclick=async()=>{
+    if(!confirm("Add ~5 fake friends with picks, ratings, check-ins and co-presence to the sandbox? Lets you see the social features working. Real festival untouched; 'Wipe test data' clears it all.")) return;
+    tSim.disabled=true; tSim.textContent="Simulating…";
+    try{ await simulateCrew(); toast("Fake crew added — check Group, Crew DNA, crowd radar"); renderApp(); }
+    catch(e){ tSim.disabled=false; tSim.textContent="Simulate busy crew"; toast("Couldn't simulate — try again"); }
   };
   const tWipe=v.querySelector("#test-wipe");
   if(tWipe) tWipe.onclick=async()=>{
@@ -5166,6 +5204,65 @@ async function generateTestLineup(){
   //  more than one act on the same stage at once; clashes only ever occur across stages.)
   for(const e of ev){ await addDoc(colEvents, {...e, createdAt:serverTimestamp()}); }
 }
+// Test-only: populate fake crew activity so social features can be seen without other phones.
+async function simulateCrew(){
+  if(!TEST_MODE) return;
+  // Clear any prior simulated crew so repeated runs don't pile up.
+  try{
+    const usnap=await getDocs(colUsers);
+    const oldSim=usnap.docs.filter(d=>d.data().sim===true).map(d=>d.id);
+    for(const uid of oldSim){
+      await deleteDoc(dref("users",uid)).catch(()=>{});
+      // their picks/ratings/safety use `uid__...` doc ids
+      for(const col of [colPicks, colRatings, colSafety]){
+        const snap=await getDocs(col);
+        const mine=snap.docs.filter(d=>d.id.startsWith(uid+"__")).map(d=>d.id);
+        for(let i=0;i<mine.length;i+=20){ await Promise.all(mine.slice(i,i+20).map(id=>deleteDoc(doc(col,id)))); }
+      }
+    }
+  }catch(e){}
+  const NAMES=["Sam","Jo","Mira","Theo","Nadia"];
+  const TAGS=["vibe","sound","crowd","surprise","dancing"];
+  // Pull the current test events to attach picks/ratings to.
+  const esnap=await getDocs(colEvents);
+  const events=esnap.docs.map(d=>({id:d.id, ...d.data()}));
+  if(!events.length) throw new Error("no-events");
+  const now=Date.now();
+  const past=events.filter(e=>{ const en=eventEnd(e); return en && en.getTime()<=now; });
+  const future=events.filter(e=>{ const st=eventStart(e); return st && st.getTime()>now; });
+  const day=currentFestivalDay();
+  const pick=(arr,n)=>{ const c=[...arr]; const out=[]; while(c.length&&out.length<n){ out.push(c.splice(Math.floor(Math.random()*c.length),1)[0]); } return out; };
+
+  for(let i=0;i<NAMES.length;i++){
+    const uid="sim_"+i+"_"+Math.random().toString(36).slice(2,7);
+    // fake user doc
+    await setDoc(dref("users", uid), { name:NAMES[i], admin:false, color:AREA_COLORS[i%AREA_COLORS.length], sim:true });
+    // picks: a mix of future (for crowd radar / going counts) + past (so they can be rated)
+    const theirFuture=pick(future, 3+Math.floor(Math.random()*3));
+    const theirPast=pick(past, 2+Math.floor(Math.random()*3));
+    for(const e of [...theirFuture, ...theirPast]){
+      await setDoc(dref("picks", uid+"__"+e.id), { userId:uid, eventId:e.id, mustSee:Math.random()<0.3, createdAt:serverTimestamp() }, {merge:true});
+    }
+    // ratings on past picks (with tags) → feeds faves, stage personality, Crew DNA
+    for(const e of theirPast){
+      const score=Math.round((5+Math.random()*5)*2)/2;   // 5.0–10.0 in .5 steps
+      const tags=pick(TAGS, Math.floor(Math.random()*3));
+      await setDoc(dref("ratings", uid+"__"+e.id), { userId:uid, eventId:e.id, score, tags, createdAt:serverTimestamp() }, {merge:true});
+    }
+    // a safe check-in for tonight (so the crew safety card shows people)
+    if(day && Math.random()<0.7){
+      await setDoc(dref("safety", uid+"__"+day), { userId:uid, day, checkedAt:serverTimestamp() }, {merge:true});
+    }
+    // co-presence with ME (so togetherness shows real minutes) — a few buckets
+    if(state.user){
+      const pair=[state.user.id, uid].sort().join("__");
+      const buckets=2+Math.floor(Math.random()*6);
+      for(let b=0;b<buckets;b++){
+        await addDoc(colCopresence, { pair, bucket:Math.floor((now-b*2*60000)/(2*60000)), by:uid, near:state.user.id, dist:10+Math.floor(Math.random()*20), at:serverTimestamp() });
+      }
+    }
+  }
+}
 // Admin: remove a user account and all the data tied to them (picks, shared location, personal pins).
 async function deleteUserAccount(userId){
   // picks (doc ids are `userId__eventId`, plus a userId field)
@@ -5192,6 +5289,12 @@ async function wipeTestData(){
     const ids=snap.docs.map(d=>d.id);
     for(let i=0;i<ids.length;i+=20){ await Promise.all(ids.slice(i,i+20).map(id=>deleteDoc(doc(col, id)))); }
   }
+  // remove simulated fake users (keep real test accounts intact)
+  try{
+    const usnap=await getDocs(colUsers);
+    const simIds=usnap.docs.filter(d=>d.data().sim===true).map(d=>d.id);
+    for(let i=0;i<simIds.length;i+=20){ await Promise.all(simIds.slice(i,i+20).map(id=>deleteDoc(dref("users",id)))); }
+  }catch(e){}
   // reset the sandbox structure doc
   try{ await deleteDoc(refStructure); }catch(e){}
 }
@@ -6209,7 +6312,7 @@ function meetupCard(){
   const fmtLen=m=>{ const h=Math.floor(m/60),mm=m%60; return (h?h+"h":"")+(mm?(h?" ":"")+mm+"m":(h?"":"0m")); };
   const winRows = wins.length ? wins.map(w=>{
     const {free}=whoFreeAt(day,w.peak,people);
-    const names=free.map(id=>{const u=state.users.find(x=>x.id===id);return u?u.name:"?";});
+    const names=free.map(id=>userName(id));
     const shown=names.slice(0,5).map(esc).join(", ")+(names.length>5?` +${names.length-5}`:"");
     return `<button class="meet-row" data-meetwin="${day}|${w.peak}">
       <div class="mr-left">
@@ -6251,7 +6354,7 @@ function callsCard(){
   const mineActive = calls.some(c=>c.userId===state.user.id);
   const list = calls.length ? calls.map(c=>{
     const ins=(c.in||[]); const joined=ins.includes(state.user.id); const mine=c.userId===state.user.id;
-    const names=ins.map(id=>{ const u=state.users.find(x=>x.id===id); return u?u.name:"?"; });
+    const names=ins.map(id=>userName(id));
     return `<div class="call-row">
       <div class="call-main"><div class="call-title">${callText(c)}</div>
         <div class="call-sub">${esc(c.name||'?')} · ${ins.length} in${ins.length?': '+names.slice(0,4).map(esc).join(", ")+(names.length>4?` +${names.length-4}`:''):''}</div></div>
