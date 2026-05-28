@@ -145,6 +145,16 @@
   .depart-act{font-weight:800;font-size:16px;margin-top:8px}
   .depart-meta{font-size:12.5px;opacity:.85;margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
   .depart-warn{margin-top:10px;background:var(--accent);color:#fff;font-weight:800;font-size:12px;padding:5px 10px;border-radius:7px;display:inline-block;text-transform:uppercase;letter-spacing:.04em}
+  .depart-ok{margin-top:10px;color:var(--ink-2);font-weight:700;font-size:12px}
+  .tf-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+  .tf-row:first-child{border-top:none}
+  .tf-route{flex:1;min-width:0}
+  .tf-stages{font-weight:700;font-size:14px}
+  .tf-arrow{color:var(--muted);margin:0 2px}
+  .tf-detail{font-size:11.5px;color:var(--ink-2);margin-top:2px}
+  .tf-badge{flex:none;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;padding:4px 9px;border-radius:999px;color:#fff}
+  .tf-badge.busy{background:var(--gold)}
+  .tf-badge.slow{background:var(--accent)}
   .clash-warn{display:flex;align-items:center;gap:12px;width:100%;background:var(--accent);color:#fff;border:2px solid var(--ink);border-radius:var(--radius);
     padding:13px 14px;margin-bottom:14px;cursor:pointer;font:inherit;text-align:left;-webkit-tap-highlight-color:transparent;box-shadow:var(--hard-sm)}
   .clash-warn .cw-ico{flex:none;font-size:22px;line-height:1}
@@ -1022,7 +1032,7 @@ const ADMIN_FEATURES = [
   ["diary",       "Festival diary",          "A timeline of your weekend written from your real data — no fluff, just truth"],
   ["tomorrowyou", "Tomorrow you advisor",    "Evening card with a short prediction for tomorrow based on your patterns"],
   ["moodring",    "Mood ring on ratings",    "Colours your top sets by their survey tags — visual fingerprint of your taste"],
-  ["pacer",       "Pace tracker",            "Subtle nudge if you're walking slower than usual — body trying to tell you something"],
+  ["pacer",       "Pace &amp; traffic",         "Flags when you're walking slower than usual — and a Site traffic page showing routes that look busy for everyone"],
   ["oracle",      "Should-I-go oracle",      "Tap any future act for a quick verdict: walk, clash, crowd, weather"],
   ["achievements","Hidden achievements",     "Tiny celebratory pop-ups when you hit milestones (first 10/10, first night under 4h sleep, etc.)"],
   ["crewdna",     "Crew DNA",                "A shared portrait of the whole group — peak hour, signature tag, the contrarian"],
@@ -1473,8 +1483,12 @@ document.addEventListener("visibilitychange", ()=>{
   }
   if(navigator.onLine) refreshWeather().catch(()=>{});
   rebindOrientation && find.orientBound && rebindOrientation();   // compass often stalls across backgrounding — re-bind
+  try{ ensureShareAlive(); }catch(e){}               // GPS interval can be killed while backgrounded — restart + fresh fix
 });
-window.addEventListener("focus", ()=>{ if(state.user && find.orientBound) { try{ rebindOrientation(); }catch(e){} } });
+window.addEventListener("focus", ()=>{
+  if(state.user && find.orientBound) { try{ rebindOrientation(); }catch(e){} }
+  try{ ensureShareAlive(); }catch(e){}
+});
 // Lightweight compass watchdog: every 3s, if Find is open and orientation has gone quiet, re-bind.
 setInterval(()=>{ try{ checkOrientationAlive(); }catch(e){} }, 3000);
 
@@ -1828,6 +1842,7 @@ function openMenu(){
   const weekend=[];
   weekend.push(["profile","Your profile"]);
   if(locationEnabled()) weekend.push(["trail","Where were you?"]);
+  if(locationEnabled() && adminFeat("pacer")) weekend.push(["traffic","Site traffic"]);
   if(festivalStart() && festivalPhase()!=="before") weekend.push(["recap","Festival recap"]);
   if(festivalStart() && festivalPhase()!=="before" && adminFeat("diary")) weekend.push(["diary","Festival diary"]);
   if(adminFeat("achievements")) weekend.push(["achievements","Achievements"]);
@@ -1945,6 +1960,7 @@ function renderView(){
   else if(state.view==="admin") v.innerHTML = viewAdmin();
   else if(state.view==="profile") v.innerHTML = viewProfile();
   else if(state.view==="trail") v.innerHTML = viewTrail();
+  else if(state.view==="traffic") v.innerHTML = viewTraffic();
   else if(state.view==="recap") v.innerHTML = viewRecap();
   else if(state.view==="diary") v.innerHTML = viewDiary();
   else if(state.view==="achievements") v.innerHTML = viewAchievements();
@@ -2264,13 +2280,25 @@ function homeDuring(){
         // departure-board style countdown to your next pick
         const h=Math.floor(np.mins/60), m=np.mins%60;
         const big = np.mins<60 ? `${np.mins}<small>min</small>` : `${h}<small>h</small> ${String(m).padStart(2,"0")}<small>m</small>`;
-        const leaveSoon = walk && np.mins<=20;   // nudge if it's close and there's a walk
+        // Real "leave in X": minutes until the set − walk-time to get there.
+        let leaveLine = "";
+        const st = stagesWithCoords().find(s=>s.name===np.ev.stageName);
+        if(st && find.pos){
+          const sec = walkSecondsFromPos(find.pos, st.id);
+          if(sec!=null){
+            const walkMin = Math.max(1, Math.round(sec/60));
+            const leaveIn = np.mins - walkMin;
+            if(leaveIn<=0) leaveLine = `<div class="depart-warn">Leave now — ~${walkMin} min walk, starts in ${np.mins} min</div>`;
+            else if(leaveIn<=15) leaveLine = `<div class="depart-warn">Leave in ${leaveIn} min (~${walkMin} min walk)</div>`;
+            else leaveLine = `<div class="depart-ok">Leave in ~${leaveIn} min · ${walkMin} min walk</div>`;
+          }
+        }
         nextCard=`<div class="depart-card">
           <div class="depart-head"><span class="depart-lbl">Starts in</span><span class="depart-at">${esc(fmt12(np.ev.start))}</span></div>
           <div class="depart-time">${big}</div>
           <div class="depart-act">${esc(np.ev.title)}</div>
           <div class="depart-meta"><span class="area-tag" style="--c:${districtColor(np.ev.districtId)}">${esc(np.ev.districtName)}</span> ${esc(np.ev.stageName)}${walk?` · ${walk}`:""}</div>
-          ${leaveSoon?`<div class="depart-warn">Leave soon to make it</div>`:""}
+          ${leaveLine}
           ${(locationEnabled()&&stagesWithCoords().some(s=>s.name===np.ev.stageName))?`<button class="btn lime sm" data-goto-stage="${esc(np.ev.stageName)}" style="margin-top:10px">Point me there →</button>`:""}
         </div>`;
       }
@@ -2603,7 +2631,9 @@ async function refreshWeather(){
 
 /* ---------- CLASH RESOLVER ---------- */
 // group a day's picks into clusters of mutually-overlapping events
-function clashClusters(day){
+function clashClusters(day, opts){
+  const futureOnly = opts && opts.futureOnly;
+  const now=Date.now();
   const ids=myPickIds();
   let list=sortEvents(state.events.filter(e=>ids.has(e.id)&&e.day===day))
     .map(e=>({e, r:timeRangeMin(e)}));
@@ -2628,7 +2658,12 @@ function clashClusters(day){
   });
   if(cur && cur.length>1) clusters.push(cur);
   // only keep clusters that contain at least one real pick (not shift-only)
-  return clusters.filter(c=>c.some(x=>!x.isShift));
+  let out = clusters.filter(c=>c.some(x=>!x.isShift));
+  // for live/actionable views: drop clusters where every act has already ended (can't act on them)
+  if(futureOnly){
+    out = out.filter(c=> c.some(x=>{ const en=eventEnd(x.e); return !en || en.getTime()>now; }));
+  }
+  return out;
 }
 function walkMinBetween(aName,bName){
   const sa=stagesWithCoords().find(s=>s.name===aName), sb=stagesWithCoords().find(s=>s.name===bName);
@@ -2845,7 +2880,7 @@ function clashWarnCard(){
   const ids=myPickIds();
   const days=DAYS.filter(d=> state.events.some(e=>ids.has(e.id)&&e.day===d));
   let n=0;
-  days.forEach(d=>{ n += clashClusters(d).length; });
+  days.forEach(d=>{ n += clashClusters(d,{futureOnly:true}).length; });
   if(!n) return "";
   return `<button class="clash-warn tappable" id="home-clashwarn" aria-label="See clash advice">
     <span class="cw-ico" aria-hidden="true">⚠</span>
@@ -2857,7 +2892,7 @@ function clashCard(limit){
   const ids=myPickIds();
   const days=DAYS.filter(d=> state.events.some(e=>ids.has(e.id)&&e.day===d));
   const clusters=[];
-  days.forEach(d=>{ clashClusters(d).forEach(c=>clusters.push({day:d, items:c})); });
+  days.forEach(d=>{ clashClusters(d,{futureOnly:true}).forEach(c=>clusters.push({day:d, items:c})); });
   if(!clusters.length) return "";
   const cap = (typeof limit==="number") ? limit : clusters.length;
   const rows=clusters.slice(0,cap).map(c=>{
@@ -2925,12 +2960,15 @@ function viewMine(){
   const ids = myPickIds();
   let list = sortEvents(state.events.filter(e=>ids.has(e.id)));
   const shifts = (state.shifts||[]).slice();
-  // clash detection (picks vs picks, and picks vs my shifts)
+  // clash detection (picks vs picks, and picks vs my shifts).
+  // Only flag clashes that are still actionable — once both acts have ended, it's not a live clash.
+  const _now=Date.now();
+  const notEnded = e => { const en=eventEnd(e); return !en || en.getTime()>_now; };
   const clashSet = new Set();
   for(let i=0;i<list.length;i++) for(let j=i+1;j<list.length;j++){
-    if(overlaps(list[i],list[j])){ clashSet.add(list[i].id); clashSet.add(list[j].id); }
+    if(overlaps(list[i],list[j]) && (notEnded(list[i])||notEnded(list[j]))){ clashSet.add(list[i].id); clashSet.add(list[j].id); }
   }
-  shifts.forEach(sh=>{ list.forEach(e=>{ if(overlaps({day:sh.day,start:sh.start,end:sh.end||addHour(sh.start)}, e)){ clashSet.add(e.id); clashSet.add("sh:"+sh.id); } }); });
+  shifts.forEach(sh=>{ list.forEach(e=>{ if(overlaps({day:sh.day,start:sh.start,end:sh.end||addHour(sh.start)}, e) && notEnded(e)){ clashSet.add(e.id); clashSet.add("sh:"+sh.id); } }); });
   const daysActive = new Set([...list.map(e=>e.day), ...shifts.map(s=>s.day)]).size;
 
   const addShiftBtn = feat("shifts") ? `<button class="btn ghost sm no-print" id="add-shift" style="flex:none">＋ Shift</button>` : "";
@@ -2941,10 +2979,11 @@ function viewMine(){
       ${emptyState("","Nothing picked yet","Go to Browse and tap the ✓ on acts you want to catch."+(feat("shifts")?" Working the festival? Add a private shift with ＋ Shift.":""))}`;
   }
 
-  // group BOTH events and shifts by day
+  // group BOTH events and shifts by day. Use festMin so post-midnight (late-night) times
+  // sort AFTER the evening, not before the afternoon (00:30 belongs at the end of the night).
   const byDay={}; DAYS.forEach(d=>byDay[d]=[]);
-  list.forEach(e=>byDay[e.day]&&byDay[e.day].push({kind:"ev",ev:e,t:toMin(e.start)}));
-  shifts.forEach(sh=>byDay[sh.day]&&byDay[sh.day].push({kind:"shift",sh,t:toMin(sh.start)}));
+  list.forEach(e=>byDay[e.day]&&byDay[e.day].push({kind:"ev",ev:e,t:festMin(e.start)}));
+  shifts.forEach(sh=>byDay[sh.day]&&byDay[sh.day].push({kind:"shift",sh,t:festMin(sh.start)}));
   Object.values(byDay).forEach(arr=>arr.sort((a,b)=>a.t-b.t));
 
   let nextCard="";
@@ -4022,7 +4061,7 @@ function viewTrail(){
     <div class="find-note" style="display:flex;justify-content:space-between;margin-top:4px">
       <span>● Start ${fmtT(start.t)}</span><span style="color:var(--accent)">● Latest ${fmtT(end.t)}</span>
     </div>
-    <div class="find-note" style="margin-top:8px">${trail.length} points · straight lines between them, not exact paths. Coloured dots are pinned stages for reference.</div>`;
+    <div class="find-note" style="margin-top:8px">${trail.length} points · joined in order you visited them. Coloured dots are pinned stages for reference. Records best while the app is open — phones pause location for backgrounded apps, so gaps mean the app was closed or minimised.</div>`;
   }
   return head+`
     <div class="card">
@@ -4030,6 +4069,27 @@ function viewTrail(){
       ${chart}
       <button class="btn ghost block" id="trail-clear" style="margin-top:12px">Clear my trail</button>
     </div>`;
+}
+function viewTraffic(){
+  const head=`<div class="sec-head"><div><h2>Site traffic</h2><div class="lead">Routes looking busy right now, from how long people are taking to walk them.</div></div></div>`;
+  const routes=routeCongestion();
+  if(!routes.length){
+    return head+emptyState("","All clear","No routes are walking slower than usual right now. As people move around the site, busy stretches will show up here. Needs a few walks logged on a route before it can tell.");
+  }
+  const rows=routes.map(r=>{
+    const extra=Math.max(0, r.recentMin-r.baselineMin);
+    const badge = r.level==="slow" ? `<span class="tf-badge slow">Slow going</span>` : `<span class="tf-badge busy">Busy</span>`;
+    return `<div class="tf-row">
+      <div class="tf-route">
+        <div class="tf-stages">${esc(r.a.name)} <span class="tf-arrow">↔</span> ${esc(r.b.name)}</div>
+        <div class="tf-detail">~${r.recentMin} min now · usually ~${r.baselineMin} min${extra?` · +${extra} min`:""} · ${r.walkers} walking</div>
+      </div>
+      ${badge}
+    </div>`;
+  }).join("");
+  return head+`
+    <div class="card">${rows}</div>
+    <div class="find-note" style="margin-top:12px">Based on recent walk-times across everyone sharing location, compared to each route's usual pace. A rough signal — treat it as "looks busy", not gospel. Quiet routes simply aren't listed.</div>`;
 }
 function viewProfile(){
   const u=state.user;
@@ -4341,6 +4401,16 @@ function wireView(){
     // Compass re-enable affordance: iOS needs a fresh user gesture for orientation permission
     // after any page reload (e.g. entering/leaving test mode). GPS can auto-resume; compass can't.
     const cen=v.querySelector("#compass-enable"); if(cen) cen.onclick=()=>{ enableFind(); };
+    const creb=v.querySelector("#compass-rebind"); if(creb) creb.onclick=()=>{
+      // A real user gesture is the most reliable way to wake iOS sensors. Re-request permission
+      // if applicable, then rebind. Clear the stalled flag and reset escalation.
+      find.orientStalled=false; find._orientRebinds=0;
+      try{
+        if(typeof DeviceOrientationEvent!=="undefined" && typeof DeviceOrientationEvent.requestPermission==="function"){
+          DeviceOrientationEvent.requestPermission().then(()=>{ rebindOrientation(); renderView(); }).catch(()=>{ rebindOrientation(); renderView(); });
+        } else { rebindOrientation(); renderView(); }
+      }catch(e){ rebindOrientation(); }
+    };
     if(find.enabledOnce && !find.started && !find.error && locationEnabled()){
       // does this device gate orientation behind requestPermission (iOS 13+)?
       const needsGesture = typeof DeviceOrientationEvent!=="undefined" && typeof DeviceOrientationEvent.requestPermission==="function";
@@ -4946,7 +5016,7 @@ let find = { started:false, enabledOnce: localStorage.getItem("fp_findon")==="1"
              pos:null, acc:null, heading:null, hasOrientation:false, headingMode:"auto", target:null, error:null,
              show:{stages:true,people:true,pins:true}, share:false, shareTimer:null, myUpdated:0, lastWrite:0,
              lost:false, autoStopAt:0, autoStopTimer:null, packingSubbed:false, notify:false, notifyTimers:[], notifiedChanges:{}, notifiedMentions:{}, notifiedCalls:{}, sessionStart:Date.now(), orientNeedsGesture:false,
-             seedActive:false, seedFrom:null, seedStartT:0, seedPt:null, seedDist:0, seedWatch:null, seedClock:null, orientLastEvent:0 };
+             seedActive:false, seedFrom:null, seedStartT:0, seedPt:null, seedDist:0, seedWatch:null, seedClock:null, orientLastEvent:0, _orientRebinds:0, orientStalled:false };
 
 const R_EARTH = 6371000;
 const toRad = d => d*Math.PI/180, toDeg = r => r*180/Math.PI;
@@ -5018,6 +5088,47 @@ function trackTrip(pos, acc){
   }
 }
 const legKey=(a,b)=> a<b ? a+"__"+b : b+"__"+a;   // undirected pair
+// ---- Route congestion: cross-reference recent walk times across everyone vs the route's baseline ----
+// A single slow walker is ambiguous; several slow walkers on the same route right now is congestion.
+const CONGESTION_RECENT_MS = 45*60*1000;   // "recent" window
+function routeCongestion(){
+  if(!adminFeat("pacer")) return [];
+  if(!state.legs || !state.legs.length) return [];
+  const now=Date.now();
+  const byPair={};
+  state.legs.forEach(l=>{
+    if(!l.pair || !l.sec) return;
+    const ts = (typeof l.tms==="number") ? l.tms : (l.at && l.at.toMillis ? l.at.toMillis() : null);
+    if(!byPair[l.pair]) byPair[l.pair]={all:[], recent:[], walkers:new Set()};
+    byPair[l.pair].all.push(l.sec);
+    if(ts && now-ts <= CONGESTION_RECENT_MS){ byPair[l.pair].recent.push(l.sec); byPair[l.pair].walkers.add(l.by||"?"); }
+  });
+  const out=[];
+  Object.entries(byPair).forEach(([pair,g])=>{
+    if(g.recent.length<1 || g.all.length<2) return;
+    const baseline=median(g.all), recent=median(g.recent);
+    if(!baseline || !recent) return;
+    const ratio=recent/baseline;
+    const walkers=g.walkers.size;
+    // Honesty gate: need either 2+ recent walkers, OR one walker who's dramatically slower.
+    const trustworthy = walkers>=2 || ratio>=1.6;
+    if(!trustworthy) return;
+    if(ratio < 1.25) return;                       // not meaningfully slower
+    const [a,b]=pair.split("__");
+    const sa=stagesWithCoords().find(s=>s.id===a), sb=stagesWithCoords().find(s=>s.id===b);
+    if(!sa||!sb) return;                            // need named stages
+    out.push({
+      pair, a:sa, b:sb, ratio, walkers,
+      baselineMin:Math.round(baseline/60), recentMin:Math.round(recent/60),
+      level: ratio>=1.5 ? "slow" : "busy"
+    });
+  });
+  return out.sort((x,y)=> y.ratio-x.ratio);
+}
+function congestionForRoute(aId,bId){
+  const key=legKey(aId,bId);
+  return routeCongestion().find(r=>r.pair===key) || null;
+}
 // ---- Pace tracker: today's walk legs vs your historical baseline ----
 async function recordLeg(a,b,sec,dist){
   try{ await addDoc(colLegs, { pair:legKey(a,b), sec, dist, by:state.user.id, at:serverTimestamp() }); }catch(e){}
@@ -5051,7 +5162,14 @@ function paceCard(){
   if(p.ratio<=1.05) return "";           // not slower in any meaningful way
   const pct=Math.round((p.ratio-1)*100);
   if(pct<10) return "";                  // sub-noise; ignore
-  // Don't double-show with the energy nudge — pace is the same family of advice
+  // If routes are congested for others too, it's probably not you — say so honestly.
+  const congested = routeCongestion().length;
+  if(congested){
+    return `<div class="home-card pace-card">
+      <div class="hc-title">🚶 Slow going</div>
+      <p style="font-size:13.5px;line-height:1.45;margin:6px 0 0">You're about <b>${pct}% slower</b> than usual — but ${congested>1?`${congested} routes look`:"a route looks"} busy for everyone right now, so it's likely crowds, not you. <button class="link-btn" data-go="traffic">See traffic →</button></p>
+    </div>`;
+  }
   return `<div class="home-card pace-card">
     <div class="hc-title">🐢 Heads up</div>
     <p style="font-size:13.5px;line-height:1.45;margin:6px 0 0">You're moving about <b>${pct}% slower</b> than your usual pace today (across ${p.pairsSeen} stretches). Body might be asking for a sit-down.</p>
@@ -5253,9 +5371,13 @@ async function simulateCrew(){
     const cpsnap=await getDocs(colCopresence);
     const oldCp=cpsnap.docs.filter(d=>String(d.data().by||"").startsWith("sim_")).map(d=>d.id);
     for(let i=0;i<oldCp.length;i+=20){ await Promise.all(oldCp.slice(i,i+20).map(id=>deleteDoc(dref("copresence",id)))); }
+    // clear sim walk legs (sim_hist_/sim_now_ walkers)
+    const lsnap=await getDocs(colLegs);
+    const oldLegs=lsnap.docs.filter(d=>String(d.data().by||"").startsWith("sim_")).map(d=>d.id);
+    for(let i=0;i<oldLegs.length;i+=20){ await Promise.all(oldLegs.slice(i,i+20).map(id=>deleteDoc(dref("legs",id)))); }
   }catch(e){}
 
-  const NAMES=["Sam","Jo","Mira","Theo","Nadia"];
+  const NAMES=["Sam","Jo","Mira","Theo","Nadia","Ravi","Esme","Cass","Otis","Lola","Kit","June","Milo","Vera","Dré"];
   const TAGS=["vibe","sound","crowd","surprise","dancing"];
   const esnap=await getDocs(colEvents);
   const events=esnap.docs.map(d=>({id:d.id, ...d.data()})).filter(e=>eventStart(e)&&eventEnd(e));
@@ -5285,7 +5407,7 @@ async function simulateCrew(){
     }
     // user doc carries the itinerary so live positions can be derived at render time
     await setDoc(dref("users", uid), {
-      name:NAMES[i], admin:false, color:AREA_COLORS[i%AREA_COLORS.length],
+      name:NAMES[i], admin:false, color:personColor(uid),
       sim:true, simItin:itinerary
     });
     // PICKS for everything on their itinerary (so "going" counts, crowd radar, recs all populate)
@@ -5310,10 +5432,15 @@ async function simulateCrew(){
 
   // CO-PRESENCE across the day: for each pair of sim friends, log buckets where their
   // itineraries put them at the same stage at the same time. Pre-dated, so togetherness fills in.
+  // Bounded: not every pair sticks together, and we cap buckets per overlap, so 15 users don't
+  // explode into thousands of writes (co-presence is O(pairs²) otherwise).
   const usnap2=await getDocs(colUsers);
   const sims=usnap2.docs.filter(d=>d.data().sim===true).map(d=>({id:d.id, ...d.data()}));
+  const MAX_BUCKETS_PER_OVERLAP = 6;   // ~12 min logged per shared set is plenty for a believable number
   for(let a=0;a<sims.length;a++){
     for(let b=a+1;b<sims.length;b++){
+      // Not every pair are joined at the hip — ~45% of pairs actually rack up shared time.
+      if(Math.random()>0.45) continue;
       const A=sims[a].simItin||[], B=sims[b].simItin||[];
       const pair=[sims[a].id, sims[b].id].sort().join("__");
       A.forEach(ia=>{
@@ -5321,8 +5448,8 @@ async function simulateCrew(){
           if(ia.stageName!==ib.stageName) return;
           const start=Math.max(ia.start, ib.start), end=Math.min(ia.end, ib.end);
           if(end<=start) return;                   // no temporal overlap
-          // one bucket per 2 min of shared time at that stage
-          for(let t=start; t<end; t+=2*60000){
+          let n=0;
+          for(let t=start; t<end && n<MAX_BUCKETS_PER_OVERLAP; t+=2*60000, n++){
             addDoc(colCopresence, { pair, bucket:Math.floor(t/(2*60000)), by:sims[a].id, near:sims[b].id, dist:8+Math.floor(Math.random()*20), at:serverTimestamp() }).catch(()=>{});
           }
         });
@@ -5351,6 +5478,25 @@ async function simulateCrew(){
     });
   }
   applyRatingTimeGate();
+  // SIM WALK LEGS: give a couple of routes a baseline of historical walks plus a cluster of
+  // slow recent walks, so the Site traffic page has something to show in testing.
+  const pinned=stagesWithCoords();
+  if(pinned.length>=2){
+    const now=Date.now();
+    const mkLeg=(a,b,sec,tms,by)=>addDoc(colLegs,{ pair:legKey(a,b), sec, dist:Math.round(sec*1.3), by, at:serverTimestamp(), tms }).catch(()=>{});
+    // pick up to 2 routes between adjacent pinned stages
+    const routes=[];
+    for(let i=0;i+1<pinned.length && routes.length<2;i++){ routes.push([pinned[i], pinned[i+1]]); }
+    routes.forEach((pairStages,ri)=>{
+      const [A,B]=pairStages;
+      const base = 240 + ri*120;               // baseline ~4–6 min
+      // historical baseline walks — timestamped hours ago so they form the baseline, not "recent"
+      for(let k=0;k<4;k++){ mkLeg(A.id,B.id, base + Math.round((Math.random()-0.5)*40), now-(3*3600000+k*600000), "sim_hist_"+k); }
+      // recent SLOW walks by different sim walkers, within the last ~15 min (the congestion signal)
+      const slow = Math.round(base * (1.4 + ri*0.2));   // 40–60% slower
+      for(let k=0;k<3;k++){ mkLeg(A.id,B.id, slow + Math.round((Math.random()-0.5)*30), now-(k*4*60000), "sim_now_"+k); }
+    });
+  }
 }
 // Admin: remove a user account and all the data tied to them (picks, shared location, personal pins).
 async function deleteUserAccount(userId){
@@ -5587,7 +5733,9 @@ async function clearBeacon(){ await deleteDoc(dref("pins","beacon__"+state.user.
 function beaconMinsLeft(b){ return b&&b.expiresAt ? Math.max(0,Math.round((b.expiresAt-Date.now())/60000)) : 0; }
 
 // ---- "Where were you?" private breadcrumb trail (on-device only, never shared) ----
-const TRAIL_KEY="fp_trail", TRAIL_MIN_GAP=180000, TRAIL_MIN_MOVE=20, TRAIL_MAX=400;
+// Trail: record densely enough to capture the actual route walked (not a corner-cutting
+// straight line). Points are cheap (we already have the GPS fixes); cap keeps storage bounded.
+const TRAIL_KEY="fp_trail", TRAIL_MIN_GAP=15000, TRAIL_MIN_MOVE=8, TRAIL_MAX=2000;
 function loadTrail(){ try{ return JSON.parse(localStorage.getItem(TRAIL_KEY)||"[]"); }catch(e){ return []; } }
 function recordTrailPoint(pos){
   if(!pos) return;
@@ -5715,6 +5863,7 @@ function writeMyLocation(){
   if(!find.share || !find.pos || !state.user) return;
   find.myUpdated=Date.now();
   trackTrip(find.pos, find.acc);   // crowdsourced walk-time learning
+  recordTrailPoint(find.pos);      // personal route history (Where were you)
   setDoc(dref("locations",state.user.id),
     { name:state.user.name, lat:+find.pos.lat.toFixed(6), lng:+find.pos.lng.toFixed(6), acc:find.acc||null, lost:!!find.lost, updatedAt:serverTimestamp() }
   ).catch(()=>{});
@@ -5744,19 +5893,33 @@ function startShare(){
   if(!navigator.geolocation){ toast("Location not supported"); return; }
   if(!locationEnabled()){ toast("Location features are off"); return; }
   find.share=true;
-  const fix=()=>navigator.geolocation.getCurrentPosition(
-    p=>{ find.pos={lat:p.coords.latitude,lng:p.coords.longitude}; find.acc=p.coords.accuracy; writeMyLocation();
-         if(state.view==="find" && document.getElementById("radar")) updateFindDynamic(); },
-    e=>{ if(e.code===1){ toast("Location blocked"); stopShare(); renderApp(); } },
-    {enableHighAccuracy:true,maximumAge:30000,timeout:20000}
-  );
-  fix();
-  find.shareTimer=setInterval(fix, BATTERY_SAVER ? 300000 : 90000);   // 5 min in saver, else ~1.5 min
+  shareFixNow();
+  find.shareTimer=setInterval(()=>shareFixNow(), BATTERY_SAVER ? 300000 : 90000);   // 5 min in saver, else ~1.5 min
   localStorage.setItem("fp_share","1");       // remember across refreshes
   if(feat("autoStop")){
     const hrs=Math.max(1, +state.structure.autoStopHours || 4);
     find.autoStopAt=Date.now()+hrs*3600000;
     find.autoStopTimer=setTimeout(()=>{ stopShare(true); toast("Auto-stopped sharing"); if(state.user) renderApp(); }, hrs*3600000);
+  }
+}
+// A single GPS fix that updates position, writes location, and refreshes the radar.
+// Exposed so the foreground-resume path can re-kick it immediately (mobile browsers
+// suspend timers while backgrounded; this is recovery, not a background loop).
+function shareFixNow(){
+  if(!find.share || !navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    p=>{ find.pos={lat:p.coords.latitude,lng:p.coords.longitude}; find.acc=p.coords.accuracy; writeMyLocation();
+         if(state.view==="find" && document.getElementById("radar")) updateFindDynamic(); },
+    e=>{ if(e.code===1){ toast("Location blocked"); stopShare(); renderApp(); } },
+    {enableHighAccuracy:true,maximumAge:0,timeout:20000}   // maximumAge:0 → force a truly fresh reading
+  );
+}
+// If sharing is meant to be on but the browser killed our interval while backgrounded, restart it.
+function ensureShareAlive(){
+  if(!find.share) return;
+  shareFixNow();                                  // immediate fresh reading
+  if(!find.shareTimer){
+    find.shareTimer=setInterval(()=>shareFixNow(), BATTERY_SAVER ? 300000 : 90000);
   }
 }
 function stopShare(userInitiated=false){
@@ -5815,12 +5978,29 @@ function rebindOrientation(){
   find.orientBound=false; find.orientHandler=null;
   bindOrientation();
 }
-// Watchdog: if the compass was working but events have gone quiet for ~4s while Find is open, re-bind.
+// Watchdog: keep the compass alive. iOS in particular silently stops delivering orientation
+// events (after heavy DOM work, or just over time). We rebind when events go quiet, and if a
+// rebind doesn't bring them back we surface a one-tap re-enable (a user gesture reliably
+// restarts iOS sensors when nothing else will).
 function checkOrientationAlive(){
   if(!find.orientBound || !find.hasOrientation) return;
-  if(state.view!=="find") return;
-  if(find.orientLastEvent && Date.now()-find.orientLastEvent > 4000){
+  const quietFor = find.orientLastEvent ? (Date.now()-find.orientLastEvent) : 0;
+  // 7s rather than 4s: a phone held dead-still genuinely emits fewer events, so don't over-trigger.
+  if(quietFor > 7000){
+    find._orientRebinds = (find._orientRebinds||0) + 1;
     rebindOrientation();
+    // If we've rebound a few times and it's STILL quiet, the silent recovery isn't working —
+    // offer a manual re-enable (only while on Find, where the compass is actually shown).
+    if(find._orientRebinds >= 3 && state.view==="find"){
+      find.orientStalled = true;
+      if(!document.querySelector(".modal-bg")) { const v=document.getElementById("view"); if(v) renderView(); }
+    }
+  } else if(quietFor < 3000){
+    // healthy again — reset the escalation + clear any stalled flag
+    if(find._orientRebinds || find.orientStalled){
+      find._orientRebinds = 0; find.orientStalled = false;
+      if(state.view==="find" && !document.querySelector(".modal-bg")){ const v=document.getElementById("view"); if(v) renderView(); }
+    }
   }
 }
 function startFindSensors(skipOrientation){
@@ -5930,7 +6110,7 @@ function viewFind(){
   const modeToggle = compassAvail ? `<div class="mode-toggle">
       <button data-fmode="auto" class="${headingUp?'on':''}">Compass</button>
       <button data-fmode="north" class="${!headingUp?'on':''}">North up</button>
-    </div>` : (find.orientNeedsGesture
+    </div>${find.orientStalled?`<button class="btn ghost sm" id="compass-rebind" style="margin-top:6px">⟳ Compass stalled — tap to restart</button>`:""}` : (find.orientNeedsGesture
         ? `<button class="btn ghost sm" id="compass-enable">Enable compass</button>`
         : `<span class="find-note">Compass not available — showing north-up</span>`);
 
