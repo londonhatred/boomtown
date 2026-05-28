@@ -155,6 +155,13 @@
   .tf-badge{flex:none;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;padding:4px 9px;border-radius:999px;color:#fff}
   .tf-badge.busy{background:var(--gold)}
   .tf-badge.slow{background:var(--accent)}
+  .seen-card{background:var(--panel)}
+  .seen-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+  .seen-row:first-of-type{border-top:none}
+  .seen-info{flex:1;min-width:0}
+  .seen-name{font-weight:700;font-size:13.5px}
+  .seen-meta{font-size:11.5px;color:var(--ink-2);margin-top:2px}
+  .seen-acts{flex:none;display:flex;gap:6px}
   .clash-warn{display:flex;align-items:center;gap:12px;width:100%;background:var(--accent);color:#fff;border:2px solid var(--ink);border-radius:var(--radius);
     padding:13px 14px;margin-bottom:14px;cursor:pointer;font:inherit;text-align:left;-webkit-tap-highlight-color:transparent;box-shadow:var(--hard-sm)}
   .clash-warn .cw-ico{flex:none;font-size:22px;line-height:1}
@@ -831,7 +838,10 @@ const VAPID_PUBLIC_KEY = "BNiNG5TNNHAyms6KGjSdyVzihWQXExKHqPk1LFTKMuDuxmwvm8RkZ_
 /* ------------------------------------------------------------ */
 
 const DAYS = ["Wednesday","Thursday","Friday","Saturday","Sunday"];
-const AREA_COLORS = ["#D6371C","#1E5A50","#2B4C9B","#B5852A","#7A3B6B","#3C6B33","#A0522D","#41566B","#B5306E","#1C1B16"];
+const AREA_COLORS = [
+  "#D6371C","#1E5A50","#2B4C9B","#B5852A","#7A3B6B","#3C6B33","#A0522D","#41566B","#B5306E","#1C1B16",
+  "#0E7C86","#C25E00","#5B3A8C","#8B1E3F","#2E6F40","#9A6A00","#37516E","#7A2E2E"
+];
 const NO_AREA_COLOR = "#8A8068";
 function districtColor(id){
   const idx = state.structure.districts.findIndex(x=>x.id===id);
@@ -2176,7 +2186,68 @@ function festivalSoFarCard(){
     <div class="fsf-grid">${items.join("")}</div>
   </div>`;
 }
-// ---- "What can I reach in time?" — exploits walk-time graph; orientation for newcomers ----
+// ---- "Did you catch these?" — detect drop-ins from your trail you didn't pick ----
+// Scans the trail for ~10+ min of presence near a stage during an unpicked act's window.
+// Skips are remembered (localStorage) so a dismissed act never nags again.
+const SEEN_KEY = "fp_seen_skips";
+const SEEN_MIN_MIN = 10;          // minutes of presence to count as "might have seen it"
+function loadSeenSkips(){ try{ return new Set(JSON.parse(localStorage.getItem(SEEN_KEY)||"[]")); }catch(e){ return new Set(); } }
+function skipSeenAct(eventId){
+  const s=loadSeenSkips(); s.add(eventId);
+  try{ localStorage.setItem(SEEN_KEY, JSON.stringify([...s])); }catch(e){}
+}
+function maybeSeenActs(){
+  if(!feat("ratings")) return [];
+  const trail=loadTrail();
+  if(trail.length<3) return [];
+  const stages=stagesWithCoords();
+  if(!stages.length) return [];
+  const picked=myPickIds();
+  const skips=loadSeenSkips();
+  const now=Date.now();
+  // For each past, unpicked, un-skipped, un-rated event: sum trail time spent within range of its stage during its window.
+  const out=[];
+  state.events.forEach(ev=>{
+    if(picked.has(ev.id) || skips.has(ev.id)) return;
+    if(myRating(ev.id)!=null) return;                       // already rated somehow
+    const st=stages.find(s=>s.name===ev.stageName); if(!st) return;
+    const start=eventStart(ev), end=eventEnd(ev); if(!start||!end) return;
+    if(end.getTime()>now) return;                           // not over yet
+    const ws=start.getTime(), we=end.getTime();
+    // walk trail; accumulate dwell time where consecutive points are near this stage AND within the set window
+    let dwellMs=0;
+    for(let i=1;i<trail.length;i++){
+      const p=trail[i], prev=trail[i-1];
+      if(p.t<ws || p.t>we) continue;                        // point outside the set's time
+      const d=haversine(p.lat,p.lng,st.lat,st.lng);
+      if(d>STAGE_RADIUS) continue;                          // not at this stage
+      const gap=p.t-prev.t;
+      if(gap>0 && gap<10*60000) dwellMs+=gap;               // count the interval (ignore huge gaps = app was closed)
+    }
+    const mins=Math.round(dwellMs/60000);
+    if(mins>=SEEN_MIN_MIN) out.push({ ev, mins });
+  });
+  // most recent first, cap a few
+  out.sort((a,b)=> (eventEnd(b.ev)-eventEnd(a.ev)));
+  return out.slice(0,4);
+}
+function seenActsCard(){
+  if(festivalPhase()==="before") return "";
+  const seen=maybeSeenActs();
+  if(!seen.length) return "";
+  const rows=seen.map(s=>`<div class="seen-row">
+    <div class="seen-info"><div class="seen-name">${esc(s.ev.title)}</div><div class="seen-meta">${esc(s.ev.stageName)} · you were nearby ~${s.mins} min</div></div>
+    <div class="seen-acts">
+      <button class="btn primary sm" data-seen-rate="${s.ev.id}">Rate</button>
+      <button class="btn ghost sm" data-seen-skip="${s.ev.id}">Skip</button>
+    </div>
+  </div>`).join("");
+  return `<div class="home-card seen-card">
+    <div class="hc-title">💭 Did you catch these?</div>
+    <div class="find-note" style="margin:2px 0 8px">You spent a while near these stages but didn't have them planned — rate any you actually watched, or skip (queues, just passing through).</div>
+    ${rows}
+  </div>`;
+}
 function reachableActs(budgetMin){
   // From current position (or nearest stage), find upcoming acts you can still make.
   if(!locationEnabled() || !find.pos) return null;
@@ -2322,6 +2393,7 @@ function homeDuring(){
   cards.push(safeCheckInCard());
   cards.push(weatherCard());
   cards.push(clashWarnCard());
+  cards.push(seenActsCard());
 
   // 2) ON NOW across the festival (your areas/picks first feel: just show a few)
   const onNow=onNowEvents();
@@ -3599,13 +3671,48 @@ function stagePersonalityCard(){
     ${items}</div>`;
 }
 // ---- Togetherness: who you've actually spent the festival with ----
+// Derive co-presence buckets live from sim itineraries (no writes). Same trick as simPositions:
+// two sims (or a sim + you) at the same stage at the same time, up to "now", are "together".
+// This replaces the old pre-written sim co-presence — fewer writes, and togetherness builds live.
+function derivedSimCopresence(){
+  const now=Date.now();
+  const out=[];
+  const sims = state.users.filter(u=>u.sim && Array.isArray(u.simItin) && u.simItin.length);
+  if(!sims.length) return out;
+  // my plan as an itinerary, so my own togetherness with sims builds too
+  const myItin = state.user ? state.picks.filter(p=>p.userId===state.user.id)
+      .map(p=>state.events.find(e=>e.id===p.eventId)).filter(Boolean)
+      .map(e=>({stageName:e.stageName, start:eventStart(e)&&eventStart(e).getTime(), end:eventEnd(e)&&eventEnd(e).getTime()}))
+      .filter(x=>x.start&&x.end) : [];
+  const people = sims.map(s=>({id:s.id, itin:s.simItin}));
+  if(myItin.length && state.user) people.push({id:state.user.id, itin:myItin});
+  // pairwise overlaps, only counting time that has already elapsed (<= now)
+  for(let a=0;a<people.length;a++){
+    for(let b=a+1;b<people.length;b++){
+      const pair=[people[a].id, people[b].id].sort().join("__");
+      people[a].itin.forEach(ia=>{
+        people[b].itin.forEach(ib=>{
+          if(ia.stageName!==ib.stageName) return;
+          const start=Math.max(ia.start, ib.start), end=Math.min(ia.end, ib.end, now);
+          if(end<=start) return;
+          for(let t=start; t<end; t+=2*60000){ out.push({ pair, bucket:Math.floor(t/(2*60000)) }); }
+        });
+      });
+    }
+  }
+  return out;
+}
+// Real (Firestore) + derived (sim) co-presence, for togetherness.
+function effectiveCopresence(){
+  return state.copresence.concat(derivedSimCopresence());
+}
 // Real time = unique 2-minute buckets per pair (both sides log, we dedupe).
 // Witnessed = events both members rated. Planned = events both members picked.
 function togetherness(){
   if(!state.user) return [];
   // Aggregate co-presence buckets per pair
   const buckets = {};   // pair -> Set of buckets
-  state.copresence.forEach(s=>{
+  effectiveCopresence().forEach(s=>{
     if(!s.pair || s.bucket==null) return;
     if(s.pair.indexOf(state.user.id)<0) return;
     (buckets[s.pair] = buckets[s.pair] || new Set()).add(s.bucket);
@@ -4443,6 +4550,8 @@ function wireView(){
   const openClash=v.querySelector("#open-clashes"); if(openClash) openClash.onclick=openClashModal;
   const homeClashWarn=v.querySelector("#home-clashwarn"); if(homeClashWarn) homeClashWarn.onclick=openClashModal;
   const homeReach=v.querySelector("#home-reach"); if(homeReach) homeReach.onclick=openReachModal;
+  v.querySelectorAll("[data-seen-rate]").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openRatingModal(b.dataset.seenRate); });
+  v.querySelectorAll("[data-seen-skip]").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); skipSeenAct(b.dataset.seenSkip); renderView(); });
   const panicOff=v.querySelector("#panic-off"); if(panicOff) panicOff.onclick=()=>setBatteryPanic(false);
   const safeIn=v.querySelector("#home-safein"); if(safeIn) safeIn.onclick=async()=>{ await checkInSafe(); renderView(); };
   const energyDismiss=v.querySelector("#energy-dismiss"); if(energyDismiss) energyDismiss.onclick=()=>{ dismissEnergyNudge(energyDismiss.dataset.tag); const card=document.getElementById("energy-nudge"); if(card) card.remove(); };
@@ -5430,53 +5539,9 @@ async function simulateCrew(){
     }
   }
 
-  // CO-PRESENCE across the day: for each pair of sim friends, log buckets where their
-  // itineraries put them at the same stage at the same time. Pre-dated, so togetherness fills in.
-  // Bounded: not every pair sticks together, and we cap buckets per overlap, so 15 users don't
-  // explode into thousands of writes (co-presence is O(pairs²) otherwise).
-  const usnap2=await getDocs(colUsers);
-  const sims=usnap2.docs.filter(d=>d.data().sim===true).map(d=>({id:d.id, ...d.data()}));
-  const MAX_BUCKETS_PER_OVERLAP = 6;   // ~12 min logged per shared set is plenty for a believable number
-  for(let a=0;a<sims.length;a++){
-    for(let b=a+1;b<sims.length;b++){
-      // Not every pair are joined at the hip — ~45% of pairs actually rack up shared time.
-      if(Math.random()>0.45) continue;
-      const A=sims[a].simItin||[], B=sims[b].simItin||[];
-      const pair=[sims[a].id, sims[b].id].sort().join("__");
-      A.forEach(ia=>{
-        B.forEach(ib=>{
-          if(ia.stageName!==ib.stageName) return;
-          const start=Math.max(ia.start, ib.start), end=Math.min(ia.end, ib.end);
-          if(end<=start) return;                   // no temporal overlap
-          let n=0;
-          for(let t=start; t<end && n<MAX_BUCKETS_PER_OVERLAP; t+=2*60000, n++){
-            addDoc(colCopresence, { pair, bucket:Math.floor(t/(2*60000)), by:sims[a].id, near:sims[b].id, dist:8+Math.floor(Math.random()*20), at:serverTimestamp() }).catch(()=>{});
-          }
-        });
-      });
-    }
-  }
-  // CO-PRESENCE with YOU: where your picks put you at the same stage+time as a sim friend's
-  // itinerary, log buckets so your own togetherness numbers come alive too.
-  if(state.user){
-    const myItin = state.picks.filter(p=>p.userId===state.user.id)
-      .map(p=>events.find(e=>e.id===p.eventId)).filter(Boolean)
-      .filter(e=>!day || e.day===day)
-      .map(e=>({stageName:e.stageName, start:eventStart(e).getTime(), end:eventEnd(e).getTime()}));
-    sims.forEach(sf=>{
-      const pair=[state.user.id, sf.id].sort().join("__");
-      (sf.simItin||[]).forEach(ib=>{
-        myItin.forEach(ia=>{
-          if(ia.stageName!==ib.stageName) return;
-          const start=Math.max(ia.start,ib.start), end=Math.min(ia.end,ib.end);
-          if(end<=start) return;
-          for(let t=start;t<end;t+=2*60000){
-            addDoc(colCopresence, { pair, bucket:Math.floor(t/(2*60000)), by:sf.id, near:state.user.id, dist:8+Math.floor(Math.random()*20), at:serverTimestamp() }).catch(()=>{});
-          }
-        });
-      });
-    });
-  }
+  // Co-presence / togetherness is now DERIVED live from itineraries (see derivedSimCopresence),
+  // so we no longer pre-write hundreds of co-presence docs here. Fewer writes, and it builds
+  // through the day as time passes — same trick as the moving map dots.
   applyRatingTimeGate();
   // SIM WALK LEGS: give a couple of routes a baseline of historical walks plus a cluster of
   // slow recent walks, so the Site traffic page has something to show in testing.
