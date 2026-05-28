@@ -951,6 +951,13 @@ function fmt12(t){
 function initials(name){
   return name.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase() || "?";
 }
+// Resolve a user id to a display name, never leaking a raw ID. Falls back to "you" / "A friend".
+function userName(id){
+  const u=state.users.find(x=>x.id===id);
+  if(u) return u.name;
+  if(state.user && id===state.user.id) return state.user.name;
+  return "A friend";
+}
 /* admin feature flags (default ON) and festival-date helpers */
 function feat(name){ const f=state.structure.features; return f ? f[name]!==false : true; }
 // adminFeat — for experimental/personal features. Default OFF.
@@ -1159,13 +1166,16 @@ function safetyCrewCard(){
   if(!checked.length) return "";
   const rows=checked.map(s=>{
     const u=state.users.find(u=>u.id===s.userId);
-    const name=u?u.name:(s.userId.slice(0,4));
+    // If we're the one checked in but our user record isn't in state.users yet, use our own name.
+    const name = u ? u.name : (s.userId===(state.user&&state.user.id) ? state.user.name : "A friend");
     const time = s.checkedAt && s.checkedAt.toMillis ? new Date(s.checkedAt.toMillis()) : null;
     const tlbl = time ? (()=>{ let h=time.getHours(); const ap=h>=12?'pm':'am'; h=h%12||12; return `${h}${time.getMinutes()?":"+String(time.getMinutes()).padStart(2,"0"):""}${ap}`; })() : "";
     return `<div class="wt-row"><span class="av" style="background:${personColor(s.userId)}">${esc(initials(name))}</span><span class="wt-name">${esc(name)}</span><span class="wt-time">${tlbl}</span></div>`;
   }).join("");
+  // Denominator: never show fewer than the number actually checked in.
+  const denom = Math.max(state.users.length, checked.length);
   return `<div class="free-card"><div class="free-head">💛 Safe & sound tonight</div>
-    <div class="find-note" style="margin-bottom:6px">${checked.length} of ${state.users.length} checked in.</div>
+    <div class="find-note" style="margin-bottom:6px">${checked.length} of ${denom} checked in.</div>
     ${rows}</div>`;
 }
 // ---- Crowd radar: where the crew converges next, from everyone's picks ----
@@ -1528,15 +1538,18 @@ function afterData(){
   if(!state.user){ return; }              // auth screen handles its own render
   // Auto-elevate: if this user is admin in real mode (per their cached profile from real-mode signup/login)
   // but lands in test mode as a non-admin, mirror their admin status into test_users — once.
-  if(TEST_MODE && state.user && !state.user.admin && !window._adminElevateChecked){
-    window._adminElevateChecked = true;
+  if(TEST_MODE && state.user && !window._testUserEnsured){
+    window._testUserEnsured = true;
     try{
       const cached = JSON.parse(localStorage.getItem("fp_user")||"null");
-      // Only trust the cache if it's for the same person AND was last written by real-mode login (admin:true)
-      if(cached && cached.id===state.user.id && cached.admin===true && cached._realAdmin===true){
-        setDoc(dref("users", state.user.id), { admin:true }, {merge:true}).then(()=>{
-          state.user = {...state.user, admin:true};
-          toast("Admin restored in test mode");
+      const wantAdmin = !!(cached && cached.id===state.user.id && cached.admin===true && cached._realAdmin===true);
+      // Ensure a NAMED user doc exists in test_users (prevents orphaned safety/picks showing raw IDs).
+      const existing = state.users.find(u=>u.id===state.user.id);
+      if(!existing || (wantAdmin && !state.user.admin)){
+        const payload = { name:state.user.name, admin: wantAdmin || !!state.user.admin };
+        setDoc(dref("users", state.user.id), payload, {merge:true}).then(()=>{
+          state.user = {...state.user, admin: payload.admin};
+          if(payload.admin && !existing) toast("Test profile set up");
           renderApp();
         }).catch(()=>{});
       }
