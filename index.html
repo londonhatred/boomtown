@@ -4387,6 +4387,8 @@ function viewAdmin(){
         ${stageCount?'':`<div class="find-note" style="margin-bottom:12px">Set up at least one stage first (custom or placeholder).</div>`}
         <div class="test-step"><span class="ts-n">3</span><div><b>Simulate a busy crew</b><div class="find-note">Adds ~5 fake friends with picks, ratings, check-ins &amp; co-presence so the social features (crowd radar, Crew DNA, togetherness, faves) light up without needing other phones. ${actCount?'':'<span style="color:var(--accent)">generate a lineup first</span>'}</div></div></div>
         <button class="btn block" id="test-sim" ${actCount?'':'disabled'} style="margin-bottom:6px;background:var(--violet);color:#fff">Simulate busy crew</button>
+        <div class="test-step" style="margin-top:14px"><span class="ts-n">4</span><div><b>Simulate a specific day</b><div class="find-note">The app uses real wall-clock time to decide what day it is. Pick a festival day here to shift everything (current day, "what's on now", phase, sim ratings) so you can test Friday/Saturday density without waiting. Time-of-day follows the real clock.${actCount?'':'<span style="color:var(--accent)"><br>generate a lineup first</span>'}</div></div></div>
+        <div class="filters" style="margin-bottom:14px">${DAYS.map(d=>`<button class="chip ${currentFestivalDay()===d?'on':''}" data-simday="${d}" ${actCount?'':'disabled'}>${d.slice(0,3)}</button>`).join("")}</div>
         <div style="border-top:1px solid var(--line);margin:14px 0 12px"></div>
         <button class="btn ghost block" id="test-wipe" style="margin-bottom:8px">Wipe all test data</button>
         <button class="btn block" id="test-exit2" style="background:var(--ink);color:var(--paper)">Exit test mode</button>
@@ -4783,6 +4785,14 @@ function wireView(){
     try{ await simulateCrew(); toast("Fake crew added — check Group, Crew DNA, crowd radar"); renderApp(); }
     catch(e){ tSim.disabled=false; tSim.textContent="Simulate busy crew"; toast("Couldn't simulate — try again"); }
   };
+  v.querySelectorAll("[data-simday]").forEach(b=>b.onclick=async()=>{
+    const d=b.dataset.simday;
+    if(d===currentFestivalDay()){ toast(`Already simulating ${d}`); return; }
+    if(!confirm(`Simulate ${d}? The app will treat today as ${d} of the festival — events, sim ratings and "what's on now" all shift to that day. Time-of-day follows your real clock.`)) return;
+    b.disabled=true;
+    try{ await simulateFestivalDay(d); toast(`Now simulating ${d}`); renderApp(); }
+    catch(e){ b.disabled=false; toast("Couldn't shift day — try again"); }
+  });
   const tWipe=v.querySelector("#test-wipe");
   if(tWipe) tWipe.onclick=async()=>{
     if(!confirm("Wipe all test data (acts, stages, picks, walk-data) in the sandbox? Your real festival is untouched.")) return;
@@ -5541,6 +5551,46 @@ async function createTestStages(){
 // existing 1.35× detour factor → ~25 min end-to-end at crowd-padded pace. Matches felt experience.
 // Districts go into 2–3 random clusters; stages within a district cluster around its centre.
 // Main-tagged stages get both corners pinned synthetically so they "just work" via the v53 path.
+// Test-mode: shift the festival's start date so a chosen day lands on "today". Time-of-day follows
+// real wall-clock. Also re-stamps sim ratings (simAt) against the new event end times so the picked
+// day looks plausibly in-progress (anything that ended pre-now becomes visible via the v57 time gate).
+async function simulateFestivalDay(dayName){
+  if(!TEST_MODE) return;
+  const idx = DAYS.indexOf(dayName);
+  if(idx<0) throw new Error("bad-day");
+  // Today's local date as YYYY-MM-DD, then subtract idx days so adding idx back lands on today.
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const newStart = new Date(today);
+  newStart.setDate(newStart.getDate() - idx);
+  const ymd = `${newStart.getFullYear()}-${String(newStart.getMonth()+1).padStart(2,"0")}-${String(newStart.getDate()).padStart(2,"0")}`;
+  await saveStructure({...state.structure, festivalStartDate: ymd});
+  // Wait one tick so state.structure reflects the new date before we use eventEnd().
+  await new Promise(r=>setTimeout(r,50));
+  // Re-stamp sim ratings: for every existing rating on a sim user, recompute simAt from the event's
+  // new end time. Ratings whose new simAt is in the past will reveal immediately via the time-gate.
+  const sims = state.users.filter(u=>u.sim).map(u=>u.id);
+  const simSet = new Set(sims);
+  const updates = [];
+  state._allRatings.forEach(r=>{
+    if(!simSet.has(r.userId)) return;             // only re-stamp sim ratings, leave real users alone
+    const ev = state.events.find(e=>e.id===r.eventId);
+    if(!ev) return;
+    const end = eventEnd(ev); if(!end) return;
+    const offsetMs = (typeof r.simAt==="number" && typeof r._origEnd==="number")
+      ? (r.simAt - r._origEnd)
+      : (2 + Math.floor(Math.random()*8))*60000;  // 2–10 min after end if we lost the original offset
+    const newSimAt = end.getTime() + offsetMs;
+    updates.push({id:r.id, simAt:newSimAt});
+  });
+  // Batch the writes (cap concurrency)
+  for(let i=0;i<updates.length;i+=20){
+    await Promise.all(updates.slice(i,i+20).map(u=>setDoc(dref("ratings",u.id), { simAt:u.simAt }, {merge:true})));
+  }
+  // applyRatingTimeGate runs on the next minute tick anyway, but force it now so the UI updates immediately.
+  applyRatingTimeGate();
+}
+// Test-mode pin generator: scatters realistic-feeling stage pins around a fixed centre.
 async function generateTestStagePins(){
   if(!TEST_MODE) return;
   const SITE_RADIUS = 560;          // metres from centre to outer ring
