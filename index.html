@@ -163,6 +163,33 @@
   .energy-card{background:var(--card);border:2px dashed var(--gold);border-radius:var(--radius);padding:14px 16px;margin-bottom:14px}
   .tmrw-card{background:var(--card);border:2px solid var(--violet)}
   .pace-card{background:var(--card);border:2px dashed var(--teal)}
+  .fsf-card{background:var(--ink);color:var(--paper);border:none}
+  .fsf-card .hc-title{color:var(--paper);opacity:.75;font-size:11px;text-transform:uppercase;letter-spacing:.08em}
+  .fsf-grid{display:flex;flex-wrap:wrap;gap:14px 20px;margin-top:8px}
+  .fsf-item{min-width:48px}
+  .fsf-n{font-family:"Anton";font-size:26px;line-height:1;color:var(--paper)}
+  .fsf-n small{font-size:14px}
+  .fsf-l{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;opacity:.7;margin-top:3px}
+  .reach-home{border:2px solid var(--teal)!important;background:var(--card);display:block;width:100%;text-align:left}
+  .reach-list{display:flex;flex-direction:column;gap:6px}
+  .reach-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:var(--card);border:1.5px solid var(--ink);border-radius:var(--radius-sm);padding:10px 12px;cursor:pointer;font:inherit}
+  .reach-name{font-weight:700;font-size:13.5px}
+  .reach-picked{color:var(--teal);font-size:11px;font-weight:700}
+  .reach-meta{font-size:11.5px;color:var(--ink-2);margin-top:2px}
+  .reach-tag{flex:none;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:4px 8px;border-radius:999px}
+  .reach-tag.full{background:var(--teal);color:#fff}
+  .reach-tag.part{background:var(--gold);color:#fff}
+  .cr-row{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--card);border:1.5px solid var(--ink);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:6px;cursor:pointer;font:inherit}
+  .cr-when{font-family:"Anton";font-size:14px;flex:none;width:54px;color:var(--accent)}
+  .cr-mid{flex:1;min-width:0}
+  .cr-name{font-weight:700;font-size:13.5px}
+  .cr-you{font-size:10.5px;color:var(--teal);font-weight:700}
+  .cr-meta{font-size:11.5px;color:var(--ink-2);margin-top:2px}
+  .cr-who{flex:none;display:flex;align-items:center;gap:6px}
+  .cr-dots{display:flex}
+  .cr-dot{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--card);margin-left:-4px}
+  .cr-dot:first-child{margin-left:0}
+  .cr-count{font-family:"Anton";font-size:15px;color:var(--ink)}
   .oracle-btn{appearance:none;width:32px;height:32px;border-radius:50%;border:2px solid var(--violet);background:var(--card);color:var(--violet);font:inherit;font-weight:800;font-size:14px;cursor:pointer;line-height:1;padding:0;-webkit-tap-highlight-color:transparent}
   .oracle-btn:active{transform:translateY(1px)}
   .oracle-modal .or-act{font-size:14px;line-height:1.4;margin:0 0 12px}
@@ -1141,6 +1168,43 @@ function safetyCrewCard(){
     <div class="find-note" style="margin-bottom:6px">${checked.length} of ${state.users.length} checked in.</div>
     ${rows}</div>`;
 }
+// ---- Crowd radar: where the crew converges next, from everyone's picks ----
+// Newcomer: "follow the crowd." Data-lover: a movement forecast.
+function crowdRadarCard(){
+  const now=Date.now();
+  const day=currentFestivalDay();
+  if(!day) return "";   // only meaningful during the festival
+  // Look at upcoming picked events today, group by stage within rolling time blocks.
+  const upcoming=state.events.filter(e=>{
+    if(e.day!==day) return false;
+    const s=eventStart(e); return s && s.getTime()>now && s.getTime()<now+4*3600000;  // next 4h
+  });
+  if(!upcoming.length) return "";
+  // For each event, count crew picks (excluding me so it reads as "others")
+  const scored=upcoming.map(e=>{
+    const goers=state.picks.filter(p=>p.eventId===e.id);
+    const others=goers.filter(p=>p.userId!==state.user.id).length;
+    return { e, total:goers.length, others, mine:myPickIds().has(e.id), start:eventStart(e) };
+  }).filter(x=>x.total>=2)            // only show genuine convergence
+    .sort((a,b)=> b.total-a.total || a.start-b.start)
+    .slice(0,4);
+  if(!scored.length) return "";
+  const rows=scored.map(x=>{
+    const goers=state.picks.filter(p=>p.eventId===x.e.id);
+    const dots=goers.slice(0,6).map(p=>`<span class="cr-dot" style="background:${personColor(p.userId)}" title="${esc((state.users.find(u=>u.id===p.userId)||{}).name||'')}"></span>`).join("");
+    return `<button class="cr-row" data-cr-go="${esc(x.e.stageName)}">
+      <div class="cr-when">${fmt12(x.e.start)}</div>
+      <div class="cr-mid">
+        <div class="cr-name">${esc(x.e.title)}${x.mine?' <span class="cr-you">you\u2019re in</span>':''}</div>
+        <div class="cr-meta">${esc(x.e.stageName)}</div>
+      </div>
+      <div class="cr-who"><div class="cr-dots">${dots}</div><div class="cr-count">${x.total}</div></div>
+    </button>`;
+  }).join("");
+  return `<div class="free-card"><div class="free-head">🧭 Where the crew's heading</div>
+    <div class="find-note" style="margin-bottom:8px">The next few spots most of the group converges. Tap to navigate.</div>
+    ${rows}</div>`;
+}
 async function login(name, passcode){
   name = name.trim();
   const snap = await getDocs(query(colUsers, where("nameLower","==",name.toLowerCase())));
@@ -1966,9 +2030,114 @@ function homePanic(){
   cards.push(`<div class="find-note" style="text-align:center;margin-top:6px">${ids.size} picks · keep the app off when not needed</div>`);
   return cards.join("");
 }
+// Glanceable live tally — useful for new members ("am I doing this right?") and data-lovers alike.
+function festivalSoFarCard(){
+  if(festivalPhase()==="before") return "";
+  const s=recapStats(null);
+  const items=[];
+  items.push(`<div class="fsf-item"><div class="fsf-n">${s.seenCount}</div><div class="fsf-l">act${s.seenCount===1?"":"s"} seen</div></div>`);
+  if(s.miles>=0.1) items.push(`<div class="fsf-item"><div class="fsf-n">${s.miles.toFixed(1)}</div><div class="fsf-l">miles</div></div>`);
+  if(feat("ratings") && s.ratedCount) items.push(`<div class="fsf-item"><div class="fsf-n">${s.ratedCount}</div><div class="fsf-l">rated</div></div>`);
+  // last night's sleep (if sleep tracking is on and we found a window)
+  if(adminFeat("sleep")){
+    const nights=sleepNights();
+    if(nights.length){ const last=nights[nights.length-1]; items.push(`<div class="fsf-item"><div class="fsf-n">${last.hours.toFixed(1)}<small>h</small></div><div class="fsf-l">last sleep</div></div>`); }
+  }
+  // peak hour (if energy tracking on)
+  if(adminFeat("energy")){
+    const peak=peakHour();
+    if(peak){ const lbl=`${(peak.h%12)||12}${peak.h>=12?'pm':'am'}`; items.push(`<div class="fsf-item"><div class="fsf-n">${lbl}</div><div class="fsf-l">your peak</div></div>`); }
+  }
+  if(items.length<2) return "";   // not enough yet to be worth a card
+  return `<div class="home-card fsf-card">
+    <div class="hc-title">Festival so far</div>
+    <div class="fsf-grid">${items.join("")}</div>
+  </div>`;
+}
+// ---- "What can I reach in time?" — exploits walk-time graph; orientation for newcomers ----
+function reachableActs(budgetMin){
+  // From current position (or nearest stage), find upcoming acts you can still make.
+  if(!locationEnabled() || !find.pos) return null;
+  const now=Date.now();
+  const horizon = now + (budgetMin||90)*60000;
+  const day=currentFestivalDay();
+  const out=[];
+  state.events.forEach(e=>{
+    if(day && e.day!==day) return;
+    const start=eventStart(e), end=eventEnd(e); if(!start||!end) return;
+    if(end.getTime()<=now) return;                         // already over
+    if(start.getTime()>horizon) return;                    // beyond the window we're showing
+    const stage=stagesWithCoords().find(s=>s.name===e.stageName);
+    if(!stage) return;                                     // need coords to compute reachability
+    const sec=walkSecondsFromPos(find.pos, stage.id); if(sec==null) return;
+    const arrive = now + sec*1000;
+    // Can you catch any of it? (arrive before it ends). How much you'd see:
+    const catchable = arrive < end.getTime();
+    if(!catchable) return;
+    const minsOfSet = Math.round((end.getTime() - Math.max(arrive, start.getTime()))/60000);
+    const inTime = arrive <= start.getTime();              // there before it starts
+    out.push({ e, stage, walkMin:Math.round(sec/60), inTime, minsOfSet, start, end, picked:myPickIds().has(e.id) });
+  });
+  // sort: full catches first, then by soonest start
+  out.sort((a,b)=> (b.inTime-a.inTime) || (a.start-b.start));
+  return out;
+}
+function openReachModal(){
+  const budget = state.reachBudget || 15;
+  const list = reachableActs(budget);
+  const wrap=document.createElement("div"); wrap.className="modal-bg";
+  let inner;
+  if(list===null){
+    inner = `<div class="find-note">Turn on location sharing (Find tab) so I can work out what you can walk to in time.</div>`;
+  } else if(!list.length){
+    inner = `<div class="find-note">Nothing reachable in the next ${budget} min from where you are. Try a longer window, or you're between waves — grab a breather.</div>`;
+  } else {
+    inner = list.slice(0,12).map(r=>{
+      const tag = r.inTime ? `<span class="reach-tag full">make the start</span>` : `<span class="reach-tag part">catch ${r.minsOfSet} min</span>`;
+      return `<button class="reach-row" data-reach-go="${esc(r.e.stageName)}">
+        <div style="flex:1;min-width:0">
+          <div class="reach-name">${esc(r.e.title)}${r.picked?' <span class="reach-picked">✓ picked</span>':''}</div>
+          <div class="reach-meta">${esc(r.e.stageName)} · ${fmt12(r.e.start)} · ${r.walkMin} min walk</div>
+        </div>
+        ${tag}
+      </button>`;
+    }).join("");
+  }
+  const budgets=[15,30,60,90];
+  const budgetTabs = `<div class="filters" style="margin-bottom:10px">${budgets.map(b=>`<button class="chip ${b===budget?'on':''}" data-reach-budget="${b}">${b}m</button>`).join("")}</div>`;
+  wrap.innerHTML=`<div class="modal reach-modal">
+    <div class="modal-head"><h2>What can I reach?</h2><button class="btn ghost sm" id="reach-close">Close</button></div>
+    <div class="find-note" style="margin-bottom:8px">Acts you could still get to from where you are now, using your learned walk-times.</div>
+    ${budgetTabs}
+    <div class="reach-list">${inner}</div>
+  </div>`;
+  document.body.appendChild(wrap);
+  const close=()=>wrap.remove();
+  wrap.querySelector("#reach-close").onclick=close;
+  wrap.onclick=e=>{ if(e.target===wrap) close(); };
+  wrap.querySelectorAll("[data-reach-budget]").forEach(b=>b.onclick=()=>{ state.reachBudget=+b.dataset.reachBudget; close(); openReachModal(); });
+  wrap.querySelectorAll("[data-reach-go]").forEach(b=>b.onclick=()=>{
+    const s=stagesWithCoords().find(x=>x.name===b.dataset.reachGo);
+    if(s){ find.target="st:"+s.id; close(); state.view="find"; renderApp(); }
+  });
+}
+function reachCard(){
+  if(festivalPhase()!=="during") return "";
+  if(!locationEnabled() || !find.pos) return "";
+  // only show if there's actually something reachable soon (don't show a dead button)
+  const quick=reachableActs(30);
+  if(!quick || !quick.length) return "";
+  return `<button class="home-card reach-home tappable" id="home-reach">
+    <div class="hc-title">🧭 What can I reach?</div>
+    <div class="find-note" style="margin-top:2px">${quick.length} act${quick.length===1?"":"s"} you could still make from here — tap to see.</div>
+  </button>`;
+}
 function homeDuring(){
   if(BATTERY_PANIC) return homePanic();
   const cards=[];
+
+  // 0) FESTIVAL SO FAR — glanceable live tally for everyone (incl. new members)
+  cards.push(festivalSoFarCard());
 
   // 1) NOW / NEXT (personal up-next + what's on now across stages)
   const np = (feat("nextAct")&&festivalStart()) ? nextPickInfo() : null;
@@ -2002,6 +2171,7 @@ function homeDuring(){
     }
   }
   cards.push(nextCard);
+  cards.push(reachCard());
   cards.push(energyNudgeCard());
   cards.push(paceCard());
   cards.push(tomorrowYouCard());
@@ -2770,6 +2940,7 @@ function viewShared(){
   return `
     <div class="sec-head"><div><h2>The group</h2><div class="lead">${lead}</div></div></div>
     <div class="filters">${friendChips}</div>
+    ${friend==="all"?crowdRadarCard():""}
     ${friend==="all"?callsCard():""}
     ${friend==="all"?safetyCrewCard():""}
     ${body}
@@ -3995,6 +4166,10 @@ function wireView(){
     if(s) find.target="st:"+s.id;
     find.enabledOnce=true; localStorage.setItem("fp_findon","1"); state.view="find"; renderApp();
   });
+  v.querySelectorAll("[data-cr-go]").forEach(b=>b.onclick=()=>{
+    const s=stagesWithCoords().find(x=>x.name===b.dataset.crGo);
+    if(s){ find.target="st:"+s.id; find.enabledOnce=true; localStorage.setItem("fp_findon","1"); state.view="find"; renderApp(); }
+  });
 
   // ---- browse filters ----
   const search = v.querySelector("#search");
@@ -4058,6 +4233,7 @@ function wireView(){
   const printBtn=v.querySelector("#print-plan"); if(printBtn) printBtn.onclick=()=>window.print();
   const openClash=v.querySelector("#open-clashes"); if(openClash) openClash.onclick=openClashModal;
   const homeClashWarn=v.querySelector("#home-clashwarn"); if(homeClashWarn) homeClashWarn.onclick=openClashModal;
+  const homeReach=v.querySelector("#home-reach"); if(homeReach) homeReach.onclick=openReachModal;
   const panicOff=v.querySelector("#panic-off"); if(panicOff) panicOff.onclick=()=>setBatteryPanic(false);
   const safeIn=v.querySelector("#home-safein"); if(safeIn) safeIn.onclick=async()=>{ await checkInSafe(); renderView(); };
   const energyDismiss=v.querySelector("#energy-dismiss"); if(energyDismiss) energyDismiss.onclick=()=>{ dismissEnergyNudge(energyDismiss.dataset.tag); const card=document.getElementById("energy-nudge"); if(card) card.remove(); };
