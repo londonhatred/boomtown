@@ -1881,6 +1881,9 @@ function openMenu(){
 
 function openRatingModal(eventId){
   const ev=state.events.find(e=>e.id===eventId); if(!ev) return;
+  // Defence in depth: never let anyone rate a set that hasn't ended yet.
+  const ended = eventEnd(ev) && eventEnd(ev).getTime() < Date.now();
+  if(!ended){ toast("You can rate this once it's finished"); return; }
   const existing = state.ratings.find(r=>r.id===state.user.id+"__"+eventId);
   let val = existing ? existing.score : 7;
   let tags = new Set((existing && existing.tags) ? existing.tags : []);
@@ -5159,11 +5162,17 @@ async function generateTestLineup(){
     const ymd=`${anchor.getFullYear()}-${String(anchor.getMonth()+1).padStart(2,"0")}-${String(anchor.getDate()).padStart(2,"0")}`;
     await saveStructure({...state.structure, festivalStartDate:ymd});
   }
-  // wipe existing events + picks only (NOT stages, pins or legs)
+  // wipe existing events + picks (NOT stages, pins or legs). Also ratings + co-presence:
+  // events get fresh IDs on regenerate, so any old ratings/co-presence are orphans that would
+  // otherwise linger and attach to nothing (this caused stale ratings on a fresh lineup).
   const esnap=await getDocs(colEvents); const eids=esnap.docs.map(d=>d.id);
   for(let i=0;i<eids.length;i+=20){ await Promise.all(eids.slice(i,i+20).map(id=>deleteDoc(dref("events",id)))); }
   const psnap=await getDocs(colPicks); const pids=psnap.docs.map(d=>d.id);
   for(let i=0;i<pids.length;i+=20){ await Promise.all(pids.slice(i,i+20).map(id=>deleteDoc(dref("picks",id)))); }
+  const rsnap=await getDocs(colRatings); const rids=rsnap.docs.map(d=>d.id);
+  for(let i=0;i<rids.length;i+=20){ await Promise.all(rids.slice(i,i+20).map(id=>deleteDoc(dref("ratings",id)))); }
+  const cpsnap=await getDocs(colCopresence); const cpids=cpsnap.docs.map(d=>d.id);
+  for(let i=0;i<cpids.length;i+=20){ await Promise.all(cpids.slice(i,i+20).map(id=>deleteDoc(dref("copresence",id)))); }
   const day=currentFestivalDay();   // tag acts to the day "now" resolves to (matches the date anchor)
   // Anchor the window to a clean quarter-hour ~30 min ago, so every act (base + a 15-min multiple)
   // lands neatly on :00/:15/:30/:45 — like a real festival programme. Something's already "on now".
