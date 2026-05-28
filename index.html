@@ -943,7 +943,8 @@ const state = {
   myPacking: { checked:[], mine:[] },
   shifts: [],                 // private, owner-only: [{id,ownerId,label,day,start,end,note}]
   legs: [],                   // walk-time samples: [{id,pair,sec,dist,seed}]
-  ratings: [],                // set ratings: [{id,userId,eventId,score}]
+  ratings: [],                // set ratings (time-gated view): [{id,userId,eventId,score}]
+  _allRatings: [],            // full ratings incl. future-scheduled (sim); gated into .ratings by time
   safety: [],                 // I'm-safe check-ins: [{id,userId,day,checkedAt}]
   copresence: [],             // co-presence samples: [{id,pair,by,near,at}]
   menuOpen: false,
@@ -1410,9 +1411,28 @@ function timeTick(){
   // don't yank focus mid-typing (chat / search inputs)
   const ae=document.activeElement;
   if(ae && (ae.tagName==="INPUT"||ae.tagName==="TEXTAREA")) return;
+  applyRatingTimeGate();                             // reveal any newly-due scheduled ratings
   if(TIME_VIEWS.has(state.view)) renderView();
   scheduleNotifications();                           // re-arm leave-now / starting-soon timers
   maybeRatingNudge();
+}
+// state.ratings is a time-gated view of state._allRatings: a rating with a future createdAt
+// stays hidden until its moment. Real ratings are always in the past, so they're unaffected;
+// this is what lets the simulator pre-schedule ratings that "arrive" over the day.
+function applyRatingTimeGate(){
+  const all = state._allRatings || [];
+  const now = Date.now();
+  const next = all.filter(r=>{
+    const t = r.createdAt && r.createdAt.toMillis ? r.createdAt.toMillis()
+            : (typeof r.simAt==="number" ? r.simAt : 0);
+    return t<=now;
+  });
+  // only swap + re-render if the visible set actually changed (avoid needless churn)
+  const changed = !state.ratings || state.ratings.length!==next.length;
+  state.ratings = next;
+  if(changed && state.view && TIME_VIEWS.has(state.view) && !document.querySelector(".modal-bg")) {
+    const v=document.getElementById("view"); if(v) renderView();
+  }
 }
 // Gentle, dismissable nudge to rate a just-ended pick (only once per act, never forced).
 let _ratingNudged = {};
@@ -1522,7 +1542,8 @@ function subscribeAll(){
     state.legs = snap.docs.map(d=>({id:d.id,...d.data()}));
   });
   onSnapshot(colRatings, snap=>{
-    state.ratings = snap.docs.map(d=>({id:d.id,...d.data()}));
+    state._allRatings = snap.docs.map(d=>({id:d.id,...d.data()}));
+    applyRatingTimeGate();
     checkAchievementTriggers();
     if(state.view==="shared" && !document.querySelector(".modal-bg")) renderView();
   });
@@ -5213,55 +5234,114 @@ async function simulateCrew(){
     const oldSim=usnap.docs.filter(d=>d.data().sim===true).map(d=>d.id);
     for(const uid of oldSim){
       await deleteDoc(dref("users",uid)).catch(()=>{});
-      // their picks/ratings/safety use `uid__...` doc ids
       for(const col of [colPicks, colRatings, colSafety]){
         const snap=await getDocs(col);
         const mine=snap.docs.filter(d=>d.id.startsWith(uid+"__")).map(d=>d.id);
         for(let i=0;i<mine.length;i+=20){ await Promise.all(mine.slice(i,i+20).map(id=>deleteDoc(doc(col,id)))); }
       }
     }
+    // clear sim co-presence (by sim users)
+    const cpsnap=await getDocs(colCopresence);
+    const oldCp=cpsnap.docs.filter(d=>String(d.data().by||"").startsWith("sim_")).map(d=>d.id);
+    for(let i=0;i<oldCp.length;i+=20){ await Promise.all(oldCp.slice(i,i+20).map(id=>deleteDoc(dref("copresence",id)))); }
   }catch(e){}
+
   const NAMES=["Sam","Jo","Mira","Theo","Nadia"];
   const TAGS=["vibe","sound","crowd","surprise","dancing"];
-  // Pull the current test events to attach picks/ratings to.
   const esnap=await getDocs(colEvents);
-  const events=esnap.docs.map(d=>({id:d.id, ...d.data()}));
+  const events=esnap.docs.map(d=>({id:d.id, ...d.data()})).filter(e=>eventStart(e)&&eventEnd(e));
   if(!events.length) throw new Error("no-events");
-  const now=Date.now();
-  const past=events.filter(e=>{ const en=eventEnd(e); return en && en.getTime()<=now; });
-  const future=events.filter(e=>{ const st=eventStart(e); return st && st.getTime()>now; });
   const day=currentFestivalDay();
+  const todays = events.filter(e=>!day || e.day===day).sort((a,b)=>eventStart(a)-eventStart(b));
+  if(!todays.length) throw new Error("no-events");
+  const stagesMap = {};
+  stagesWithCoords().forEach(s=>stagesMap[s.name]=s);
   const pick=(arr,n)=>{ const c=[...arr]; const out=[]; while(c.length&&out.length<n){ out.push(c.splice(Math.floor(Math.random()*c.length),1)[0]); } return out; };
 
   for(let i=0;i<NAMES.length;i++){
     const uid="sim_"+i+"_"+Math.random().toString(36).slice(2,7);
-    // fake user doc
-    await setDoc(dref("users", uid), { name:NAMES[i], admin:false, color:AREA_COLORS[i%AREA_COLORS.length], sim:true });
-    // picks: a mix of future (for crowd radar / going counts) + past (so they can be rated)
-    const theirFuture=pick(future, 3+Math.floor(Math.random()*3));
-    const theirPast=pick(past, 2+Math.floor(Math.random()*3));
-    for(const e of [...theirFuture, ...theirPast]){
-      await setDoc(dref("picks", uid+"__"+e.id), { userId:uid, eventId:e.id, mustSee:Math.random()<0.3, createdAt:serverTimestamp() }, {merge:true});
+    // Build an ITINERARY: a non-overlapping chain of acts across the day this friend "attends".
+    // Greedy walk through the day picking ~60-70% of slots, skipping overlaps.
+    const itinerary=[];
+    let lastEnd=0;
+    todays.forEach(e=>{
+      const st=eventStart(e).getTime(), en=eventEnd(e).getTime();
+      if(st<lastEnd) return;                       // would overlap what they're already at
+      if(Math.random()<0.38) return;               // skip some slots (gaps = realism)
+      itinerary.push({ eventId:e.id, stageName:e.stageName, start:st, end:en });
+      lastEnd=en;
+    });
+    if(!itinerary.length && todays[0]){
+      const e=todays[0]; itinerary.push({eventId:e.id, stageName:e.stageName, start:eventStart(e).getTime(), end:eventEnd(e).getTime()});
     }
-    // ratings on past picks (with tags) → feeds faves, stage personality, Crew DNA
-    for(const e of theirPast){
-      const score=Math.round((5+Math.random()*5)*2)/2;   // 5.0–10.0 in .5 steps
+    // user doc carries the itinerary so live positions can be derived at render time
+    await setDoc(dref("users", uid), {
+      name:NAMES[i], admin:false, color:AREA_COLORS[i%AREA_COLORS.length],
+      sim:true, simItin:itinerary
+    });
+    // PICKS for everything on their itinerary (so "going" counts, crowd radar, recs all populate)
+    for(const it of itinerary){
+      await setDoc(dref("picks", uid+"__"+it.eventId), { userId:uid, eventId:it.eventId, mustSee:Math.random()<0.3, createdAt:serverTimestamp() }, {merge:true});
+    }
+    // RATINGS — scheduled a few minutes after each set ends. Most get rated, some never (realism).
+    for(const it of itinerary){
+      if(Math.random()<0.25) continue;             // ~quarter never bother rating
+      const score=Math.round((5+Math.random()*5)*2)/2;
       const tags=pick(TAGS, Math.floor(Math.random()*3));
-      await setDoc(dref("ratings", uid+"__"+e.id), { userId:uid, eventId:e.id, score, tags, createdAt:serverTimestamp() }, {merge:true});
+      const ratedAt = it.end + (2+Math.floor(Math.random()*8))*60000;   // 2–10 min after it ends
+      // simAt (plain ms) lets the time-gate reveal it exactly when due; createdAt also set for ordering.
+      await setDoc(dref("ratings", uid+"__"+it.eventId),
+        { userId:uid, eventId:it.eventId, score, tags, simAt:ratedAt, createdAt:serverTimestamp() }, {merge:true});
     }
-    // a safe check-in for tonight (so the crew safety card shows people)
-    if(day && Math.random()<0.7){
+    // SAFE CHECK-IN for tonight (most check in)
+    if(day && Math.random()<0.75){
       await setDoc(dref("safety", uid+"__"+day), { userId:uid, day, checkedAt:serverTimestamp() }, {merge:true});
     }
-    // co-presence with ME (so togetherness shows real minutes) — a few buckets
-    if(state.user){
-      const pair=[state.user.id, uid].sort().join("__");
-      const buckets=2+Math.floor(Math.random()*6);
-      for(let b=0;b<buckets;b++){
-        await addDoc(colCopresence, { pair, bucket:Math.floor((now-b*2*60000)/(2*60000)), by:uid, near:state.user.id, dist:10+Math.floor(Math.random()*20), at:serverTimestamp() });
-      }
+  }
+
+  // CO-PRESENCE across the day: for each pair of sim friends, log buckets where their
+  // itineraries put them at the same stage at the same time. Pre-dated, so togetherness fills in.
+  const usnap2=await getDocs(colUsers);
+  const sims=usnap2.docs.filter(d=>d.data().sim===true).map(d=>({id:d.id, ...d.data()}));
+  for(let a=0;a<sims.length;a++){
+    for(let b=a+1;b<sims.length;b++){
+      const A=sims[a].simItin||[], B=sims[b].simItin||[];
+      const pair=[sims[a].id, sims[b].id].sort().join("__");
+      A.forEach(ia=>{
+        B.forEach(ib=>{
+          if(ia.stageName!==ib.stageName) return;
+          const start=Math.max(ia.start, ib.start), end=Math.min(ia.end, ib.end);
+          if(end<=start) return;                   // no temporal overlap
+          // one bucket per 2 min of shared time at that stage
+          for(let t=start; t<end; t+=2*60000){
+            addDoc(colCopresence, { pair, bucket:Math.floor(t/(2*60000)), by:sims[a].id, near:sims[b].id, dist:8+Math.floor(Math.random()*20), at:serverTimestamp() }).catch(()=>{});
+          }
+        });
+      });
     }
   }
+  // CO-PRESENCE with YOU: where your picks put you at the same stage+time as a sim friend's
+  // itinerary, log buckets so your own togetherness numbers come alive too.
+  if(state.user){
+    const myItin = state.picks.filter(p=>p.userId===state.user.id)
+      .map(p=>events.find(e=>e.id===p.eventId)).filter(Boolean)
+      .filter(e=>!day || e.day===day)
+      .map(e=>({stageName:e.stageName, start:eventStart(e).getTime(), end:eventEnd(e).getTime()}));
+    sims.forEach(sf=>{
+      const pair=[state.user.id, sf.id].sort().join("__");
+      (sf.simItin||[]).forEach(ib=>{
+        myItin.forEach(ia=>{
+          if(ia.stageName!==ib.stageName) return;
+          const start=Math.max(ia.start,ib.start), end=Math.min(ia.end,ib.end);
+          if(end<=start) return;
+          for(let t=start;t<end;t+=2*60000){
+            addDoc(colCopresence, { pair, bucket:Math.floor(t/(2*60000)), by:sf.id, near:state.user.id, dist:8+Math.floor(Math.random()*20), at:serverTimestamp() }).catch(()=>{});
+          }
+        });
+      });
+    });
+  }
+  applyRatingTimeGate();
 }
 // Admin: remove a user account and all the data tied to them (picks, shared location, personal pins).
 async function deleteUserAccount(userId){
@@ -5396,7 +5476,41 @@ function peopleWithCoords(){
     const ts = (l.updatedAt && l.updatedAt.toMillis) ? l.updatedAt.toMillis() : now;
     if(now-ts > 8*60*1000) return;            // hide stale (>8 min, ~5 missed updates)
     const u=state.users.find(x=>x.id===l.id);
-    out.push({id:l.id, name:(u?u.name:(l.name||"Friend")), color:personColor(l.id), lat:l.lat, lng:l.lng, ts, lost:!!l.lost});
+    out.push({id:l.id, name:userName(l.id), color:personColor(l.id), lat:l.lat, lng:l.lng, ts, lost:!!l.lost});
+  });
+  // Simulated friends: derive a live position from their itinerary + the current time.
+  simPositions().forEach(p=>out.push(p));
+  return out;
+}
+// Compute where each simulated friend "is" right now from their stored itinerary.
+// At a stage during a set → at that stage (jittered). Between sets → partway to the next stage.
+function simPositions(){
+  const now=Date.now(); const out=[];
+  const stageByName={}; stagesWithCoords().forEach(s=>stageByName[s.name]=s);
+  const jit=(seed)=>((Math.sin(seed*99.7)*0.5+0.5)-0.5)*0.00018;  // ~±10m deterministic-ish wobble
+  state.users.filter(u=>u.sim && Array.isArray(u.simItin) && u.simItin.length).forEach(u=>{
+    const itin=u.simItin.slice().sort((a,b)=>a.start-b.start);
+    // Only show during the festival window (first start → last end + 20min)
+    const firstStart=itin[0].start, lastEnd=itin[itin.length-1].end;
+    if(now < firstStart-10*60000 || now > lastEnd+20*60000) return;
+    let lat=null, lng=null;
+    // are they currently AT a set?
+    const at=itin.find(it=>now>=it.start && now<=it.end);
+    if(at && stageByName[at.stageName]){ lat=stageByName[at.stageName].lat; lng=stageByName[at.stageName].lng; }
+    else {
+      // between sets: interpolate from previous stage to next stage by elapsed fraction
+      let prev=null, nextIt=null;
+      for(const it of itin){ if(it.end<=now) prev=it; if(it.start>now && !nextIt) nextIt=it; }
+      const ps=prev&&stageByName[prev.stageName], ns=nextIt&&stageByName[nextIt.stageName];
+      if(ps&&ns){
+        const span=nextIt.start-prev.end, f= span>0 ? Math.min(1,Math.max(0,(now-prev.end)/span)) : 0;
+        lat=ps.lat+(ns.lat-ps.lat)*f; lng=ps.lng+(ns.lng-ps.lng)*f;
+      } else if(ps){ lat=ps.lat; lng=ps.lng; }
+      else if(ns){ lat=ns.lat; lng=ns.lng; }
+    }
+    if(lat==null) return;
+    const seed=(u.id.charCodeAt(4)||7);
+    out.push({ id:u.id, name:u.name, color:personColor(u.id), lat:lat+jit(seed), lng:lng+jit(seed+1), ts:now, lost:false, sim:true });
   });
   return out;
 }
