@@ -36,6 +36,26 @@
     --hard-sm:2px 2px 0 var(--ink);
     --safe-b:env(safe-area-inset-bottom,0px);
   }
+  /* Dark mode — keeps the warm risograph character: warm-dark ground, warm-light ink,
+     lifted accents so they survive on a dark background, softened hard-shadows. */
+  [data-theme="dark"]{
+    --paper:#1B1916;
+    --card:#242019;
+    --panel:#2C271E;
+    --ink:#EFE7D5;
+    --ink-2:#C9BFA6;
+    --muted:#9A917A;
+    --line:rgba(239,231,213,.16);
+    --line-strong:rgba(239,231,213,.34);
+    --rule:#EFE7D5;
+    --accent:#F2553B;
+    --accent-ink:#1B1916;
+    --teal:#4FB3A2;
+    --gold:#D7A946;
+    --violet:#A98BE0;
+    --hard:3px 3px 0 rgba(0,0,0,.55);
+    --hard-sm:2px 2px 0 rgba(0,0,0,.55);
+  }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0}
   body{
@@ -758,6 +778,21 @@
 <body>
 <div id="root"></div>
 
+<script>
+/* No-flash theme init: apply saved choice, else system preference, before the app paints. */
+(function(){
+  try{
+    var saved = localStorage.getItem("fp_theme"); // "dark" | "light" | null(=system)
+    var sysDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    var dark = saved ? (saved==="dark") : sysDark;
+    if(dark){
+      document.documentElement.setAttribute("data-theme","dark");
+      var m=document.querySelector('meta[name="theme-color"]'); if(m) m.setAttribute("content","#1B1916");
+    }
+  }catch(e){}
+})();
+</script>
+
 <script type="module">
 /* ============================================================
    FESTIVAL PLANNER
@@ -1334,6 +1369,35 @@ function setupOfflineBanner(){
 }
 setupOfflineBanner();
 startBatteryMonitor();
+// ---- Theme (dark mode) ----
+// Stored choice "dark"/"light", or null = follow system. The inline head script does the
+// initial paint; this keeps it in sync and reacts to system changes when on "system".
+function currentTheme(){
+  const saved=localStorage.getItem("fp_theme");
+  if(saved==="dark"||saved==="light") return saved;
+  return "system";
+}
+function effectiveDark(){
+  const t=currentTheme();
+  if(t==="dark") return true;
+  if(t==="light") return false;
+  return !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+}
+function applyTheme(){
+  const dark=effectiveDark();
+  if(dark) document.documentElement.setAttribute("data-theme","dark");
+  else document.documentElement.removeAttribute("data-theme");
+  const m=document.querySelector('meta[name="theme-color"]'); if(m) m.setAttribute("content", dark?"#1B1916":"#EFE7D5");
+}
+function setTheme(choice){           // "dark" | "light" | "system"
+  if(choice==="system") localStorage.removeItem("fp_theme");
+  else localStorage.setItem("fp_theme", choice);
+  applyTheme();
+}
+// React to OS theme flips when the user is on "system"
+if(window.matchMedia){
+  try{ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", ()=>{ if(currentTheme()==="system") applyTheme(); }); }catch(e){}
+}
 
 /* ---- time awareness: keep time-sensitive views current as minutes pass ---- */
 // Views whose content depends on the current time (on-now, countdowns, leave-now, today's remaining).
@@ -1758,6 +1822,12 @@ function openMenu(){
       <button class="switch ${BATTERY_SAVER?'on':''}" id="mn-batt" role="switch" aria-checked="${BATTERY_SAVER}"><span></span></button></div>
     <div class="menu-row toggle"><div class="mr-txt"><div class="lbl">Battery panic</div><div class="sub">${BATTERY_PANIC?"On · only essentials visible":"Manual trigger if battery is low (auto on Android &lt;15%)"}</div></div>
       <button class="switch ${BATTERY_PANIC?'on':''}" id="mn-panic" role="switch" aria-checked="${BATTERY_PANIC}"><span></span></button></div>
+    <div class="menu-row toggle"><div class="mr-txt"><div class="lbl">Appearance</div><div class="sub">${currentTheme()==="system"?"Following your device":currentTheme()==="dark"?"Dark":"Light"}</div></div>
+      <div class="tri-toggle" data-theme-toggle>
+        <button class="tri-opt ${currentTheme()==="light"?'on':''}" data-theme-set="light">Light</button>
+        <button class="tri-opt ${currentTheme()==="system"?'on':''}" data-theme-set="system">Auto</button>
+        <button class="tri-opt ${currentTheme()==="dark"?'on':''}" data-theme-set="dark">Dark</button>
+      </div></div>
   </div>`;
 
   const adminHtml = state.user.admin ? section("Admin", [["admin","Manage festival"]], "admin") : "";
@@ -1784,6 +1854,7 @@ function openMenu(){
   const nt=wrap.querySelector("#mn-notify"); if(nt) nt.onclick=async()=>{ await toggleNotify(); close(); openMenu(); };
   const bt=wrap.querySelector("#mn-batt"); if(bt) bt.onclick=()=>{ setBatterySaver(!BATTERY_SAVER); close(); openMenu(); };
   const pn=wrap.querySelector("#mn-panic"); if(pn) pn.onclick=()=>{ setBatteryPanic(!BATTERY_PANIC); close(); openMenu(); };
+  wrap.querySelectorAll("[data-theme-set]").forEach(b=>b.onclick=()=>{ setTheme(b.dataset.themeSet); close(); openMenu(); });
 }
 
 function openRatingModal(eventId){
